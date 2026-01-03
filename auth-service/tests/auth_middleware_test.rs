@@ -1,8 +1,9 @@
 use auth_service::{
     build_router,
     config::Config,
+    init_tracing,
     middleware::{create_login_rate_limiter, create_password_reset_rate_limiter, auth_middleware},
-    services::{EmailService, JwtService, MongoDb},
+    services::{EmailService, JwtService, MongoDb, TokenBlacklist, MockBlacklist},
     AppState,
 };
 use axum::{
@@ -14,6 +15,7 @@ use axum::{
 };
 use tower::util::ServiceExt;
 use uuid::Uuid;
+use std::sync::Arc;
 
 async fn setup_test_config() -> (Config, String) {
     dotenvy::dotenv().ok();
@@ -40,6 +42,7 @@ async fn test_auth_middleware() {
     
     let email = EmailService::new(&config.gmail).expect("Failed to create email service");
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
+    let redis = Arc::new(MockBlacklist::new());
     
     let login_limiter = create_login_rate_limiter(5, 60);
     let reset_limiter = create_password_reset_rate_limiter(3, 3600);
@@ -49,6 +52,7 @@ async fn test_auth_middleware() {
         db,
         email,
         jwt: jwt.clone(), // Clone for use in test
+        redis: redis.clone(),
         login_rate_limiter: login_limiter,
         password_reset_rate_limiter: reset_limiter,
     };
@@ -94,6 +98,7 @@ async fn test_auth_middleware() {
     let token = jwt.generate_access_token(user_id, email).unwrap();
 
     let response = app
+        .clone()
         .oneshot(
             Request::builder()
                 .uri("/protected")
@@ -105,6 +110,31 @@ async fn test_auth_middleware() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
+
+    // 6. Test: Blacklisted Token
+    // Generate a new token
+    let blacklisted_token = jwt.generate_access_token(user_id, email).unwrap();
+    // Parse it to get JTI (we need to peek inside or just use the generated jti if accessible)
+    // Since we can't easily peek inside without jwt service methods exposed for it or manually decoding,
+    // let's rely on validation parsing it. 
+    // Actually we need the JTI to blacklist it.
+    let claims = jwt.validate_access_token(&blacklisted_token).unwrap();
+    
+    // Blacklist the token
+    redis.blacklist_token(&claims.jti, 3600).await.expect("Failed to blacklist");
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/protected")
+                .header("Authorization", format!("Bearer {}", blacklisted_token))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
     // Cleanup
     teardown_test_db(&config.mongodb.uri, &db_name).await;

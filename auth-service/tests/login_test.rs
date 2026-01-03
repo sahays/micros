@@ -1,9 +1,9 @@
-use auth_service::{
+    use auth_service::{
     build_router,
     config::Config,
     middleware::{create_login_rate_limiter, create_password_reset_rate_limiter},
     models::{RefreshToken, User},
-    services::{EmailService, JwtService, MongoDb},
+    services::{EmailService, JwtService, MongoDb, MockBlacklist},
     utils::{hash_password, Password},
     AppState,
 };
@@ -14,6 +14,7 @@ use axum::{
 use mongodb::bson::doc;
 use tower::util::ServiceExt;
 use uuid::Uuid;
+use std::sync::Arc;
 
 async fn setup_test_config() -> (Config, String) {
     dotenvy::dotenv().ok();
@@ -42,6 +43,7 @@ async fn test_login_creates_hashed_refresh_token() {
 
     let email = EmailService::new(&config.gmail).expect("Failed to create email service");
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
+    let redis = Arc::new(MockBlacklist::new());
     
     let login_limiter = create_login_rate_limiter(5, 60);
     let reset_limiter = create_password_reset_rate_limiter(3, 3600);
@@ -51,10 +53,10 @@ async fn test_login_creates_hashed_refresh_token() {
         db: db.clone(),
         email,
         jwt,
+        redis,
         login_rate_limiter: login_limiter,
         password_reset_rate_limiter: reset_limiter,
     };
-
     // 3. Create Test User
     let password = "test_password_123";
     let password_hash = hash_password(&Password::new(password.to_string())).unwrap();

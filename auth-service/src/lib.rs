@@ -13,9 +13,10 @@ use axum::{
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+use std::sync::Arc;
 use crate::config::Config;
 use crate::middleware::{LoginRateLimiter, PasswordResetRateLimiter};
-use crate::services::{EmailService, JwtService, MongoDb};
+use crate::services::{EmailService, JwtService, MongoDb, RedisService, TokenBlacklist};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -23,6 +24,7 @@ pub struct AppState {
     pub db: MongoDb,
     pub email: EmailService,
     pub jwt: JwtService,
+    pub redis: Arc<dyn TokenBlacklist>,
     pub login_rate_limiter: LoginRateLimiter,
     pub password_reset_rate_limiter: PasswordResetRateLimiter,
 }

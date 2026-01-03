@@ -1,8 +1,9 @@
 use auth_service::{
     build_router,
     config::Config,
+    init_tracing,
     middleware::{create_login_rate_limiter, create_password_reset_rate_limiter},
-    services::{EmailService, JwtService, MongoDb},
+    services::{EmailService, JwtService, MongoDb, MockBlacklist},
     AppState,
 };
 use axum::{
@@ -11,6 +12,7 @@ use axum::{
 };
 use tower::util::ServiceExt;
 use uuid::Uuid;
+use std::sync::Arc;
 
 // Helper to setup test config with a unique database
 async fn setup_test_config() -> (Config, String) {
@@ -23,9 +25,12 @@ async fn setup_test_config() -> (Config, String) {
     // Override database name with a random one for isolation
     let db_name = format!("test_auth_{}", Uuid::new_v4());
     config.mongodb.database = db_name.clone();
+    config.log_level = "debug".to_string(); // Use debug for more info
     
-    // Disable logging noise during tests
-    config.log_level = "error".to_string();
+    // Initialize tracing if not already initialized
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter("debug")
+        .try_init();
 
     (config, db_name)
 }
@@ -52,6 +57,7 @@ async fn test_password_reset_flow() {
     // In a real CI, you might mock this, but for now we assume env is set.
     let email = EmailService::new(&config.gmail).expect("Failed to create email service");
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
+    let redis = Arc::new(MockBlacklist::new());
     
     let login_limiter = create_login_rate_limiter(
         config.rate_limit.login_attempts,
@@ -67,6 +73,7 @@ async fn test_password_reset_flow() {
         db,
         email,
         jwt,
+        redis,
         login_rate_limiter: login_limiter,
         password_reset_rate_limiter: reset_limiter,
     };

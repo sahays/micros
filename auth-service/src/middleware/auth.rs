@@ -48,6 +48,32 @@ pub async fn auth_middleware(
         }
     };
 
+    // Check blacklist
+    let is_blacklisted = state
+        .redis
+        .is_blacklisted(&claims.jti)
+        .await
+        .map_err(|e| {
+            tracing::error!("Redis error checking blacklist: {}", e);
+            // Fail closed: if Redis is down, we assume token is revoked for security
+            // Alternatively, fail open if availability is prioritized over immediate revocation
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    if is_blacklisted {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "Token has been revoked".to_string(),
+            }),
+        ));
+    }
+
     // Store claims in request extensions so handlers can access them
     req.extensions_mut().insert(claims);
 

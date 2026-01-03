@@ -1,9 +1,9 @@
-use auth_service::{
+    use auth_service::{
     build_router,
     config::Config,
     init_tracing,
     middleware,
-    services::{EmailService, JwtService, MongoDb},
+    services::{EmailService, JwtService, MongoDb, RedisService},
     AppState,
 };
 use std::net::SocketAddr;
@@ -32,6 +32,10 @@ async fn main() -> Result<(), anyhow::Error> {
     db.initialize_indexes().await?;
     tracing::info!("Database initialized successfully");
 
+    // Initialize Redis service
+    let redis = RedisService::new(&config.redis).await?;
+    tracing::info!("Redis service initialized");
+
     // Initialize email service
     let email = EmailService::new(&config.gmail)?;
     tracing::info!("Email service initialized");
@@ -57,18 +61,16 @@ async fn main() -> Result<(), anyhow::Error> {
         config.rate_limit.password_reset_window_seconds
     );
 
-    // TODO: Initialize Redis
-
     // Create application state
     let state = AppState {
         config: config.clone(),
         db,
         email,
         jwt,
+        redis: std::sync::Arc::new(redis),
         login_rate_limiter,
         password_reset_rate_limiter,
     };
-
     // Build application router
     let app = build_router(state).await?;
 

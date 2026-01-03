@@ -4,7 +4,7 @@ use auth_service::{
     init_tracing,
     middleware::{create_login_rate_limiter, create_password_reset_rate_limiter},
     models::{RefreshToken, User},
-    services::{EmailService, JwtService, MongoDb},
+    services::{EmailService, JwtService, MongoDb, MockBlacklist},
     AppState,
 };
 use axum::{
@@ -14,6 +14,7 @@ use axum::{
 use mongodb::bson::doc;
 use tower::util::ServiceExt;
 use uuid::Uuid;
+use std::sync::Arc;
 
 async fn setup_test_config() -> (Config, String) {
     dotenvy::dotenv().ok();
@@ -48,6 +49,7 @@ async fn test_refresh_token_flow() {
 
     let email = EmailService::new(&config.gmail).expect("Failed to create email service");
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
+    let redis = Arc::new(MockBlacklist::new());
     
     let login_limiter = create_login_rate_limiter(5, 60);
     let reset_limiter = create_password_reset_rate_limiter(3, 3600);
@@ -57,6 +59,7 @@ async fn test_refresh_token_flow() {
         db: db.clone(),
         email,
         jwt: jwt.clone(),
+        redis,
         login_rate_limiter: login_limiter,
         password_reset_rate_limiter: reset_limiter,
     };
