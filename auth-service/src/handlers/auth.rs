@@ -38,15 +38,14 @@ pub async fn register(
     Json(req): Json<RegisterRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
     // Validate request
-    req.validate()
-        .map_err(|e| {
-            (
-                StatusCode::UNPROCESSABLE_ENTITY,
-                Json(ErrorResponse {
-                    error: format!("Validation error: {}", e),
-                }),
-            )
-        })?;
+    req.validate().map_err(|e| {
+        (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(ErrorResponse {
+                error: format!("Validation error: {}", e),
+            }),
+        )
+    })?;
 
     // Check if user already exists
     let existing_user = state
@@ -74,16 +73,15 @@ pub async fn register(
     }
 
     // Hash password
-    let password_hash = hash_password(&Password::new(req.password))
-        .map_err(|e| {
-            tracing::error!("Password hashing error: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Internal server error".to_string(),
-                }),
-            )
-        })?;
+    let password_hash = hash_password(&Password::new(req.password)).map_err(|e| {
+        tracing::error!("Password hashing error: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "Internal server error".to_string(),
+            }),
+        )
+    })?;
 
     // Create user
     let user = User::new(req.email.clone(), password_hash.into_string(), req.name);
@@ -107,7 +105,8 @@ pub async fn register(
 
     // Generate verification token
     let token = generate_random_token();
-    let verification_token = VerificationToken::new_email_verification(user.id.clone(), token.clone());
+    let verification_token =
+        VerificationToken::new_email_verification(user.id.clone(), token.clone());
 
     state
         .db
@@ -144,7 +143,8 @@ pub async fn register(
         StatusCode::CREATED,
         Json(RegisterResponse {
             user_id: user.id,
-            message: "Registration successful. Please check your email to verify your account.".to_string(),
+            message: "Registration successful. Please check your email to verify your account."
+                .to_string(),
         }),
     ))
 }
@@ -461,6 +461,273 @@ pub async fn logout(
         StatusCode::OK,
         Json(serde_json::json!({
             "message": "Logged out successfully"
+        })),
+    ))
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct PasswordResetRequest {
+    #[validate(email(message = "Invalid email format"))]
+    pub email: String,
+}
+
+pub async fn request_password_reset(
+    State(state): State<AppState>,
+    Json(req): Json<PasswordResetRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    // Validate request
+    req.validate().map_err(|e| {
+        (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(ErrorResponse {
+                error: format!("Validation error: {}", e),
+            }),
+        )
+    })?;
+
+    // Find user by email
+    let user = state
+        .db
+        .users()
+        .find_one(doc! { "email": &req.email }, None)
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error finding user: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    // If user exists, generate token and send email
+    if let Some(user) = user {
+        // Generate reset token
+        let token = generate_random_token();
+        let verification_token = VerificationToken::new_password_reset(user.id.clone(), token.clone());
+
+        state
+            .db
+            .verification_tokens()
+            .insert_one(&verification_token, None)
+            .await
+            .map_err(|e| {
+                tracing::error!("Database error creating reset token: {}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: "Internal server error".to_string(),
+                    }),
+                )
+            })?;
+
+        // Send reset email
+        let base_url = format!("http://localhost:{}", state.config.port);
+        state
+            .email
+            .send_password_reset_email(&req.email, &token, &base_url)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to send reset email: {}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: "Internal server error".to_string(),
+                    }),
+                )
+            })?;
+
+        tracing::info!("Password reset requested for user: {}", user.id);
+    } else {
+        // If user doesn't exist, we still return 200 OK to prevent email enumeration
+        tracing::info!("Password reset requested for non-existent email: {}", req.email);
+    }
+
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "message": "If your email is registered, you will receive a password reset link shortly."
+        })),
+    ))
+}
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct PasswordResetConfirm {
+    pub token: String,
+
+    #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
+    pub new_password: String,
+}
+
+pub async fn confirm_password_reset(
+    State(state): State<AppState>,
+    Json(req): Json<PasswordResetConfirm>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    // Validate request
+    req.validate().map_err(|e| {
+        (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(ErrorResponse {
+                error: format!("Validation error: {}", e),
+            }),
+        )
+    })?;
+
+    // Find reset token
+    let verification_token = state
+        .db
+        .verification_tokens()
+        .find_one(
+            doc! {
+                "token": &req.token,
+                "token_type": "password_reset"
+            },
+            None,
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error finding reset token: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    let verification_token = verification_token.ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Invalid or expired reset token".to_string(),
+            }),
+        )
+    })?;
+
+    // Check if token is expired
+    if verification_token.is_expired() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Reset token has expired".to_string(),
+            }),
+        ));
+    }
+
+    // Hash new password
+    let password_hash = hash_password(&Password::new(req.new_password)).map_err(|e| {
+        tracing::error!("Password hashing error: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "Internal server error".to_string(),
+            }),
+        )
+    })?;
+
+    // Update user password and invalidate all refresh tokens
+    let session = state.db.client().start_session(None).await.map_err(|e| {
+        tracing::error!("Failed to start database session: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "Internal server error".to_string(),
+            }),
+        )
+    })?;
+
+    // We use a transaction to ensure atomicity
+    let mut session = session;
+    session.start_transaction(None).await.map_err(|e| {
+        tracing::error!("Failed to start transaction: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "Internal server error".to_string(),
+            }),
+        )
+    })?;
+
+    // Update password
+    state
+        .db
+        .users()
+        .update_one_with_session(
+            doc! { "_id": &verification_token.user_id },
+            doc! {
+                "$set": {
+                    "password_hash": password_hash.into_string(),
+                    "updated_at": mongodb::bson::DateTime::now()
+                }
+            },
+            None,
+            &mut session,
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error updating user password: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    // Invalidate all refresh tokens for the user
+    state
+        .db
+        .refresh_tokens()
+        .update_many_with_session(
+            doc! { "user_id": &verification_token.user_id },
+            doc! { "$set": { "revoked": true } },
+            None,
+            &mut session,
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error revoking refresh tokens: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    // Delete the used reset token
+    state
+        .db
+        .verification_tokens()
+        .delete_one_with_session(doc! { "_id": &verification_token.id }, None, &mut session)
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error deleting reset token: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    session.commit_transaction().await.map_err(|e| {
+        tracing::error!("Failed to commit transaction: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "Internal server error".to_string(),
+            }),
+        )
+    })?;
+
+    tracing::info!("Password reset successful for user: {}", verification_token.user_id);
+
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "message": "Password reset successful. You can now login with your new password."
         })),
     ))
 }

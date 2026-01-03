@@ -114,7 +114,9 @@ impl MongoDb {
             )
             .build();
 
-        refresh_tokens.create_index(refresh_token_index, None).await?;
+        refresh_tokens
+            .create_index(refresh_token_index, None)
+            .await?;
 
         // TTL index on expires_at for automatic cleanup
         let refresh_expiry_index = IndexModel::builder()
@@ -127,7 +129,9 @@ impl MongoDb {
             )
             .build();
 
-        refresh_tokens.create_index(refresh_expiry_index, None).await?;
+        refresh_tokens
+            .create_index(refresh_expiry_index, None)
+            .await?;
         tracing::info!("Created indexes on refresh_tokens collection");
 
         Ok(())

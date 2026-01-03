@@ -3,5 +3,5 @@ mod user;
 mod verification_token;
 
 pub use refresh_token::RefreshToken;
-pub use user::{NewUser, SanitizedUser, User};
-pub use verification_token::{TokenType, VerificationToken};
+pub use user::User;
+pub use verification_token::VerificationToken;

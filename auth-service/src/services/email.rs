@@ -1,7 +1,6 @@
 use lettre::{
-    message::{header::ContentType, MessageBuilder},
-    transport::smtp::{authentication::Credentials, response::Response},
-    Message, SmtpTransport, Transport,
+    message::header::ContentType, transport::smtp::authentication::Credentials, Message,
+    SmtpTransport, Transport,
 };
 use std::time::Duration;
 
@@ -84,7 +83,10 @@ impl EmailService {
         reset_token: &str,
         base_url: &str,
     ) -> Result<(), anyhow::Error> {
-        let reset_link = format!("{}/auth/password-reset/confirm?token={}", base_url, reset_token);
+        let reset_link = format!(
+            "{}/auth/password-reset/confirm?token={}",
+            base_url, reset_token
+        );
 
         let html_body = format!(
             r#"
@@ -116,13 +118,8 @@ impl EmailService {
             reset_link
         );
 
-        self.send_email(
-            to_email,
-            "Reset Your Password",
-            &plain_body,
-            &html_body,
-        )
-        .await
+        self.send_email(to_email, "Reset Your Password", &plain_body, &html_body)
+            .await
     }
 
     async fn send_email(

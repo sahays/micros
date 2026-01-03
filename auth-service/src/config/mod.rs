@@ -96,12 +96,10 @@ impl Config {
                 .unwrap_or_else(|_| "dev".to_string())
                 .parse()
                 .map_err(|_| anyhow::anyhow!("Invalid ENVIRONMENT value"))?,
-            service_name: env::var("SERVICE_NAME")
-                .unwrap_or_else(|_| "auth-service".to_string()),
+            service_name: env::var("SERVICE_NAME").unwrap_or_else(|_| "auth-service".to_string()),
             service_version: env::var("SERVICE_VERSION")
                 .unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_string()),
-            log_level: env::var("LOG_LEVEL")
-                .unwrap_or_else(|_| "info".to_string()),
+            log_level: env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
             port: env::var("PORT")
                 .unwrap_or_else(|_| "3000".to_string())
                 .parse()
@@ -113,8 +111,7 @@ impl Config {
                     .map_err(|_| anyhow::anyhow!("MONGODB_DATABASE is required"))?,
             },
             redis: RedisConfig {
-                url: env::var("REDIS_URL")
-                    .map_err(|_| anyhow::anyhow!("REDIS_URL is required"))?,
+                url: env::var("REDIS_URL").map_err(|_| anyhow::anyhow!("REDIS_URL is required"))?,
             },
             jwt: JwtConfig {
                 private_key_path: env::var("JWT_PRIVATE_KEY_PATH")
@@ -200,17 +197,23 @@ impl Config {
         }
 
         if self.jwt.access_token_expiry_minutes <= 0 {
-            return Err(anyhow::anyhow!("JWT_ACCESS_TOKEN_EXPIRY_MINUTES must be positive"));
+            return Err(anyhow::anyhow!(
+                "JWT_ACCESS_TOKEN_EXPIRY_MINUTES must be positive"
+            ));
         }
 
         if self.jwt.refresh_token_expiry_days <= 0 {
-            return Err(anyhow::anyhow!("JWT_REFRESH_TOKEN_EXPIRY_DAYS must be positive"));
+            return Err(anyhow::anyhow!(
+                "JWT_REFRESH_TOKEN_EXPIRY_DAYS must be positive"
+            ));
         }
 
         // In production, ensure stricter validation
         if self.environment == Environment::Prod {
             if self.security.allowed_origins.iter().any(|o| o == "*") {
-                return Err(anyhow::anyhow!("Wildcard CORS origin not allowed in production"));
+                return Err(anyhow::anyhow!(
+                    "Wildcard CORS origin not allowed in production"
+                ));
             }
 
             if self.swagger.enabled == SwaggerMode::Public {

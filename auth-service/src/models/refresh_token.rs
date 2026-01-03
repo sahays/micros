@@ -59,11 +59,7 @@ mod tests {
 
     #[test]
     fn test_refresh_token_creation() {
-        let token = RefreshToken::new(
-            "user_123".to_string(),
-            "token_abc".to_string(),
-            7,
-        );
+        let token = RefreshToken::new("user_123".to_string(), "token_abc".to_string(), 7);
 
         assert_eq!(token.user_id, "user_123");
         assert_eq!(token.token, "token_abc");
@@ -73,11 +69,7 @@ mod tests {
 
     #[test]
     fn test_refresh_token_expiry() {
-        let mut token = RefreshToken::new(
-            "user_123".to_string(),
-            "token_abc".to_string(),
-            7,
-        );
+        let mut token = RefreshToken::new("user_123".to_string(), "token_abc".to_string(), 7);
 
         // Not expired initially
         assert!(!token.is_expired());
@@ -91,11 +83,7 @@ mod tests {
 
     #[test]
     fn test_refresh_token_revocation() {
-        let mut token = RefreshToken::new(
-            "user_123".to_string(),
-            "token_abc".to_string(),
-            7,
-        );
+        let mut token = RefreshToken::new("user_123".to_string(), "token_abc".to_string(), 7);
 
         assert!(token.is_valid());
 

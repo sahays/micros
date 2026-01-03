@@ -1,5 +1,4 @@
 use axum::{
-    body::Body,
     extract::Request,
     http::StatusCode,
     middleware::Next,
@@ -17,6 +16,9 @@ use std::{num::NonZeroU32, sync::Arc, time::Duration};
 /// Rate limiter for login endpoint
 pub type LoginRateLimiter = Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>;
 
+/// Rate limiter for password reset endpoint
+pub type PasswordResetRateLimiter = Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>;
+
 /// Create a rate limiter for login attempts
 pub fn create_login_rate_limiter(attempts: u32, window_seconds: u64) -> LoginRateLimiter {
     let quota = Quota::with_period(Duration::from_secs(window_seconds / attempts as u64))
@@ -26,9 +28,21 @@ pub fn create_login_rate_limiter(attempts: u32, window_seconds: u64) -> LoginRat
     Arc::new(RateLimiter::direct(quota))
 }
 
+/// Create a rate limiter for password reset attempts
+pub fn create_password_reset_rate_limiter(
+    attempts: u32,
+    window_seconds: u64,
+) -> PasswordResetRateLimiter {
+    let quota = Quota::with_period(Duration::from_secs(window_seconds / attempts as u64))
+        .unwrap()
+        .allow_burst(NonZeroU32::new(attempts).unwrap());
+
+    Arc::new(RateLimiter::direct(quota))
+}
+
 /// Middleware to rate limit requests
 pub async fn rate_limit_middleware(
-    limiter: LoginRateLimiter,
+    limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
     request: Request,
     next: Next,
 ) -> Response {

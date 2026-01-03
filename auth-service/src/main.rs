@@ -12,14 +12,11 @@ use axum::{
 };
 use std::net::SocketAddr;
 use tokio::signal;
-use tower_http::{
-    cors::CorsLayer,
-    trace::TraceLayer,
-};
+use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::config::Config;
-use crate::middleware::LoginRateLimiter;
+use crate::middleware::{LoginRateLimiter, PasswordResetRateLimiter};
 use crate::services::{EmailService, JwtService, MongoDb};
 
 #[derive(Clone)]
@@ -29,6 +26,7 @@ pub struct AppState {
     pub email: EmailService,
     pub jwt: JwtService,
     pub login_rate_limiter: LoginRateLimiter,
+    pub password_reset_rate_limiter: PasswordResetRateLimiter,
 }
 
 #[tokio::main]
@@ -67,10 +65,16 @@ async fn main() -> Result<(), anyhow::Error> {
         config.rate_limit.login_attempts,
         config.rate_limit.login_window_seconds,
     );
+    let password_reset_rate_limiter = middleware::create_password_reset_rate_limiter(
+        config.rate_limit.password_reset_attempts,
+        config.rate_limit.password_reset_window_seconds,
+    );
     tracing::info!(
-        "Rate limiter initialized: {} attempts per {} seconds",
+        "Rate limiters initialized: Login ({} attempts/{}s), Password Reset ({} attempts/{}s)",
         config.rate_limit.login_attempts,
-        config.rate_limit.login_window_seconds
+        config.rate_limit.login_window_seconds,
+        config.rate_limit.password_reset_attempts,
+        config.rate_limit.password_reset_window_seconds
     );
 
     // TODO: Initialize Redis
@@ -82,6 +86,7 @@ async fn main() -> Result<(), anyhow::Error> {
         email,
         jwt,
         login_rate_limiter,
+        password_reset_rate_limiter,
     };
 
     // Build application router
@@ -113,12 +118,28 @@ async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
             middleware::rate_limit_middleware(login_limiter.clone(), req, next)
         }));
 
+    // Create password reset request route with rate limiting
+    let reset_request_limiter = state.password_reset_rate_limiter.clone();
+    let reset_request_route = Router::new()
+        .route(
+            "/auth/password-reset/request",
+            post(handlers::auth::request_password_reset),
+        )
+        .layer(from_fn(move |req, next| {
+            middleware::rate_limit_middleware(reset_request_limiter.clone(), req, next)
+        }));
+
     let app = Router::new()
         .route("/health", get(health_check))
         // Authentication routes
         .route("/auth/register", post(handlers::auth::register))
         .route("/auth/verify", get(handlers::auth::verify_email))
         .merge(login_route)
+        .merge(reset_request_route)
+        .route(
+            "/auth/password-reset/confirm",
+            post(handlers::auth::confirm_password_reset),
+        )
         .route("/auth/logout", post(handlers::auth::logout))
         .with_state(state)
         // Add CORS layer
@@ -133,17 +154,13 @@ async fn health_check(
     axum::extract::State(state): axum::extract::State<AppState>,
 ) -> Result<axum::Json<serde_json::Value>, (axum::http::StatusCode, String)> {
     // Check MongoDB connection
-    state
-        .db
-        .health_check()
-        .await
-        .map_err(|e| {
-            tracing::error!("MongoDB health check failed: {}", e);
-            (
-                axum::http::StatusCode::SERVICE_UNAVAILABLE,
-                format!("MongoDB unhealthy: {}", e),
-            )
-        })?;
+    state.db.health_check().await.map_err(|e| {
+        tracing::error!("MongoDB health check failed: {}", e);
+        (
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            format!("MongoDB unhealthy: {}", e),
+        )
+    })?;
 
     // TODO: Check Redis connection
 
@@ -160,9 +177,7 @@ async fn health_check(
 
 fn init_tracing(config: &Config) {
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| {
-            tracing_subscriber::EnvFilter::new(&config.log_level)
-        });
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&config.log_level));
 
     tracing_subscriber::registry()
         .with(env_filter)

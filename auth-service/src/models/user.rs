@@ -15,6 +15,7 @@ pub struct User {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct NewUser {
     pub email: String,
     pub password_hash: String,

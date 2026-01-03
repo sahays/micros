@@ -56,27 +56,25 @@ impl JwtService {
     /// Create a new JWT service by loading RSA keys from files
     pub fn new(config: &JwtConfig) -> Result<Self, anyhow::Error> {
         // Load private key for signing
-        let private_key_pem = fs::read_to_string(&config.private_key_path)
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "Failed to read private key from {}: {}",
-                    config.private_key_path,
-                    e
-                )
-            })?;
+        let private_key_pem = fs::read_to_string(&config.private_key_path).map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to read private key from {}: {}",
+                config.private_key_path,
+                e
+            )
+        })?;
 
         let encoding_key = EncodingKey::from_rsa_pem(private_key_pem.as_bytes())
             .map_err(|e| anyhow::anyhow!("Failed to parse private key: {}", e))?;
 
         // Load public key for verification
-        let public_key_pem = fs::read_to_string(&config.public_key_path)
-            .map_err(|e| {
-                anyhow::anyhow!(
-                    "Failed to read public key from {}: {}",
-                    config.public_key_path,
-                    e
-                )
-            })?;
+        let public_key_pem = fs::read_to_string(&config.public_key_path).map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to read public key from {}: {}",
+                config.public_key_path,
+                e
+            )
+        })?;
 
         let decoding_key = DecodingKey::from_rsa_pem(public_key_pem.as_bytes())
             .map_err(|e| anyhow::anyhow!("Failed to parse public key: {}", e))?;
@@ -152,10 +150,7 @@ impl JwtService {
     }
 
     /// Validate and decode an access token
-    pub fn validate_access_token(
-        &self,
-        token: &str,
-    ) -> Result<AccessTokenClaims, anyhow::Error> {
+    pub fn validate_access_token(&self, token: &str) -> Result<AccessTokenClaims, anyhow::Error> {
         let mut validation = Validation::new(Algorithm::RS256);
         validation.validate_exp = true;
 
@@ -166,10 +161,7 @@ impl JwtService {
     }
 
     /// Validate and decode a refresh token
-    pub fn validate_refresh_token(
-        &self,
-        token: &str,
-    ) -> Result<RefreshTokenClaims, anyhow::Error> {
+    pub fn validate_refresh_token(&self, token: &str) -> Result<RefreshTokenClaims, anyhow::Error> {
         let mut validation = Validation::new(Algorithm::RS256);
         validation.validate_exp = true;
 
@@ -193,42 +185,43 @@ mod tests {
 
     fn create_test_keys() -> Result<(NamedTempFile, NamedTempFile), anyhow::Error> {
         // Generate test RSA key pair
-        let private_key = r#"-----BEGIN RSA PRIVATE KEY-----
-MIIEpAIBAAKCAQEAu1SU1LfVLPHCozMxH2Mo4lgOEePzNm0tRgeLezV6ffAt0gun
-VTLw7onLRnrq0/IzKT6WR0yNu3KjdIQJzkn9FS5lL+h9yPGYEPUhLl4YQZXT/r6B
-Z6YJwBEYR9fxqBPH1CJnPv4Lk7qfQpK4lCd/k3s3jCQJFTgk6z9GNsKh6hI7WtQ7
-a/Z3pJ2V1pYx9TcZQiJhVVJCRoT1IxHLVxV1PwTCh6tXbUv/8U/7a1TfQPrPpJ0V
-fN8gPMZLQdVvNW6JwG5ZkT1mHWRNqsKpvgJCFCwwVG3C6vYfJOJPv0J1WkUB2jv+
-e2OHiN0d3LQPMkfTLz/kL1KCJqBQV6QKLWlqBwIDAQABAoIBAC2qHPCPD0D2NzFs
-bPATH8dmLMPvgR4nY7DjABfH0iFLTxIXjDDY0mQxqYWPx0GEGPPt0g7Q3FLKC7gG
-fBFVQtC9NWQFLvNiMJjzQBIxCT6zDLo2LwqyPQENYq6oZiLBPLTmBn6g7pqcCRkg
-5j5RxmW2p5bPEKvG4GhCKkPL1bI4aPZ4Q2XFpPPLXaL0tNvvXdmXHq0uFHzvxJXH
-nqGWwOgR7Js9RI8mNk7d8PQ3Y/VRMmQnV8VVVS5QGHfz8PvKyqrPNbNHCqk3A8WX
-YrNdVYGxJ7fQRVfgv1vJR/fJpjTBRLs9xCZqLLqkh3bqPJHB8aLbFE8mPxLaPJXW
-Y8fNqCECgYEA3h2Q8vxrFZZLB4Cq9S0WnV2TqLh7bOCg7nWHCLPLU0Vk9PGqNQUk
-9FqBHWKNVxYOVPPXG8dJ4mBNqD2dGkQPDwRnWlRAKqQNqkXCe0sLlqWGg0hVV1cQ
-IVqJCON3HUKzGcC3fLuV8nfQHQHvO9gQn8r1VCLLYqRNYvnPXLPHgr0CgYEA2IbJ
-n0vPxGCfqGMZf8Kd8JnO9TKHZcE7QYNLDqGxLfRm7TqDdj0gKJzFhWdMVF1Hs7B7
-WLBfBP9SfM0mKLVqN5TW0VPqdBZvP6V6N3KrHQ1LoqBB+oLvHBvLcSZLbZLbdcWX
-G9QQRpQqL7XqLfMwqGNz7VGBpMTBfLPcQsT9AjMCgYEAxCR5K+rH8tL3fNOKLT3L
-sJzGGnBFQa0jZpX0MmBHGhZGgLqPJdLpE4G8sGqBaXOKQqvNqhL6GWr7Vpo+0bqN
-xYQMF6y8xm6U6TVJdP6oPaTPi8g8ULfkWLhJ7DLj0c3LaW6VJkl0pXLCvB9kPTXV
-kL5YmfWFbYq2NqPK1e3qpqUCgYEAxOKNNRPQ5LVOJMqFqH1lGQGQZl5kR7XNVVVZ
-YZQH0fWJcL7MQpgqHJfVIAMXHSQKvKqR1LkKzQvqVxqHPgLm3BcQfNV8YFrvUn7m
-xvNB0f0nVqNqYLBQZRyQvLQhRfGJKYGtNHJMZkRTTgGLLYlM6VKBd1L7KGPVmMGz
-HQCQe4MCgYBcL8GWqMCqPfR9s3j1hqL7RwKJTRLXhQJ0LG1R8ULBfMRRdJdxJXPQ
-Y8WLXJPZ2NBWqvgKJPFGLQaQfHqABJmGqEHVvLGKMC8qQOy1lJYzRVh+PqCYxCY9
-YN8eCxvHYzT7fYN8x/SqLWnVD6P3uR3d3F1P3Lh0qNE3ZHNL0QHfJg==
------END RSA PRIVATE KEY-----"#;
+        let private_key = r#"-----BEGIN PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCazAniq0OLiSsC
+OhQ+HVyptrwMEaWD5YJzz2I+yjCFcLRWcQ30j9xnyZO9Rxt2lYveqlH0A73+w3St
++lzZmhs3HnrpdWUIPgFxB2EiP9Hf6ty2/e29CdxACUPx7aGh5M2ViASOdzkeFUPY
+NOFkYuxZTGNGMTH2JzTwPpAavvcXmZ994OO/BJx25IBhDSK+sgPgh1NceigiakfL
+6LwTwIeenkPVaus9Gi1Gi2UrmL3hr/o5MMv4NAcN+nAzIvZHVlykOn1ci6Pm939L
+DSYWiVZUoj7W0dFe6klL9XsnWaUROsb5W9IQKlwJDMfCs7FHDjERPoNCVwRd9/VE
+j4IPu1kdAgMBAAECggEAL3KLNSc5tPN+c1hKDCAD3yFb0nc2PI+ExOq0OnrPFJfP
+Lw/IL0ZJUKbA2iuJh3efP8kFBb5/5i8S/KDZBPnvjZ2SHy0Uosoetv6ED3NwaSoc
+LRr4XBFBqX8tjGJCQNVZDpR6kRCKOWZbPVI4JAUOXPDFHSbHIaQy3dDPauNN6bV6
+zX0DiQ3zNtVJ/Cygd0ndiVjgILKhxC9VnN4HRA3usLkXpo7jGiCV1J7XHTQsmB3X
+Kkbn3uqtjkyy7ngcLuSq6sdx/EFQhsl7rvcweeNMHNRE/paKupoeulXxbWM9EpN2
+qmFDRtA8ih3EfeUK1PZGdTfLkQWt5f/4dD9w61z4IQKBgQDNUSqO58NfMqVampfb
+NySa34WuXoVTNMwtHDqzFAykfg+nXo8ABGv6SvNcIHL8CicwPSYSrd5JvbSCTwVs
+tJsaC836xOjrZ0kK+oy8l4sycp6tERHNi7rTv64YfbmPE0Z77M60c1/KueOYBcKn
+srNZZLPrHpxyjmFlToYvj/MpHwKBgQDBAk2DJsINL79+dE2PqUTCX9dq9ixDDQEt
+mH2OOQj7Too49tOjvZP/iG5kPQ/Qkfjx2JZeru2xKzxunYa3qvwuHDeJYDvkilxa
+G3NEeVZahvdp+ZknmGZKxgaZKgZP04kgW97PAcfFrqjzB8EcajwcjHLue2Qg5162
+ceihyBeqQwKBgEpu5X3fWb3Wb4nUR79KU3PuGtmnHLCYkHi+Ji2r1BWCOgyUREVe
+VQLtTyKUBPuIdsKPOJFHBTI4mwsuuKm7JAuiQe9qmYJV9G4NfR4V1nnYgdv+NzUM
+NhP0BpqMYcwT0da1eA6FUTH+iBsh43rGVyzOTEet1kvVgEuo1w7BIgdDAoGAQkcx
+KO1hS7fu0VTM4Z1l0D2rMr7QWkIX+nlX/EPXsry4uHECIkNSlDhceC2DxcKqsxoG
+IQN++gz31qBfh6i+qnLkG1ehmYxtxD+S6JumLLYWNh0RG8i4r8qqr2QAAN+KQkNq
+ErnwyRB+Ud6C0OgmNkOAoCZdLvNk0c/x68RTZBMCgYEAxXsNZwPZQBeQIjLZQeiR
+3N1PS33NB4HcQP8K+wYLbW0PvjxeXUpMit2RmkKi4fFLX0rO7Huwa0rwJLPksJdy
+szbJbBstFz1BZ8nwpJp1m/Ntqja3n74mp4MwSr6au1Db1SVJAOisMRZ3oIXuYI6m
+C+AKS63xSUuh0BRfCg6QHGA=
+-----END PRIVATE KEY-----"#;
 
         let public_key = r#"-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu1SU1LfVLPHCozMxH2Mo
-4lgOEePzNm0tRgeLezV6ffAt0gunVTLw7onLRnrq0/IzKT6WR0yNu3KjdIQJzkn9
-FS5lL+h9yPGYEPUhLl4YQZXT/r6BZ6YJwBEYR9fxqBPH1CJnPv4Lk7qfQpK4lCd/
-k3s3jCQJFTgk6z9GNsKh6hI7WtQ7a/Z3pJ2V1pYx9TcZQiJhVVJCRoT1IxHLVxV1
-PwTCh6tXbUv/8U/7a1TfQPrPpJ0VfN8gPMZLQdVvNW6JwG5ZkT1mHWRNqsKpvgJC
-FCwwVG3C6vYfJOJPv0J1WkUB2jv+e2OHiN0d3LQPMkfTLz/kL1KCJqBQV6QKLWlq
-BwIDAQAB
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmswJ4qtDi4krAjoUPh1c
+qba8DBGlg+WCc89iPsowhXC0VnEN9I/cZ8mTvUcbdpWL3qpR9AO9/sN0rfpc2Zob
+Nx566XVlCD4BcQdhIj/R3+rctv3tvQncQAlD8e2hoeTNlYgEjnc5HhVD2DThZGLs
+WUxjRjEx9ic08D6QGr73F5mffeDjvwScduSAYQ0ivrID4IdTXHooImpHy+i8E8CH
+np5D1WrrPRotRotlK5i94a/6OTDL+DQHDfpwMyL2R1ZcpDp9XIuj5vd/Sw0mFolW
+VKI+1tHRXupJS/V7J1mlETrG+VvSECpcCQzHwrOxRw4xET6DQlcEXff1RI+CD7tZ
+HQIDAQAB
 -----END PUBLIC KEY-----"#;
 
         let mut private_file = NamedTempFile::new()?;
