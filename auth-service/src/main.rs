@@ -6,7 +6,7 @@ mod services;
 mod utils;
 
 use axum::{
-    routing::get,
+    routing::{get, post},
     Router,
 };
 use std::net::SocketAddr;
@@ -18,12 +18,13 @@ use tower_http::{
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::config::Config;
-use crate::services::MongoDb;
+use crate::services::{EmailService, MongoDb};
 
 #[derive(Clone)]
 pub struct AppState {
     pub config: Config,
     pub db: MongoDb,
+    pub email: EmailService,
 }
 
 #[tokio::main]
@@ -49,6 +50,10 @@ async fn main() -> Result<(), anyhow::Error> {
     db.initialize_indexes().await?;
     tracing::info!("Database initialized successfully");
 
+    // Initialize email service
+    let email = EmailService::new(&config.gmail)?;
+    tracing::info!("Email service initialized");
+
     // TODO: Initialize Redis
     // TODO: Load JWT keys
 
@@ -56,6 +61,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let state = AppState {
         config: config.clone(),
         db,
+        email,
     };
 
     // Build application router
@@ -76,13 +82,15 @@ async fn main() -> Result<(), anyhow::Error> {
 }
 
 async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
-    // TODO: Add authentication routes
     // TODO: Add user routes
     // TODO: Add admin routes
-    // TODO: Add middleware (CORS, auth, rate limiting)
+    // TODO: Add middleware (auth, rate limiting)
 
     let app = Router::new()
         .route("/health", get(health_check))
+        // Authentication routes
+        .route("/auth/register", post(handlers::auth::register))
+        .route("/auth/verify", get(handlers::auth::verify_email))
         .with_state(state)
         // Add CORS layer
         .layer(CorsLayer::permissive()) // TODO: Configure from config
