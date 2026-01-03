@@ -1,8 +1,8 @@
 use auth_service::{
     config::Config,
     middleware::{
-        app_auth_middleware, create_client_rate_limiter, create_ip_rate_limiter, create_login_rate_limiter,
-        create_password_reset_rate_limiter,
+        app_auth_middleware, create_client_rate_limiter, create_ip_rate_limiter,
+        create_login_rate_limiter, create_password_reset_rate_limiter,
     },
     models::{Client, ClientType},
     services::{EmailService, JwtService, MockBlacklist, MongoDb, TokenBlacklist},
@@ -99,7 +99,9 @@ async fn test_app_auth_middleware() {
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
     // 5. Test: Valid Token via X-App-Token
-    let token = jwt.generate_app_token(client_id, "Test App", vec![], 100).unwrap();
+    let token = jwt
+        .generate_app_token(client_id, "Test App", vec![], 100)
+        .unwrap();
     let response = app
         .clone()
         .oneshot(

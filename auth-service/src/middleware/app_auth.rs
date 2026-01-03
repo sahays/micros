@@ -27,11 +27,11 @@ pub async fn app_auth_middleware(
         .get("X-App-Token")
         .or_else(|| req.headers().get(header::AUTHORIZATION))
         .and_then(|value| value.to_str().ok())
-        .and_then(|value| {
+        .map(|value| {
             if value.starts_with("Bearer ") {
-                Some(value.strip_prefix("Bearer ").unwrap())
+                value.strip_prefix("Bearer ").unwrap()
             } else {
-                Some(value)
+                value
             }
         });
 
@@ -62,15 +62,19 @@ pub async fn app_auth_middleware(
 
     // 3. Check blacklist (for client revocation)
     let blacklist_key = format!("client:{}", claims.client_id);
-    let is_revoked = state.redis.is_blacklisted(&blacklist_key).await.map_err(|e| {
-        tracing::error!(error = %e, "Redis error checking client revocation");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "Internal server error".to_string(),
-            }),
-        )
-    })?;
+    let is_revoked = state
+        .redis
+        .is_blacklisted(&blacklist_key)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Redis error checking client revocation");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
 
     if is_revoked {
         return Err((

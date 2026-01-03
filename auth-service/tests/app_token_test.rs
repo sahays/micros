@@ -2,7 +2,8 @@ use auth_service::{
     build_router,
     config::Config,
     middleware::{
-        create_client_rate_limiter, create_ip_rate_limiter, create_login_rate_limiter, create_password_reset_rate_limiter,
+        create_client_rate_limiter, create_ip_rate_limiter, create_login_rate_limiter,
+        create_password_reset_rate_limiter,
     },
     models::{Client, ClientType},
     services::{EmailService, JwtService, MockBlacklist, MongoDb},
@@ -69,7 +70,7 @@ async fn test_app_token_success() {
     let client_id = "test_client_id";
     let client_secret = "test_client_secret";
     let client_secret_hash = hash_password(&Password::new(client_secret.to_string())).unwrap();
-    
+
     let client = Client::new(
         client_id.to_string(),
         client_secret_hash.into_string(),
@@ -106,13 +107,17 @@ async fn test_app_token_success() {
         .await
         .unwrap();
     let body_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    
-    let access_token = body_json["access_token"].as_str().expect("access_token missing");
+
+    let access_token = body_json["access_token"]
+        .as_str()
+        .expect("access_token missing");
     assert_eq!(body_json["token_type"], "Bearer");
     assert_eq!(body_json["expires_in"], 3600);
 
     // Validate claims
-    let claims = jwt.validate_app_token(access_token).expect("Invalid app token");
+    let claims = jwt
+        .validate_app_token(access_token)
+        .expect("Invalid app token");
     assert_eq!(claims.client_id, client_id);
     assert_eq!(claims.sub, client_id);
     assert_eq!(claims.name, "Test App");
@@ -152,7 +157,7 @@ async fn test_app_token_invalid_secret() {
     let client_id = "test_client_id_invalid";
     let client_secret = "test_client_secret";
     let client_secret_hash = hash_password(&Password::new(client_secret.to_string())).unwrap();
-    
+
     let client = Client::new(
         client_id.to_string(),
         client_secret_hash.into_string(),
@@ -222,7 +227,7 @@ async fn test_app_token_invalid_grant_type() {
                 .uri("/auth/app/token")
                 .header("Content-Type", "application/json")
                 .body(Body::from(
-                    r#"{"client_id": "any", "client_secret": "any", "grant_type": "password"}"#
+                    r#"{"client_id": "any", "client_secret": "any", "grant_type": "password"}"#,
                 ))
                 .unwrap(),
         )

@@ -64,7 +64,10 @@ async fn test_client_rate_limiting() {
     // 2. Build App with Middlewares
     let app = Router::new()
         .route("/protected", get(|| async { "ok" }))
-        .layer(from_fn_with_state(state.client_rate_limiter.clone(), client_rate_limit_middleware))
+        .layer(from_fn_with_state(
+            state.client_rate_limiter.clone(),
+            client_rate_limit_middleware,
+        ))
         .layer(from_fn_with_state(state.clone(), app_auth_middleware))
         .with_state(state);
 
@@ -81,7 +84,9 @@ async fn test_client_rate_limiting() {
     );
     db.clients().insert_one(&client, None).await.unwrap();
 
-    let token = jwt.generate_app_token(client_id, "Test App", vec![], 2).unwrap();
+    let token = jwt
+        .generate_app_token(client_id, "Test App", vec![], 2)
+        .unwrap();
 
     // 4. First request - OK
     let response = app
@@ -124,10 +129,13 @@ async fn test_client_rate_limiting() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
-    
+
     // Check headers
     assert_eq!(response.headers().get("x-ratelimit-limit").unwrap(), "2");
-    assert_eq!(response.headers().get("x-ratelimit-remaining").unwrap(), "0");
+    assert_eq!(
+        response.headers().get("x-ratelimit-remaining").unwrap(),
+        "0"
+    );
     assert!(response.headers().get("retry-after").is_some());
 
     // 7. Cleanup

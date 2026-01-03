@@ -1,8 +1,8 @@
 use auth_service::{
     config::Config,
     middleware::{
-        admin_auth_middleware, app_auth_middleware, create_client_rate_limiter,
-        create_ip_rate_limiter, create_login_rate_limiter, create_password_reset_rate_limiter,
+        admin_auth_middleware, create_client_rate_limiter, create_ip_rate_limiter,
+        create_login_rate_limiter, create_password_reset_rate_limiter,
     },
     models::{Client, ClientType},
     services::{EmailService, JwtService, MockBlacklist, MongoDb},
@@ -74,7 +74,10 @@ async fn test_client_rotation_and_revocation() {
         .layer(from_fn_with_state(state.clone(), admin_auth_middleware));
 
     let app = Router::new()
-        .route("/auth/app/token", post(auth_service::handlers::app::app_token))
+        .route(
+            "/auth/app/token",
+            post(auth_service::handlers::app::app_token),
+        )
         .merge(admin_routes)
         .with_state(state);
 
@@ -107,12 +110,14 @@ async fn test_client_rotation_and_revocation() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let body_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
     let new_secret = body_json["new_client_secret"].as_str().unwrap();
 
     // 5. Verify: Both secrets work for token exchange (grace period)
-    
+
     // Old secret works
     let response = app
         .clone()

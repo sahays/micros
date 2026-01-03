@@ -27,7 +27,11 @@ pub struct Client {
     pub client_id: String,
     pub client_secret_hash: String,
     pub previous_client_secret_hash: Option<String>,
-    #[serde(default, with = "optional_chrono_datetime_as_bson_datetime", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "optional_chrono_datetime_as_bson_datetime",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub previous_secret_expiry: Option<chrono::DateTime<chrono::Utc>>,
     pub app_name: String,
     pub app_type: ClientType,
@@ -42,17 +46,18 @@ pub struct Client {
 
 pub mod optional_chrono_datetime_as_bson_datetime {
     use chrono::{DateTime, Utc};
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use serde::{Deserialize, Deserializer, Serializer};
 
-    pub fn serialize<S>(
-        val: &Option<DateTime<Utc>>,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(val: &Option<DateTime<Utc>>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
         match val {
-            Some(date) => mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime::serialize(date, serializer),
+            Some(date) => {
+                mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime::serialize(
+                    date, serializer,
+                )
+            }
             None => serializer.serialize_none(),
         }
     }
@@ -62,7 +67,10 @@ pub mod optional_chrono_datetime_as_bson_datetime {
         D: Deserializer<'de>,
     {
         #[derive(Deserialize)]
-        struct Wrapper(#[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")] DateTime<Utc>);
+        struct Wrapper(
+            #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+            DateTime<Utc>,
+        );
 
         let wrapper = Option::<Wrapper>::deserialize(deserializer)?;
         Ok(wrapper.map(|w| w.0))
