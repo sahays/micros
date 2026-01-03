@@ -18,6 +18,13 @@ use tower_http::{
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::config::Config;
+use crate::services::MongoDb;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub config: Config,
+    pub db: MongoDb,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -35,13 +42,24 @@ async fn main() -> Result<(), anyhow::Error> {
     );
 
     // Initialize database connections
-    // TODO: Initialize MongoDB
-    // TODO: Initialize Redis
+    tracing::info!("Initializing database connections");
+    let db = MongoDb::connect(&config.mongodb.uri, &config.mongodb.database).await?;
 
+    // Create indexes
+    db.initialize_indexes().await?;
+    tracing::info!("Database initialized successfully");
+
+    // TODO: Initialize Redis
     // TODO: Load JWT keys
 
+    // Create application state
+    let state = AppState {
+        config: config.clone(),
+        db,
+    };
+
     // Build application router
-    let app = build_router(config.clone()).await?;
+    let app = build_router(state).await?;
 
     // Start server
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
@@ -57,7 +75,7 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn build_router(_config: Config) -> Result<Router, anyhow::Error> {
+async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
     // TODO: Add authentication routes
     // TODO: Add user routes
     // TODO: Add admin routes
@@ -65,6 +83,7 @@ async fn build_router(_config: Config) -> Result<Router, anyhow::Error> {
 
     let app = Router::new()
         .route("/health", get(health_check))
+        .with_state(state)
         // Add CORS layer
         .layer(CorsLayer::permissive()) // TODO: Configure from config
         // Add tracing layer
@@ -73,10 +92,33 @@ async fn build_router(_config: Config) -> Result<Router, anyhow::Error> {
     Ok(app)
 }
 
-async fn health_check() -> &'static str {
-    // TODO: Check MongoDB connection
+async fn health_check(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> Result<axum::Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    // Check MongoDB connection
+    state
+        .db
+        .health_check()
+        .await
+        .map_err(|e| {
+            tracing::error!("MongoDB health check failed: {}", e);
+            (
+                axum::http::StatusCode::SERVICE_UNAVAILABLE,
+                format!("MongoDB unhealthy: {}", e),
+            )
+        })?;
+
     // TODO: Check Redis connection
-    "OK"
+
+    Ok(axum::Json(serde_json::json!({
+        "status": "healthy",
+        "service": state.config.service_name,
+        "version": state.config.service_version,
+        "environment": format!("{:?}", state.config.environment),
+        "checks": {
+            "mongodb": "up"
+        }
+    })))
 }
 
 fn init_tracing(config: &Config) {
