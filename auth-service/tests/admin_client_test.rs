@@ -67,6 +67,7 @@ async fn test_create_client_flow() {
         redis,
         login_rate_limiter: login_limiter,
         password_reset_rate_limiter: reset_limiter,
+        app_token_rate_limiter: ip_limiter.clone(),
         ip_rate_limiter: ip_limiter,
     };
 

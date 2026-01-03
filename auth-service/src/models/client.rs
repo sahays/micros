@@ -26,6 +26,9 @@ pub struct Client {
     pub id: Option<ObjectId>,
     pub client_id: String,
     pub client_secret_hash: String,
+    pub previous_client_secret_hash: Option<String>,
+    #[serde(default, with = "optional_chrono_datetime_as_bson_datetime", skip_serializing_if = "Option::is_none")]
+    pub previous_secret_expiry: Option<chrono::DateTime<chrono::Utc>>,
     pub app_name: String,
     pub app_type: ClientType,
     pub rate_limit_per_min: u32,
@@ -35,6 +38,35 @@ pub struct Client {
     pub created_at: chrono::DateTime<chrono::Utc>,
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+pub mod optional_chrono_datetime_as_bson_datetime {
+    use chrono::{DateTime, Utc};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S>(
+        val: &Option<DateTime<Utc>>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match val {
+            Some(date) => mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime::serialize(date, serializer),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct Wrapper(#[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")] DateTime<Utc>);
+
+        let wrapper = Option::<Wrapper>::deserialize(deserializer)?;
+        Ok(wrapper.map(|w| w.0))
+    }
 }
 
 impl Client {
@@ -51,6 +83,8 @@ impl Client {
             id: None,
             client_id,
             client_secret_hash,
+            previous_client_secret_hash: None,
+            previous_secret_expiry: None,
             app_name,
             app_type,
             rate_limit_per_min,

@@ -42,6 +42,7 @@ pub struct JwtConfig {
     pub public_key_path: String,
     pub access_token_expiry_minutes: i64,
     pub refresh_token_expiry_days: i64,
+    pub app_token_expiry_minutes: i64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -85,6 +86,10 @@ pub struct RateLimitConfig {
     pub register_window_seconds: u64,
     pub password_reset_attempts: u32,
     pub password_reset_window_seconds: u64,
+    pub global_ip_limit: u32,
+    pub global_ip_window_seconds: u64,
+    pub app_token_limit: u32,
+    pub app_token_window_seconds: u64,
 }
 
 impl Config {
@@ -127,6 +132,10 @@ impl Config {
                     .unwrap_or_else(|_| "7".to_string())
                     .parse()
                     .map_err(|_| anyhow::anyhow!("Invalid JWT_REFRESH_TOKEN_EXPIRY_DAYS"))?,
+                app_token_expiry_minutes: env::var("JWT_APP_TOKEN_EXPIRY_MINUTES")
+                    .unwrap_or_else(|_| "60".to_string())
+                    .parse()
+                    .map_err(|_| anyhow::anyhow!("Invalid JWT_APP_TOKEN_EXPIRY_MINUTES"))?,
             },
             google: GoogleOAuthConfig {
                 client_id: env::var("GOOGLE_CLIENT_ID")
@@ -186,6 +195,22 @@ impl Config {
                     .unwrap_or_else(|_| "3600".to_string())
                     .parse()
                     .unwrap_or(3600),
+                global_ip_limit: env::var("RATE_LIMIT_GLOBAL_IP_LIMIT")
+                    .unwrap_or_else(|_| "100".to_string())
+                    .parse()
+                    .unwrap_or(100),
+                global_ip_window_seconds: env::var("RATE_LIMIT_GLOBAL_IP_WINDOW_SECONDS")
+                    .unwrap_or_else(|_| "60".to_string())
+                    .parse()
+                    .unwrap_or(60),
+                app_token_limit: env::var("RATE_LIMIT_APP_TOKEN_LIMIT")
+                    .unwrap_or_else(|_| "10".to_string())
+                    .parse()
+                    .unwrap_or(10),
+                app_token_window_seconds: env::var("RATE_LIMIT_APP_TOKEN_WINDOW_SECONDS")
+                    .unwrap_or_else(|_| "60".to_string())
+                    .parse()
+                    .unwrap_or(60),
             },
         };
 

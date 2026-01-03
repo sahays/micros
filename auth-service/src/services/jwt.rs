@@ -16,6 +16,7 @@ pub struct JwtService {
     key_id: String,
     access_token_expiry_minutes: i64,
     refresh_token_expiry_days: i64,
+    app_token_expiry_minutes: i64,
 }
 
 /// JWK representation
@@ -61,6 +62,27 @@ pub struct RefreshTokenClaims {
     pub exp: i64,
     /// Issued at (Unix timestamp)
     pub iat: i64,
+}
+
+/// Claims for app tokens (short-lived, for services)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppTokenClaims {
+    /// Subject (client ID)
+    pub sub: String,
+    /// Client ID (explicitly included as per specs)
+    pub client_id: String,
+    /// App Name
+    pub name: String,
+    /// Token Type (should be "app")
+    pub typ: String,
+    /// Scopes
+    pub scopes: Vec<String>,
+    /// Expiration time (Unix timestamp)
+    pub exp: i64,
+    /// Issued at (Unix timestamp)
+    pub iat: i64,
+    /// JWT ID (for blacklisting/tracking)
+    pub jti: String,
 }
 
 /// Token response returned to client
@@ -111,6 +133,7 @@ impl JwtService {
             key_id,
             access_token_expiry_minutes: config.access_token_expiry_minutes,
             refresh_token_expiry_days: config.refresh_token_expiry_days,
+            app_token_expiry_minutes: config.app_token_expiry_minutes,
         })
     }
 
@@ -229,6 +252,50 @@ impl JwtService {
     pub fn access_token_expiry_seconds(&self) -> i64 {
         self.access_token_expiry_minutes * 60
     }
+
+    /// Generate an app token for a client
+    pub fn generate_app_token(
+        &self,
+        client_id: &str,
+        app_name: &str,
+        scopes: Vec<String>,
+    ) -> Result<String, anyhow::Error> {
+        let now = Utc::now();
+        let exp = now + Duration::minutes(self.app_token_expiry_minutes);
+
+        let claims = AppTokenClaims {
+            sub: client_id.to_string(),
+            client_id: client_id.to_string(),
+            name: app_name.to_string(),
+            typ: "app".to_string(),
+            scopes,
+            exp: exp.timestamp(),
+            iat: now.timestamp(),
+            jti: Uuid::new_v4().to_string(),
+        };
+
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = Some(self.key_id.clone());
+        let token = encode(&header, &claims, &self.encoding_key)
+            .map_err(|e| anyhow::anyhow!("Failed to encode app token: {}", e))?;
+
+        Ok(token)
+    }
+
+    /// Validate and decode an app token
+    pub fn validate_app_token(&self, token: &str) -> Result<AppTokenClaims, anyhow::Error> {
+        let mut validation = Validation::new(Algorithm::RS256);
+        validation.validate_exp = true;
+
+        let token_data = decode::<AppTokenClaims>(token, &self.decoding_key, &validation)
+            .map_err(|e| anyhow::anyhow!("Invalid app token: {}", e))?;
+
+        if token_data.claims.typ != "app" {
+            return Err(anyhow::anyhow!("Invalid token type"));
+        }
+
+        Ok(token_data.claims)
+    }
 }
 
 #[cfg(test)]
@@ -296,11 +363,13 @@ HQIDAQAB
             public_key_path: public_file.path().to_str().unwrap().to_string(),
             access_token_expiry_minutes: 15,
             refresh_token_expiry_days: 7,
+            app_token_expiry_minutes: 60,
         };
 
         let service = JwtService::new(&config)?;
         assert_eq!(service.access_token_expiry_minutes, 15);
         assert_eq!(service.refresh_token_expiry_days, 7);
+        assert_eq!(service.app_token_expiry_minutes, 60);
 
         Ok(())
     }
@@ -314,6 +383,7 @@ HQIDAQAB
             public_key_path: public_file.path().to_str().unwrap().to_string(),
             access_token_expiry_minutes: 15,
             refresh_token_expiry_days: 7,
+            app_token_expiry_minutes: 60,
         };
 
         let service = JwtService::new(&config)?;
@@ -337,6 +407,7 @@ HQIDAQAB
             public_key_path: public_file.path().to_str().unwrap().to_string(),
             access_token_expiry_minutes: 15,
             refresh_token_expiry_days: 7,
+            app_token_expiry_minutes: 60,
         };
 
         let service = JwtService::new(&config)?;
@@ -361,6 +432,7 @@ HQIDAQAB
             public_key_path: public_file.path().to_str().unwrap().to_string(),
             access_token_expiry_minutes: 15,
             refresh_token_expiry_days: 7,
+            app_token_expiry_minutes: 60,
         };
 
         let service = JwtService::new(&config)?;

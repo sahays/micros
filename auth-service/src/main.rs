@@ -53,10 +53,14 @@ async fn main() -> Result<(), anyhow::Error> {
         config.rate_limit.password_reset_window_seconds,
     );
     let ip_rate_limiter = middleware::create_ip_rate_limiter(
-        100, // Default global IP limit: 100 requests per 1 minute
-        60,
+        config.rate_limit.global_ip_limit,
+        config.rate_limit.global_ip_window_seconds,
     );
-    tracing::info!("Rate limiters initialized: Login, Password Reset, and Global IP");
+    let app_token_rate_limiter = middleware::create_ip_rate_limiter(
+        config.rate_limit.app_token_limit,
+        config.rate_limit.app_token_window_seconds,
+    );
+    tracing::info!("Rate limiters initialized: Login, Password Reset, App Token, and Global IP");
 
     // Create application state
     let state = AppState {
@@ -67,6 +71,7 @@ async fn main() -> Result<(), anyhow::Error> {
         redis: std::sync::Arc::new(redis),
         login_rate_limiter,
         password_reset_rate_limiter,
+        app_token_rate_limiter,
         ip_rate_limiter,
     };
     // Build application router

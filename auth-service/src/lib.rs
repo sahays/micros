@@ -27,6 +27,7 @@ pub struct AppState {
     pub redis: Arc<dyn crate::services::TokenBlacklist>,
     pub login_rate_limiter: LoginRateLimiter,
     pub password_reset_rate_limiter: PasswordResetRateLimiter,
+    pub app_token_rate_limiter: IpRateLimiter,
     pub ip_rate_limiter: IpRateLimiter,
 }
 
@@ -62,6 +63,15 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
             middleware::rate_limit_middleware,
         ));
 
+    // Create app token route with rate limiting
+    let app_token_limiter = state.app_token_rate_limiter.clone();
+    let app_token_route = Router::new()
+        .route("/auth/app/token", post(handlers::app::app_token))
+        .layer(from_fn_with_state(
+            app_token_limiter,
+            middleware::ip_rate_limit_middleware,
+        ));
+
     // Create global IP rate limiter
     let ip_limiter = state.ip_rate_limiter.clone();
 
@@ -77,6 +87,7 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
             "/auth/google/callback",
             get(handlers::auth::google_callback),
         )
+        .merge(app_token_route)
         .merge(login_route)
         .merge(reset_request_route)
         .merge(admin_routes)
