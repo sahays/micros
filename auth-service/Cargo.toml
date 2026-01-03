@@ -8,7 +8,7 @@ description = "Self-contained authentication microservice with JWT, OAuth, and e
 [dependencies]
 # Web framework
 axum = { version = "0.7", features = ["macros"] }
-tower = "0.4"
+tower = { version = "0.4", features = ["util"] }
 tower-http = { version = "0.5", features = ["cors", "trace"] }
 
 # Async runtime
@@ -77,6 +77,10 @@ config = "0.14"
 tempfile = "3.24.0"
 # Testing
 tokio-test = "0.4"
+
+[lib]
+name = "auth_service"
+path = "src/lib.rs"
 
 [[bin]]
 name = "auth-service"

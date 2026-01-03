@@ -1,33 +1,13 @@
-mod config;
-mod handlers;
-mod middleware;
-mod models;
-mod services;
-mod utils;
-
-use axum::{
-    middleware::from_fn,
-    routing::{get, post},
-    Router,
+use auth_service::{
+    build_router,
+    config::Config,
+    init_tracing,
+    middleware,
+    services::{EmailService, JwtService, MongoDb},
+    AppState,
 };
 use std::net::SocketAddr;
 use tokio::signal;
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-
-use crate::config::Config;
-use crate::middleware::{LoginRateLimiter, PasswordResetRateLimiter};
-use crate::services::{EmailService, JwtService, MongoDb};
-
-#[derive(Clone)]
-pub struct AppState {
-    pub config: Config,
-    pub db: MongoDb,
-    pub email: EmailService,
-    pub jwt: JwtService,
-    pub login_rate_limiter: LoginRateLimiter,
-    pub password_reset_rate_limiter: PasswordResetRateLimiter,
-}
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -104,85 +84,6 @@ async fn main() -> Result<(), anyhow::Error> {
 
     tracing::info!("Service shutdown complete");
     Ok(())
-}
-
-async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
-    // TODO: Add user routes
-    // TODO: Add admin routes
-
-    // Create login route with rate limiting
-    let login_limiter = state.login_rate_limiter.clone();
-    let login_route = Router::new()
-        .route("/auth/login", post(handlers::auth::login))
-        .layer(from_fn(move |req, next| {
-            middleware::rate_limit_middleware(login_limiter.clone(), req, next)
-        }));
-
-    // Create password reset request route with rate limiting
-    let reset_request_limiter = state.password_reset_rate_limiter.clone();
-    let reset_request_route = Router::new()
-        .route(
-            "/auth/password-reset/request",
-            post(handlers::auth::request_password_reset),
-        )
-        .layer(from_fn(move |req, next| {
-            middleware::rate_limit_middleware(reset_request_limiter.clone(), req, next)
-        }));
-
-    let app = Router::new()
-        .route("/health", get(health_check))
-        // Authentication routes
-        .route("/auth/register", post(handlers::auth::register))
-        .route("/auth/verify", get(handlers::auth::verify_email))
-        .merge(login_route)
-        .merge(reset_request_route)
-        .route(
-            "/auth/password-reset/confirm",
-            post(handlers::auth::confirm_password_reset),
-        )
-        .route("/auth/logout", post(handlers::auth::logout))
-        .with_state(state)
-        // Add CORS layer
-        .layer(CorsLayer::permissive()) // TODO: Configure from config
-        // Add tracing layer
-        .layer(TraceLayer::new_for_http());
-
-    Ok(app)
-}
-
-async fn health_check(
-    axum::extract::State(state): axum::extract::State<AppState>,
-) -> Result<axum::Json<serde_json::Value>, (axum::http::StatusCode, String)> {
-    // Check MongoDB connection
-    state.db.health_check().await.map_err(|e| {
-        tracing::error!("MongoDB health check failed: {}", e);
-        (
-            axum::http::StatusCode::SERVICE_UNAVAILABLE,
-            format!("MongoDB unhealthy: {}", e),
-        )
-    })?;
-
-    // TODO: Check Redis connection
-
-    Ok(axum::Json(serde_json::json!({
-        "status": "healthy",
-        "service": state.config.service_name,
-        "version": state.config.service_version,
-        "environment": format!("{:?}", state.config.environment),
-        "checks": {
-            "mongodb": "up"
-        }
-    })))
-}
-
-fn init_tracing(config: &Config) {
-    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&config.log_level));
-
-    tracing_subscriber::registry()
-        .with(env_filter)
-        .with(tracing_subscriber::fmt::layer().json())
-        .init();
 }
 
 async fn shutdown_signal() {
