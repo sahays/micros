@@ -32,7 +32,11 @@ pub struct AppState {
 
 pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
     // TODO: Add user routes
-    // TODO: Add admin routes
+    
+    // Admin routes
+    let admin_routes = Router::new()
+        .route("/auth/admin/clients", post(handlers::admin::create_client))
+        .layer(from_fn_with_state(state.clone(), middleware::admin_auth_middleware));
 
     // Create login route with rate limiting
     let login_limiter = state.login_rate_limiter.clone();
@@ -63,6 +67,7 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
         .route("/auth/google/callback", get(handlers::auth::google_callback))
         .merge(login_route)
         .merge(reset_request_route)
+        .merge(admin_routes)
         .route(
             "/auth/password-reset/confirm",
             post(handlers::auth::confirm_password_reset),

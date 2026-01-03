@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod rate_limit;
 pub mod tracing;
+pub mod admin;
 
 pub use auth::{auth_middleware, AuthUser};
 pub use rate_limit::{
@@ -9,3 +10,4 @@ pub use rate_limit::{
     PasswordResetRateLimiter,
 };
 pub use tracing::request_id_middleware;
+pub use admin::admin_auth_middleware;

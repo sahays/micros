@@ -61,6 +61,7 @@ pub struct GmailConfig {
 pub struct SecurityConfig {
     pub allowed_origins: Vec<String>,
     pub require_signatures: bool,
+    pub admin_api_key: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -151,6 +152,8 @@ impl Config {
                     .unwrap_or_else(|_| "false".to_string())
                     .parse()
                     .unwrap_or(false),
+                admin_api_key: env::var("ADMIN_API_KEY")
+                    .map_err(|_| anyhow::anyhow!("ADMIN_API_KEY is required"))?,
             },
             swagger: SwaggerConfig {
                 enabled: env::var("ENABLE_SWAGGER")

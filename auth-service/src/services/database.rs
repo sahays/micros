@@ -1,22 +1,22 @@
 use mongodb::{
     bson::doc,
     options::{ClientOptions, IndexOptions},
-    Client, Collection, Database, IndexModel,
+    Client as MongoClient, Collection, Database, IndexModel,
 };
 use std::time::Duration;
 
-use crate::models::{RefreshToken, User, VerificationToken};
+use crate::models::{Client, RefreshToken, User, VerificationToken};
 
 #[derive(Clone)]
 pub struct MongoDb {
-    client: Client,
+    client: MongoClient,
     db: Database,
 }
 
 impl MongoDb {
     pub async fn connect(uri: &str, database: &str) -> Result<Self, anyhow::Error> {
         tracing::info!(uri = %uri, "Connecting to MongoDB");
-        let client = Client::with_uri_str(uri).await?;
+        let client = MongoClient::with_uri_str(uri).await?;
         let db = client.database(database);
         tracing::info!(database = %database, "Successfully connected to MongoDB database");
         Ok(Self {
@@ -119,6 +119,23 @@ impl MongoDb {
             .await?;
         tracing::info!("Created indexes on refresh_tokens collection");
 
+        // Clients collection indexes
+        let clients = self.clients();
+
+        // Unique index on client_id
+        let client_id_index = IndexModel::builder()
+            .keys(doc! { "client_id": 1 })
+            .options(
+                IndexOptions::builder()
+                    .unique(true)
+                    .name("client_id_unique".to_string())
+                    .build(),
+            )
+            .build();
+
+        clients.create_index(client_id_index, None).await?;
+        tracing::info!("Created unique index on clients.client_id");
+
         Ok(())
     }
 
@@ -142,7 +159,11 @@ impl MongoDb {
         self.db.collection("refresh_tokens")
     }
 
-    pub fn client(&self) -> &Client {
+    pub fn clients(&self) -> Collection<Client> {
+        self.db.collection("clients")
+    }
+
+    pub fn client(&self) -> &MongoClient {
         &self.client
     }
 
