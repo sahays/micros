@@ -13,10 +13,10 @@ use axum::{
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use std::sync::Arc;
 use crate::config::Config;
-use crate::middleware::{LoginRateLimiter, PasswordResetRateLimiter, IpRateLimiter};
+use crate::middleware::{IpRateLimiter, LoginRateLimiter, PasswordResetRateLimiter};
 use crate::services::{EmailService, JwtService, MongoDb};
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -32,17 +32,23 @@ pub struct AppState {
 
 pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
     // TODO: Add user routes
-    
+
     // Admin routes
     let admin_routes = Router::new()
         .route("/auth/admin/clients", post(handlers::admin::create_client))
-        .layer(from_fn_with_state(state.clone(), middleware::admin_auth_middleware));
+        .layer(from_fn_with_state(
+            state.clone(),
+            middleware::admin_auth_middleware,
+        ));
 
     // Create login route with rate limiting
     let login_limiter = state.login_rate_limiter.clone();
     let login_route = Router::new()
         .route("/auth/login", post(handlers::auth::login))
-        .layer(from_fn_with_state(login_limiter, middleware::rate_limit_middleware));
+        .layer(from_fn_with_state(
+            login_limiter,
+            middleware::rate_limit_middleware,
+        ));
 
     // Create password reset request route with rate limiting
     let reset_request_limiter = state.password_reset_rate_limiter.clone();
@@ -51,11 +57,14 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
             "/auth/password-reset/request",
             post(handlers::auth::request_password_reset),
         )
-        .layer(from_fn_with_state(reset_request_limiter, middleware::rate_limit_middleware));
+        .layer(from_fn_with_state(
+            reset_request_limiter,
+            middleware::rate_limit_middleware,
+        ));
 
     // Create global IP rate limiter
     let ip_limiter = state.ip_rate_limiter.clone();
-    
+
     let app = Router::new()
         .route("/health", get(health_check))
         .route("/.well-known/jwks.json", get(handlers::well_known::jwks))
@@ -64,7 +73,10 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
         .route("/auth/verify", get(handlers::auth::verify_email))
         .route("/auth/introspect", post(handlers::auth::introspect))
         .route("/auth/google", get(handlers::auth::google_login))
-        .route("/auth/google/callback", get(handlers::auth::google_callback))
+        .route(
+            "/auth/google/callback",
+            get(handlers::auth::google_callback),
+        )
         .merge(login_route)
         .merge(reset_request_route)
         .merge(admin_routes)
@@ -76,13 +88,22 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
         .merge(
             Router::new()
                 .route("/auth/logout", post(handlers::auth::logout))
-                .route("/users/me", get(handlers::user::get_me).patch(handlers::user::update_me))
+                .route(
+                    "/users/me",
+                    get(handlers::user::get_me).patch(handlers::user::update_me),
+                )
                 .route("/users/me/password", post(handlers::user::change_password))
-                .layer(from_fn_with_state(state.clone(), middleware::auth_middleware)),
+                .layer(from_fn_with_state(
+                    state.clone(),
+                    middleware::auth_middleware,
+                )),
         )
         .with_state(state)
         // Global IP rate limiting
-        .layer(from_fn_with_state(ip_limiter, middleware::ip_rate_limit_middleware))
+        .layer(from_fn_with_state(
+            ip_limiter,
+            middleware::ip_rate_limit_middleware,
+        ))
         // Add tracing middleware for request_id
         .layer(from_fn(middleware::request_id_middleware))
         // Add CORS layer

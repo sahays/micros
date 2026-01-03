@@ -83,7 +83,7 @@ mod tests {
     #[test]
     fn test_token_expiration() {
         let mut token = VerificationToken::new_password_reset("u".to_string(), "t".to_string());
-        
+
         // Manually set expiry to past
         token.expires_at = Utc::now() - Duration::hours(1);
         assert!(token.is_expired());

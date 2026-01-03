@@ -1,20 +1,22 @@
 use auth_service::{
     build_router,
     config::Config,
-    middleware::{create_login_rate_limiter, create_password_reset_rate_limiter, create_ip_rate_limiter},
-    services::{EmailService, JwtService, MongoDb, MockBlacklist},
-    AppState,
     handlers::admin::CreateClientResponse,
+    middleware::{
+        create_ip_rate_limiter, create_login_rate_limiter, create_password_reset_rate_limiter,
+    },
     models::{Client, ClientType},
+    services::{EmailService, JwtService, MockBlacklist, MongoDb},
+    AppState,
 };
 use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
+use mongodb::bson::doc;
+use std::sync::Arc;
 use tower::util::ServiceExt;
 use uuid::Uuid;
-use std::sync::Arc;
-use mongodb::bson::doc;
 
 async fn setup_test_config() -> (Config, String) {
     dotenvy::dotenv().ok();
@@ -22,7 +24,7 @@ async fn setup_test_config() -> (Config, String) {
     // But Config::from_env() checks for it.
     // For test, we can set the env var before calling from_env, or mock the config struct manually.
     std::env::set_var("ADMIN_API_KEY", "test_admin_key");
-    
+
     let mut config = Config::from_env().expect("Failed to load environment variables for test");
     let db_name = format!("test_auth_admin_client_{}", Uuid::new_v4());
     config.mongodb.database = db_name.clone();
@@ -43,14 +45,16 @@ async fn test_create_client_flow() {
     let db = MongoDb::connect(&config.mongodb.uri, &config.mongodb.database)
         .await
         .expect("Failed to connect to DB");
-    
+
     // Initialize indexes (important for unique client_id)
-    db.initialize_indexes().await.expect("Failed to initialize indexes");
-    
+    db.initialize_indexes()
+        .await
+        .expect("Failed to initialize indexes");
+
     let email = EmailService::new(&config.gmail).expect("Failed to create email service");
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
-    
+
     let login_limiter = create_login_rate_limiter(5, 60);
     let reset_limiter = create_password_reset_rate_limiter(3, 3600);
     let ip_limiter = create_ip_rate_limiter(100, 60);
@@ -76,12 +80,14 @@ async fn test_create_client_flow() {
                 .method("POST")
                 .uri("/auth/admin/clients")
                 .header("Content-Type", "application/json")
-                .body(Body::from(r#"{
+                .body(Body::from(
+                    r#"{
                     "app_name": "Test App",
                     "app_type": "web",
                     "rate_limit_per_min": 100,
                     "allowed_origins": ["http://localhost:8080"]
-                }"#))
+                }"#,
+                ))
                 .unwrap(),
         )
         .await
@@ -98,12 +104,14 @@ async fn test_create_client_flow() {
                 .uri("/auth/admin/clients")
                 .header("Content-Type", "application/json")
                 .header("X-Admin-Api-Key", "test_admin_key")
-                .body(Body::from(r#"{
+                .body(Body::from(
+                    r#"{
                     "app_name": "Test App",
                     "app_type": "web",
                     "rate_limit_per_min": 100,
                     "allowed_origins": ["http://localhost:8080"]
-                }"#))
+                }"#,
+                ))
                 .unwrap(),
         )
         .await
@@ -111,7 +119,9 @@ async fn test_create_client_flow() {
 
     assert_eq!(response.status(), StatusCode::CREATED);
 
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let client_res: CreateClientResponse = serde_json::from_slice(&body).unwrap();
 
     assert!(!client_res.client_id.is_empty());

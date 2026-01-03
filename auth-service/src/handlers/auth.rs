@@ -410,7 +410,7 @@ pub async fn logout(
     // 1. Blacklist the current access token
     let access_token_claims = user.0;
     let remaining_time = access_token_claims.exp - chrono::Utc::now().timestamp();
-    
+
     if remaining_time > 0 {
         state
             .redis
@@ -701,7 +701,7 @@ pub async fn google_login(
 ) -> (CookieJar, impl IntoResponse) {
     let oauth_state = generate_random_token();
     let code_verifier = generate_random_token();
-    
+
     // Create code challenge
     let mut hasher = Sha256::new();
     hasher.update(code_verifier.as_bytes());
@@ -806,7 +806,7 @@ pub async fn refresh(
         ));
     }
 
-    // 2. Verify the hash matches (Security check: prevents reuse of old tokens with same ID if we were reusing IDs, 
+    // 2. Verify the hash matches (Security check: prevents reuse of old tokens with same ID if we were reusing IDs,
     // though here we use UUIDs, this checks if the token content matches what we expect)
     if stored_token.token_hash != RefreshToken::hash_token(&req.refresh_token) {
         // This is suspicious - ID matches but content doesn't
@@ -821,7 +821,7 @@ pub async fn refresh(
 
     // Generate new tokens (Rotate)
     // We perform operations sequentially. Transactions would be better but require a replica set.
-    
+
     // 1. Revoke the old token
     state
         .db
@@ -869,14 +869,14 @@ pub async fn refresh(
                 }),
             )
         })?;
-    
+
     // Check if user is still verified/active
     if !user.verified {
         return Err((
-             StatusCode::FORBIDDEN,
-             Json(ErrorResponse {
-                 error: "User account is not verified".to_string(),
-             }),
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                error: "User account is not verified".to_string(),
+            }),
         ));
     }
 
@@ -1053,7 +1053,8 @@ pub async fn request_password_reset(
     if let Some(user) = user {
         // Generate reset token
         let token = generate_random_token();
-        let verification_token = VerificationToken::new_password_reset(user.id.clone(), token.clone());
+        let verification_token =
+            VerificationToken::new_password_reset(user.id.clone(), token.clone());
 
         state
             .db

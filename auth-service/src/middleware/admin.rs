@@ -1,11 +1,11 @@
+use crate::AppState;
 use axum::{
     extract::{Request, State},
-    http::{StatusCode, HeaderMap},
+    http::{HeaderMap, StatusCode},
     middleware::Next,
-    response::{Response, IntoResponse, Json},
+    response::{IntoResponse, Json, Response},
 };
 use serde_json::json;
-use crate::AppState;
 
 pub async fn admin_auth_middleware(
     State(state): State<AppState>,

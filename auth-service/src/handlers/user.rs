@@ -1,11 +1,11 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use mongodb::bson::doc;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use validator::Validate;
 
 use crate::{
     middleware::AuthUser,
-    models::{SanitizedUser, VerificationToken},
+    models::VerificationToken,
     utils::{hash_password, verify_password, Password, PasswordHashString},
     AppState,
 };
@@ -116,7 +116,7 @@ pub async fn update_me(
                 ));
             }
 
-            update_doc.insert("email", &new_email);
+            update_doc.insert("email", new_email);
             update_doc.insert("verified", false);
             email_changed = true;
         }
@@ -158,7 +158,8 @@ pub async fn update_me(
             hex::encode(token_bytes)
         };
 
-        let verification_token = VerificationToken::new_email_verification(user.id.clone(), token.clone());
+        let verification_token =
+            VerificationToken::new_email_verification(user.id.clone(), token.clone());
 
         state
             .db

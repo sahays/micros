@@ -2,8 +2,11 @@ use auth_service::{
     build_router,
     config::Config,
     init_tracing,
-    middleware::{create_login_rate_limiter, create_password_reset_rate_limiter, create_ip_rate_limiter, auth_middleware},
-    services::{EmailService, JwtService, MongoDb, TokenBlacklist, MockBlacklist},
+    middleware::{
+        auth_middleware, create_ip_rate_limiter, create_login_rate_limiter,
+        create_password_reset_rate_limiter,
+    },
+    services::{EmailService, JwtService, MockBlacklist, MongoDb, TokenBlacklist},
     AppState,
 };
 use axum::{
@@ -13,9 +16,9 @@ use axum::{
     routing::get,
     Router,
 };
+use std::sync::Arc;
 use tower::util::ServiceExt;
 use uuid::Uuid;
-use std::sync::Arc;
 
 async fn setup_test_config() -> (Config, String) {
     dotenvy::dotenv().ok();
@@ -39,11 +42,11 @@ async fn test_auth_middleware() {
     let db = MongoDb::connect(&config.mongodb.uri, &config.mongodb.database)
         .await
         .expect("Failed to connect to DB");
-    
+
     let email = EmailService::new(&config.gmail).expect("Failed to create email service");
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
-    
+
     let login_limiter = create_login_rate_limiter(5, 60);
     let reset_limiter = create_password_reset_rate_limiter(3, 3600);
     let ip_limiter = create_ip_rate_limiter(100, 60);
@@ -118,12 +121,15 @@ async fn test_auth_middleware() {
     let blacklisted_token = jwt.generate_access_token(user_id, email).unwrap();
     // Parse it to get JTI (we need to peek inside or just use the generated jti if accessible)
     // Since we can't easily peek inside without jwt service methods exposed for it or manually decoding,
-    // let's rely on validation parsing it. 
+    // let's rely on validation parsing it.
     // Actually we need the JTI to blacklist it.
     let claims = jwt.validate_access_token(&blacklisted_token).unwrap();
-    
+
     // Blacklist the token
-    redis.blacklist_token(&claims.jti, 3600).await.expect("Failed to blacklist");
+    redis
+        .blacklist_token(&claims.jti, 3600)
+        .await
+        .expect("Failed to blacklist");
 
     let response = app
         .oneshot(

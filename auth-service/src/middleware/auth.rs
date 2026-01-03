@@ -7,10 +7,7 @@ use axum::{
 };
 use serde::Serialize;
 
-use crate::{
-    services::AccessTokenClaims,
-    AppState,
-};
+use crate::{services::AccessTokenClaims, AppState};
 
 /// Middleware to require authentication
 pub async fn auth_middleware(
@@ -49,21 +46,17 @@ pub async fn auth_middleware(
     };
 
     // Check blacklist
-    let is_blacklisted = state
-        .redis
-        .is_blacklisted(&claims.jti)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Redis error checking blacklist");
-            // Fail closed: if Redis is down, we assume token is revoked for security
-            // Alternatively, fail open if availability is prioritized over immediate revocation
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Internal server error".to_string(),
-                }),
-            )
-        })?;
+    let is_blacklisted = state.redis.is_blacklisted(&claims.jti).await.map_err(|e| {
+        tracing::error!(error = %e, "Redis error checking blacklist");
+        // Fail closed: if Redis is down, we assume token is revoked for security
+        // Alternatively, fail open if availability is prioritized over immediate revocation
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "Internal server error".to_string(),
+            }),
+        )
+    })?;
 
     if is_blacklisted {
         return Err((
@@ -96,15 +89,12 @@ where
     type Rejection = (StatusCode, Json<ErrorResponse>);
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        let claims = parts
-            .extensions
-            .get::<AccessTokenClaims>()
-            .ok_or((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Auth claims missing from request extensions".to_string(),
-                }),
-            ))?;
+        let claims = parts.extensions.get::<AccessTokenClaims>().ok_or((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                error: "Auth claims missing from request extensions".to_string(),
+            }),
+        ))?;
 
         Ok(AuthUser(claims.clone()))
     }

@@ -1,8 +1,8 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 
 use crate::{
     models::{Client, ClientType},
@@ -14,12 +14,12 @@ use crate::{
 pub struct CreateClientRequest {
     #[validate(length(min = 1, message = "App name is required"))]
     pub app_name: String,
-    
+
     pub app_type: ClientType,
-    
+
     #[validate(range(min = 1, message = "Rate limit must be at least 1"))]
     pub rate_limit_per_min: u32,
-    
+
     pub allowed_origins: Vec<String>,
 }
 

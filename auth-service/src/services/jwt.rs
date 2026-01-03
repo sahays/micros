@@ -117,9 +117,9 @@ impl JwtService {
     /// Get the public key set in JWKS format
     pub fn get_jwks(&self) -> Result<Jwks, anyhow::Error> {
         use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+        use rsa::pkcs8::DecodePublicKey;
         use rsa::traits::PublicKeyParts;
         use rsa::RsaPublicKey;
-        use rsa::pkcs8::DecodePublicKey;
 
         // Parse PEM to get RSA components
         // We might need to strip the PEM headers if DecodePublicKey doesn't handle them

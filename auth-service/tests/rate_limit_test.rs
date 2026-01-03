@@ -1,18 +1,20 @@
 use auth_service::{
     build_router,
     config::Config,
-    middleware::{create_login_rate_limiter, create_password_reset_rate_limiter, create_ip_rate_limiter},
-    services::{EmailService, JwtService, MongoDb, MockBlacklist},
+    middleware::{
+        create_ip_rate_limiter, create_login_rate_limiter, create_password_reset_rate_limiter,
+    },
+    services::{EmailService, JwtService, MockBlacklist, MongoDb},
     AppState,
 };
 use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
+use std::net::SocketAddr;
+use std::sync::Arc;
 use tower::util::ServiceExt;
 use uuid::Uuid;
-use std::sync::Arc;
-use std::net::SocketAddr;
 
 async fn setup_test_config() -> (Config, String) {
     dotenvy::dotenv().ok();
@@ -36,11 +38,11 @@ async fn test_rate_limit_headers() {
     let db = MongoDb::connect(&config.mongodb.uri, &config.mongodb.database)
         .await
         .expect("Failed to connect to DB");
-    
+
     let email = EmailService::new(&config.gmail).expect("Failed to create email service");
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
-    
+
     let login_limiter = create_login_rate_limiter(1, 60); // 1 per min
     let reset_limiter = create_password_reset_rate_limiter(3, 3600);
     let ip_limiter = create_ip_rate_limiter(100, 60);
@@ -65,7 +67,9 @@ async fn test_rate_limit_headers() {
             .method("POST")
             .uri("/auth/login")
             .header("Content-Type", "application/json")
-            .body(Body::from(r#"{"email": "test@example.com", "password": "p"}"#))
+            .body(Body::from(
+                r#"{"email": "test@example.com", "password": "p"}"#,
+            ))
             .unwrap()
     };
 
@@ -77,7 +81,7 @@ async fn test_rate_limit_headers() {
     // 2nd request (rate limited)
     let response = app.oneshot(login_req()).await.unwrap();
     assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
-    
+
     // Check headers
     assert!(response.headers().contains_key("retry-after"));
     assert!(response.headers().contains_key("x-ratelimit-limit"));

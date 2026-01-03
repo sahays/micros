@@ -1,9 +1,7 @@
-use axum::{extract::State, http::header, response::IntoResponse, Json};
 use crate::AppState;
+use axum::{extract::State, http::header, response::IntoResponse, Json};
 
-pub async fn jwks(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+pub async fn jwks(State(state): State<AppState>) -> impl IntoResponse {
     match state.jwt.get_jwks() {
         Ok(jwks) => (
             [

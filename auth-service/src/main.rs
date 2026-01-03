@@ -1,8 +1,7 @@
-    use auth_service::{
+use auth_service::{
     build_router,
     config::Config,
-    init_tracing,
-    middleware,
+    init_tracing, middleware,
     services::{EmailService, JwtService, MongoDb, RedisService},
     AppState,
 };
@@ -57,9 +56,7 @@ async fn main() -> Result<(), anyhow::Error> {
         100, // Default global IP limit: 100 requests per 1 minute
         60,
     );
-    tracing::info!(
-        "Rate limiters initialized: Login, Password Reset, and Global IP"
-    );
+    tracing::info!("Rate limiters initialized: Login, Password Reset, and Global IP");
 
     // Create application state
     let state = AppState {
@@ -77,7 +74,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Start server
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
-    
+
     let service_span = tracing::info_span!(
         "service",
         service = %config.service_name,

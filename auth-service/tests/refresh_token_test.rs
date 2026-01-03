@@ -2,9 +2,11 @@ use auth_service::{
     build_router,
     config::Config,
     init_tracing,
-    middleware::{create_login_rate_limiter, create_password_reset_rate_limiter, create_ip_rate_limiter},
+    middleware::{
+        create_ip_rate_limiter, create_login_rate_limiter, create_password_reset_rate_limiter,
+    },
     models::{RefreshToken, User},
-    services::{EmailService, JwtService, MongoDb, MockBlacklist, TokenBlacklist},
+    services::{EmailService, JwtService, MockBlacklist, MongoDb, TokenBlacklist},
     AppState,
 };
 use axum::{
@@ -12,9 +14,9 @@ use axum::{
     http::{Request, StatusCode},
 };
 use mongodb::bson::doc;
+use std::sync::Arc;
 use tower::util::ServiceExt;
 use uuid::Uuid;
-use std::sync::Arc;
 
 async fn setup_test_config() -> (Config, String) {
     dotenvy::dotenv().ok();
@@ -22,7 +24,7 @@ async fn setup_test_config() -> (Config, String) {
     let db_name = format!("test_auth_refresh_{}", Uuid::new_v4());
     config.mongodb.database = db_name.clone();
     config.log_level = "debug".to_string(); // Use debug for more info
-    
+
     // Initialize tracing if not already initialized
     let _ = tracing_subscriber::fmt()
         .with_env_filter("debug")
@@ -45,12 +47,14 @@ async fn test_refresh_token_flow() {
     let db = MongoDb::connect(&config.mongodb.uri, &config.mongodb.database)
         .await
         .expect("Failed to connect to DB");
-    db.initialize_indexes().await.expect("Failed to init indexes");
+    db.initialize_indexes()
+        .await
+        .expect("Failed to init indexes");
 
     let email = EmailService::new(&config.gmail).expect("Failed to create email service");
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
-    
+
     let login_limiter = create_login_rate_limiter(5, 60);
     let reset_limiter = create_password_reset_rate_limiter(3, 3600);
     let ip_limiter = create_ip_rate_limiter(100, 60);
@@ -80,15 +84,16 @@ async fn test_refresh_token_flow() {
 
     // 4. Generate Initial Refresh Token
     let refresh_token_id = Uuid::new_v4().to_string();
-    let refresh_token_str = jwt.generate_refresh_token(&user.id, &refresh_token_id).unwrap();
-    
-    let refresh_token_model = RefreshToken::new_with_id(
-        refresh_token_id,
-        user.id.clone(),
-        &refresh_token_str,
-        7,
-    );
-    db.refresh_tokens().insert_one(&refresh_token_model, None).await.unwrap();
+    let refresh_token_str = jwt
+        .generate_refresh_token(&user.id, &refresh_token_id)
+        .unwrap();
+
+    let refresh_token_model =
+        RefreshToken::new_with_id(refresh_token_id, user.id.clone(), &refresh_token_str, 7);
+    db.refresh_tokens()
+        .insert_one(&refresh_token_model, None)
+        .await
+        .unwrap();
 
     // 5. Build Router
     let app = build_router(state).await.expect("Failed to build router");
@@ -112,9 +117,11 @@ async fn test_refresh_token_flow() {
 
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let body_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    
+
     let new_access_token = body_json["access_token"].as_str().unwrap();
     let new_refresh_token = body_json["refresh_token"].as_str().unwrap();
 

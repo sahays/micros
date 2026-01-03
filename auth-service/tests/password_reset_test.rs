@@ -2,17 +2,19 @@ use auth_service::{
     build_router,
     config::Config,
     init_tracing,
-    middleware::{create_login_rate_limiter, create_password_reset_rate_limiter, create_ip_rate_limiter},
-    services::{EmailService, JwtService, MongoDb, MockBlacklist},
+    middleware::{
+        create_ip_rate_limiter, create_login_rate_limiter, create_password_reset_rate_limiter,
+    },
+    services::{EmailService, JwtService, MockBlacklist, MongoDb},
     AppState,
 };
 use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
+use std::sync::Arc;
 use tower::util::ServiceExt;
 use uuid::Uuid;
-use std::sync::Arc;
 
 // Helper to setup test config with a unique database
 async fn setup_test_config() -> (Config, String) {
@@ -26,7 +28,7 @@ async fn setup_test_config() -> (Config, String) {
     let db_name = format!("test_auth_{}", Uuid::new_v4());
     config.mongodb.database = db_name.clone();
     config.log_level = "debug".to_string(); // Use debug for more info
-    
+
     // Initialize tracing if not already initialized
     let _ = tracing_subscriber::fmt()
         .with_env_filter("debug")
@@ -49,16 +51,18 @@ async fn test_password_reset_flow() {
     let db = MongoDb::connect(&config.mongodb.uri, &config.mongodb.database)
         .await
         .expect("Failed to connect to DB");
-    
-    // Ensure indexes are created
-    db.initialize_indexes().await.expect("Failed to init indexes");
 
-    // Note: EmailService requires valid Gmail creds in env. 
+    // Ensure indexes are created
+    db.initialize_indexes()
+        .await
+        .expect("Failed to init indexes");
+
+    // Note: EmailService requires valid Gmail creds in env.
     // In a real CI, you might mock this, but for now we assume env is set.
     let email = EmailService::new(&config.gmail).expect("Failed to create email service");
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
-    
+
     let login_limiter = create_login_rate_limiter(
         config.rate_limit.login_attempts,
         config.rate_limit.login_window_seconds,

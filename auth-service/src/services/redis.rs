@@ -1,18 +1,20 @@
-use redis::{aio::ConnectionManager, Client};
 use async_trait::async_trait;
-
-use crate::config::RedisConfig;
+use redis::{aio::ConnectionManager, Client};
 
 #[async_trait]
 pub trait TokenBlacklist: Send + Sync {
-    async fn blacklist_token(&self, token_jti: &str, expiry_seconds: i64) -> Result<(), anyhow::Error>;
+    async fn blacklist_token(
+        &self,
+        token_jti: &str,
+        expiry_seconds: i64,
+    ) -> Result<(), anyhow::Error>;
     async fn is_blacklisted(&self, token_jti: &str) -> Result<bool, anyhow::Error>;
     async fn health_check(&self) -> Result<(), anyhow::Error>;
 }
 
 #[derive(Clone)]
 pub struct RedisService {
-    client: Client,
+    _client: Client,
     manager: ConnectionManager,
 }
 
@@ -20,13 +22,16 @@ impl RedisService {
     pub async fn new(config: &crate::config::RedisConfig) -> Result<Self, anyhow::Error> {
         tracing::info!(url = %config.url, "Connecting to Redis");
         let client = Client::open(config.url.clone())?;
-        
+
         // Use ConnectionManager for automatic reconnection
         let manager = client.get_connection_manager().await?;
-        
+
         tracing::info!("Successfully connected to Redis");
 
-        Ok(Self { client, manager })
+        Ok(Self {
+            _client: client,
+            manager,
+        })
     }
 }
 
@@ -41,10 +46,14 @@ impl TokenBlacklist for RedisService {
     }
 
     /// Add a token to the blacklist with an expiry
-    async fn blacklist_token(&self, token_jti: &str, expiry_seconds: i64) -> Result<(), anyhow::Error> {
+    async fn blacklist_token(
+        &self,
+        token_jti: &str,
+        expiry_seconds: i64,
+    ) -> Result<(), anyhow::Error> {
         let mut conn = self.manager.clone();
         let key = format!("blacklist:{}", token_jti);
-        
+
         redis::cmd("SET")
             .arg(&key)
             .arg("revoked")
@@ -59,13 +68,13 @@ impl TokenBlacklist for RedisService {
     async fn is_blacklisted(&self, token_jti: &str) -> Result<bool, anyhow::Error> {
         let mut conn = self.manager.clone();
         let key = format!("blacklist:{}", token_jti);
-        
+
         let exists: bool = redis::cmd("EXISTS")
             .arg(&key)
             .query_async(&mut conn)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to check blacklist: {}", e))?;
-            
+
         Ok(exists)
     }
 }
@@ -94,8 +103,15 @@ impl TokenBlacklist for MockBlacklist {
         Ok(())
     }
 
-    async fn blacklist_token(&self, token_jti: &str, _expiry_seconds: i64) -> Result<(), anyhow::Error> {
-        self.blacklisted_tokens.lock().unwrap().insert(token_jti.to_string());
+    async fn blacklist_token(
+        &self,
+        token_jti: &str,
+        _expiry_seconds: i64,
+    ) -> Result<(), anyhow::Error> {
+        self.blacklisted_tokens
+            .lock()
+            .unwrap()
+            .insert(token_jti.to_string());
         Ok(())
     }
 

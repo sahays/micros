@@ -1,11 +1,7 @@
-use axum::{
-    extract::Request,
-    response::Response,
-    middleware::Next,
-};
 use axum::http::HeaderValue;
-use uuid::Uuid;
+use axum::{extract::Request, middleware::Next, response::Response};
 use tracing::info_span;
+use uuid::Uuid;
 
 pub const REQUEST_ID_HEADER: &str = "x-request-id";
 
@@ -17,8 +13,10 @@ pub async fn request_id_middleware(mut req: Request, next: Next) -> Response {
         .map(|s| s.to_string())
         .unwrap_or_else(|| Uuid::new_v4().to_string());
 
-    req.headers_mut()
-        .insert(REQUEST_ID_HEADER, HeaderValue::from_str(&request_id).unwrap());
+    req.headers_mut().insert(
+        REQUEST_ID_HEADER,
+        HeaderValue::from_str(&request_id).unwrap(),
+    );
 
     // Create a span for the request that includes the request_id
     let span = info_span!(
@@ -33,9 +31,10 @@ pub async fn request_id_middleware(mut req: Request, next: Next) -> Response {
         next.run(req).await
     };
 
-    response
-        .headers_mut()
-        .insert(REQUEST_ID_HEADER, HeaderValue::from_str(&request_id).unwrap());
-    
+    response.headers_mut().insert(
+        REQUEST_ID_HEADER,
+        HeaderValue::from_str(&request_id).unwrap(),
+    );
+
     response
 }

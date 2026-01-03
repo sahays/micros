@@ -1,7 +1,5 @@
 use mongodb::{
-    bson::doc,
-    options::{ClientOptions, IndexOptions},
-    Client as MongoClient, Collection, Database, IndexModel,
+    bson::doc, options::IndexOptions, Client as MongoClient, Collection, Database, IndexModel,
 };
 use std::time::Duration;
 
@@ -19,10 +17,7 @@ impl MongoDb {
         let client = MongoClient::with_uri_str(uri).await?;
         let db = client.database(database);
         tracing::info!(database = %database, "Successfully connected to MongoDB database");
-        Ok(Self {
-            client,
-            db,
-        })
+        Ok(Self { client, db })
     }
 
     pub async fn initialize_indexes(&self) -> Result<(), anyhow::Error> {

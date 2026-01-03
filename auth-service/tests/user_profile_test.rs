@@ -1,9 +1,11 @@
 use auth_service::{
     build_router,
     config::Config,
-    middleware::{create_login_rate_limiter, create_password_reset_rate_limiter, create_ip_rate_limiter},
-    models::{User, SanitizedUser},
-    services::{EmailService, JwtService, MongoDb, MockBlacklist},
+    middleware::{
+        create_ip_rate_limiter, create_login_rate_limiter, create_password_reset_rate_limiter,
+    },
+    models::{SanitizedUser, User},
+    services::{EmailService, JwtService, MockBlacklist, MongoDb},
     utils::{hash_password, Password},
     AppState,
 };
@@ -11,9 +13,9 @@ use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
+use std::sync::Arc;
 use tower::util::ServiceExt;
 use uuid::Uuid;
-use std::sync::Arc;
 
 async fn setup_test_config() -> (Config, String) {
     dotenvy::dotenv().ok();
@@ -37,11 +39,11 @@ async fn test_user_profile_flow() {
     let db = MongoDb::connect(&config.mongodb.uri, &config.mongodb.database)
         .await
         .expect("Failed to connect to DB");
-    
+
     let email_service = EmailService::new(&config.gmail).expect("Failed to create email service");
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
-    
+
     let login_limiter = create_login_rate_limiter(5, 60);
     let reset_limiter = create_password_reset_rate_limiter(3, 3600);
     let ip_limiter = create_ip_rate_limiter(100, 60);
@@ -90,7 +92,9 @@ async fn test_user_profile_flow() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let user_info: SanitizedUser = serde_json::from_slice(&body).unwrap();
     assert_eq!(user_info.email, user.email);
     assert_eq!(user_info.name, user.name);
@@ -112,7 +116,9 @@ async fn test_user_profile_flow() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let user_info: SanitizedUser = serde_json::from_slice(&body).unwrap();
     assert_eq!(user_info.name, Some(new_name.to_string()));
 
