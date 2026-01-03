@@ -5,7 +5,7 @@ use mongodb::{
 };
 use std::time::Duration;
 
-use crate::models::{User, VerificationToken};
+use crate::models::{RefreshToken, User, VerificationToken};
 
 #[derive(Clone)]
 pub struct MongoDb {
@@ -89,6 +89,47 @@ impl MongoDb {
         tokens.create_index(expiry_index, None).await?;
         tracing::info!("Created indexes on verification_tokens collection");
 
+        // Refresh tokens collection indexes
+        let refresh_tokens = self.refresh_tokens();
+
+        // Index on user_id for fast lookup of user's refresh tokens
+        let user_id_index = IndexModel::builder()
+            .keys(doc! { "user_id": 1 })
+            .options(
+                IndexOptions::builder()
+                    .name("user_id_lookup".to_string())
+                    .build(),
+            )
+            .build();
+
+        refresh_tokens.create_index(user_id_index, None).await?;
+
+        // Index on token for fast lookup
+        let refresh_token_index = IndexModel::builder()
+            .keys(doc! { "token": 1 })
+            .options(
+                IndexOptions::builder()
+                    .name("refresh_token_lookup".to_string())
+                    .build(),
+            )
+            .build();
+
+        refresh_tokens.create_index(refresh_token_index, None).await?;
+
+        // TTL index on expires_at for automatic cleanup
+        let refresh_expiry_index = IndexModel::builder()
+            .keys(doc! { "expires_at": 1 })
+            .options(
+                IndexOptions::builder()
+                    .expire_after(Duration::from_secs(0))
+                    .name("refresh_token_expiry_ttl".to_string())
+                    .build(),
+            )
+            .build();
+
+        refresh_tokens.create_index(refresh_expiry_index, None).await?;
+        tracing::info!("Created indexes on refresh_tokens collection");
+
         Ok(())
     }
 
@@ -106,6 +147,10 @@ impl MongoDb {
 
     pub fn verification_tokens(&self) -> Collection<VerificationToken> {
         self.db.collection("verification_tokens")
+    }
+
+    pub fn refresh_tokens(&self) -> Collection<RefreshToken> {
+        self.db.collection("refresh_tokens")
     }
 
     pub fn client(&self) -> &Client {

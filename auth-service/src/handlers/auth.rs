@@ -5,8 +5,9 @@ use serde::{Deserialize, Serialize};
 use validator::Validate;
 
 use crate::{
-    models::{User, VerificationToken},
-    utils::{hash_password, Password},
+    models::{RefreshToken, User, VerificationToken},
+    services::TokenResponse,
+    utils::{hash_password, verify_password, Password, PasswordHashString},
     AppState,
 };
 
@@ -252,4 +253,214 @@ fn generate_random_token() -> String {
     let mut rng = rand::thread_rng();
     let token_bytes: [u8; 32] = rng.gen();
     hex::encode(token_bytes)
+}
+
+// Login/Logout endpoints
+
+#[derive(Debug, Deserialize, Validate)]
+pub struct LoginRequest {
+    #[validate(email(message = "Invalid email format"))]
+    pub email: String,
+
+    #[validate(length(min = 1, message = "Password is required"))]
+    pub password: String,
+}
+
+pub async fn login(
+    State(state): State<AppState>,
+    Json(req): Json<LoginRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    // Validate request
+    req.validate().map_err(|e| {
+        (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            Json(ErrorResponse {
+                error: format!("Validation error: {}", e),
+            }),
+        )
+    })?;
+
+    // Find user by email
+    let user = state
+        .db
+        .users()
+        .find_one(doc! { "email": &req.email }, None)
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error finding user: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    let user = user.ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "Invalid email or password".to_string(),
+            }),
+        )
+    })?;
+
+    // Verify password (constant-time comparison)
+    verify_password(
+        &Password::new(req.password),
+        &PasswordHashString::new(user.password_hash.clone()),
+    )
+    .map_err(|_| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "Invalid email or password".to_string(),
+            }),
+        )
+    })?;
+
+    // Check if email is verified
+    if !user.verified {
+        return Err((
+            StatusCode::FORBIDDEN,
+            Json(ErrorResponse {
+                error: "Email not verified. Please check your email for verification link."
+                    .to_string(),
+            }),
+        ));
+    }
+
+    // Generate refresh token ID (this will be both the jti in JWT and _id in database)
+    let refresh_token_id = uuid::Uuid::new_v4().to_string();
+
+    // Generate JWT tokens
+    let access_token = state
+        .jwt
+        .generate_access_token(&user.id, &user.email)
+        .map_err(|e| {
+            tracing::error!("Failed to generate access token: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    let refresh_token_str = state
+        .jwt
+        .generate_refresh_token(&user.id, &refresh_token_id)
+        .map_err(|e| {
+            tracing::error!("Failed to generate refresh token: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    // Store refresh token in database with matching ID
+    let refresh_token = RefreshToken {
+        id: refresh_token_id,
+        user_id: user.id.clone(),
+        token: refresh_token_str.clone(),
+        expires_at: chrono::Utc::now()
+            + chrono::Duration::days(state.config.jwt.refresh_token_expiry_days),
+        created_at: chrono::Utc::now(),
+        revoked: false,
+    };
+
+    state
+        .db
+        .refresh_tokens()
+        .insert_one(&refresh_token, None)
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error storing refresh token: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    tracing::info!("User logged in: {}", user.id);
+
+    Ok((
+        StatusCode::OK,
+        Json(TokenResponse {
+            access_token,
+            refresh_token: refresh_token_str,
+            token_type: "Bearer".to_string(),
+            expires_in: state.jwt.access_token_expiry_seconds(),
+        }),
+    ))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LogoutRequest {
+    pub refresh_token: String,
+}
+
+pub async fn logout(
+    State(state): State<AppState>,
+    Json(req): Json<LogoutRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    // Validate and decode refresh token
+    let claims = state
+        .jwt
+        .validate_refresh_token(&req.refresh_token)
+        .map_err(|_| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse {
+                    error: "Invalid refresh token".to_string(),
+                }),
+            )
+        })?;
+
+    // Revoke refresh token in database
+    let result = state
+        .db
+        .refresh_tokens()
+        .update_one(
+            doc! {
+                "_id": &claims.jti,
+                "user_id": &claims.sub,
+            },
+            doc! {
+                "$set": { "revoked": true }
+            },
+            None,
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error revoking refresh token: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    if result.matched_count == 0 {
+        return Err((
+            StatusCode::NOT_FOUND,
+            Json(ErrorResponse {
+                error: "Refresh token not found".to_string(),
+            }),
+        ));
+    }
+
+    tracing::info!("User logged out: {}", claims.sub);
+
+    Ok((
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "message": "Logged out successfully"
+        })),
+    ))
 }

@@ -6,6 +6,7 @@ mod services;
 mod utils;
 
 use axum::{
+    middleware::from_fn,
     routing::{get, post},
     Router,
 };
@@ -18,13 +19,16 @@ use tower_http::{
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::config::Config;
-use crate::services::{EmailService, MongoDb};
+use crate::middleware::LoginRateLimiter;
+use crate::services::{EmailService, JwtService, MongoDb};
 
 #[derive(Clone)]
 pub struct AppState {
     pub config: Config,
     pub db: MongoDb,
     pub email: EmailService,
+    pub jwt: JwtService,
+    pub login_rate_limiter: LoginRateLimiter,
 }
 
 #[tokio::main]
@@ -54,14 +58,30 @@ async fn main() -> Result<(), anyhow::Error> {
     let email = EmailService::new(&config.gmail)?;
     tracing::info!("Email service initialized");
 
+    // Initialize JWT service
+    let jwt = JwtService::new(&config.jwt)?;
+    tracing::info!("JWT service initialized");
+
+    // Initialize rate limiters
+    let login_rate_limiter = middleware::create_login_rate_limiter(
+        config.rate_limit.login_attempts,
+        config.rate_limit.login_window_seconds,
+    );
+    tracing::info!(
+        "Rate limiter initialized: {} attempts per {} seconds",
+        config.rate_limit.login_attempts,
+        config.rate_limit.login_window_seconds
+    );
+
     // TODO: Initialize Redis
-    // TODO: Load JWT keys
 
     // Create application state
     let state = AppState {
         config: config.clone(),
         db,
         email,
+        jwt,
+        login_rate_limiter,
     };
 
     // Build application router
@@ -84,13 +104,22 @@ async fn main() -> Result<(), anyhow::Error> {
 async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
     // TODO: Add user routes
     // TODO: Add admin routes
-    // TODO: Add middleware (auth, rate limiting)
+
+    // Create login route with rate limiting
+    let login_limiter = state.login_rate_limiter.clone();
+    let login_route = Router::new()
+        .route("/auth/login", post(handlers::auth::login))
+        .layer(from_fn(move |req, next| {
+            middleware::rate_limit_middleware(login_limiter.clone(), req, next)
+        }));
 
     let app = Router::new()
         .route("/health", get(health_check))
         // Authentication routes
         .route("/auth/register", post(handlers::auth::register))
         .route("/auth/verify", get(handlers::auth::verify_email))
+        .merge(login_route)
+        .route("/auth/logout", post(handlers::auth::logout))
         .with_state(state)
         // Add CORS layer
         .layer(CorsLayer::permissive()) // TODO: Configure from config
