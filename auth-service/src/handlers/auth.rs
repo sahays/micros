@@ -484,6 +484,264 @@ pub async fn logout(
     ))
 }
 
+use axum_extra::extract::cookie::{Cookie, CookieJar};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use sha2::{Digest, Sha256};
+
+#[derive(Debug, Deserialize)]
+pub struct GoogleCallbackQuery {
+    pub code: String,
+    pub state: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GoogleTokenResponse {
+    access_token: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GoogleUserInfo {
+    email: String,
+    name: Option<String>,
+    #[allow(dead_code)]
+    picture: Option<String>,
+}
+
+pub async fn google_callback(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    axum::extract::Query(query): axum::extract::Query<GoogleCallbackQuery>,
+) -> Result<(CookieJar, impl IntoResponse), (StatusCode, Json<ErrorResponse>)> {
+    // 1. Validate state
+    let stored_state = jar.get("oauth_state").map(|c| c.value());
+    if stored_state != Some(&query.state) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Invalid OAuth state".to_string(),
+            }),
+        ));
+    }
+
+    // 2. Get code verifier
+    let code_verifier = jar.get("code_verifier").map(|c| c.value()).ok_or_else(|| {
+        (
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Missing code verifier".to_string(),
+            }),
+        )
+    })?;
+
+    // 3. Exchange code for token
+    let client = reqwest::Client::new();
+    let token_response = client
+        .post("https://oauth2.googleapis.com/token")
+        .form(&[
+            ("client_id", &state.config.google.client_id),
+            ("client_secret", &state.config.google.client_secret),
+            ("code", &query.code),
+            ("code_verifier", &code_verifier.to_string()),
+            ("grant_type", &"authorization_code".to_string()),
+            ("redirect_uri", &state.config.google.redirect_uri),
+        ])
+        .send()
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to exchange Google code: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Failed to authenticate with Google".to_string(),
+                }),
+            )
+        })?
+        .json::<GoogleTokenResponse>()
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to parse Google token response: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    // 4. Fetch user info
+    let user_info = client
+        .get("https://www.googleapis.com/oauth2/v3/userinfo")
+        .bearer_auth(token_response.access_token)
+        .send()
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to fetch Google user info: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Failed to get user info from Google".to_string(),
+                }),
+            )
+        })?
+        .json::<GoogleUserInfo>()
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to parse Google user info: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    // 5. Find or create user
+    let user = state
+        .db
+        .users()
+        .find_one(doc! { "email": &user_info.email }, None)
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error finding user: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    let user = match user {
+        Some(user) => user,
+        None => {
+            // Create new user for social login
+            let new_user = User::new(
+                user_info.email.clone(),
+                "SOCIAL_LOGIN_NO_PASSWORD".to_string(),
+                user_info.name,
+            );
+            // Social users are pre-verified
+            let mut user = new_user;
+            user.verified = true;
+
+            state
+                .db
+                .users()
+                .insert_one(&user, None)
+                .await
+                .map_err(|e| {
+                    tracing::error!("Database error creating social user: {}", e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(ErrorResponse {
+                            error: "Internal server error".to_string(),
+                        }),
+                    )
+                })?;
+            user
+        }
+    };
+
+    // 6. Issue tokens
+    let (access_token, refresh_token_str, refresh_token_id) = state
+        .jwt
+        .generate_token_pair(&user.id, &user.email)
+        .map_err(|e| {
+            tracing::error!("Failed to generate token pair: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    // 7. Store refresh token
+    let refresh_token = RefreshToken::new_with_id(
+        refresh_token_id,
+        user.id.clone(),
+        &refresh_token_str,
+        state.config.jwt.refresh_token_expiry_days,
+    );
+
+    state
+        .db
+        .refresh_tokens()
+        .insert_one(&refresh_token, None)
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error storing refresh token: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    // 8. Clean up cookies and return tokens
+    let final_jar = jar
+        .remove(Cookie::from("oauth_state"))
+        .remove(Cookie::from("code_verifier"));
+
+    Ok((
+        final_jar,
+        Json(TokenResponse {
+            access_token,
+            refresh_token: refresh_token_str,
+            token_type: "Bearer".to_string(),
+            expires_in: state.jwt.access_token_expiry_seconds(),
+        }),
+    ))
+}
+
+pub async fn google_login(
+    State(state): State<AppState>,
+    jar: CookieJar,
+) -> (CookieJar, impl IntoResponse) {
+    let oauth_state = generate_random_token();
+    let code_verifier = generate_random_token();
+    
+    // Create code challenge
+    let mut hasher = Sha256::new();
+    hasher.update(code_verifier.as_bytes());
+    let code_challenge = URL_SAFE_NO_PAD.encode(hasher.finalize());
+
+    let google_url = format!(
+        "https://accounts.google.com/o/oauth2/v2/auth?\
+        response_type=code&\
+        client_id={}&\
+        redirect_uri={}&\
+        scope=openid%20email%20profile&\
+        state={}&\
+        code_challenge={}&\
+        code_challenge_method=S256",
+        state.config.google.client_id,
+        state.config.google.redirect_uri,
+        oauth_state,
+        code_challenge
+    );
+
+    // Store state and verifier in cookies (secure, http_only)
+    let updated_jar = jar
+        .add(
+            Cookie::build(("oauth_state", oauth_state))
+                .path("/")
+                .http_only(true)
+                .max_age(time::Duration::minutes(15))
+                .build(),
+        )
+        .add(
+            Cookie::build(("code_verifier", code_verifier))
+                .path("/")
+                .http_only(true)
+                .max_age(time::Duration::minutes(15))
+                .build(),
+        );
+
+    (updated_jar, axum::response::Redirect::to(&google_url))
+}
+
 #[derive(Debug, Deserialize)]
 pub struct RefreshRequest {
     pub refresh_token: String,

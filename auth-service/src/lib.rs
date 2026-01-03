@@ -59,6 +59,8 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
         .route("/auth/register", post(handlers::auth::register))
         .route("/auth/verify", get(handlers::auth::verify_email))
         .route("/auth/introspect", post(handlers::auth::introspect))
+        .route("/auth/google", get(handlers::auth::google_login))
+        .route("/auth/google/callback", get(handlers::auth::google_callback))
         .merge(login_route)
         .merge(reset_request_route)
         .route(
