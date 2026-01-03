@@ -154,16 +154,20 @@ impl EmailService {
             .map_err(|e| anyhow::anyhow!("Failed to spawn email task: {}", e))?;
 
         match result {
-            Ok(response) => {
+            Ok(_) => {
                 tracing::info!(
-                    "Email sent successfully to {}: {:?}",
-                    to_email,
-                    response.code()
+                    to = %to_email,
+                    subject = %subject,
+                    "Email sent successfully"
                 );
                 Ok(())
             }
             Err(e) => {
-                tracing::error!("Failed to send email to {}: {}", to_email, e);
+                tracing::error!(
+                    error = %e,
+                    to = %to_email,
+                    "Failed to send email"
+                );
                 Err(anyhow::anyhow!("Failed to send email: {}", e))
             }
         }

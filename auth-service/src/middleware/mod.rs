@@ -1,8 +1,11 @@
 pub mod auth;
 pub mod rate_limit;
+pub mod tracing;
 
 pub use auth::{auth_middleware, AuthUser};
 pub use rate_limit::{
-    create_login_rate_limiter, create_password_reset_rate_limiter, rate_limit_middleware,
-    LoginRateLimiter, PasswordResetRateLimiter,
+    create_ip_rate_limiter, create_login_rate_limiter, create_password_reset_rate_limiter,
+    ip_rate_limit_middleware, rate_limit_middleware, IpRateLimiter, LoginRateLimiter,
+    PasswordResetRateLimiter,
 };
+pub use tracing::request_id_middleware;

@@ -7,17 +7,19 @@ pub async fn jwks(
     match state.jwt.get_jwks() {
         Ok(jwks) => (
             [
-                (header::CACHE_CONTROL, "public, max-age=3600"),
                 (header::CONTENT_TYPE, "application/json"),
+                (header::CACHE_CONTROL, "public, max-age=3600"),
             ],
             Json(jwks),
-        ).into_response(),
+        )
+            .into_response(),
         Err(e) => {
-            tracing::error!("Failed to generate JWKS: {}", e);
+            tracing::error!(error = %e, "Failed to generate JWKS");
             (
                 axum::http::StatusCode::INTERNAL_SERVER_ERROR,
                 "Internal Server Error",
-            ).into_response()
+            )
+                .into_response()
         }
     }
 }

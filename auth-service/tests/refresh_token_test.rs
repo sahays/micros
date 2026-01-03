@@ -2,7 +2,7 @@ use auth_service::{
     build_router,
     config::Config,
     init_tracing,
-    middleware::{create_login_rate_limiter, create_password_reset_rate_limiter},
+    middleware::{create_login_rate_limiter, create_password_reset_rate_limiter, create_ip_rate_limiter},
     models::{RefreshToken, User},
     services::{EmailService, JwtService, MongoDb, MockBlacklist, TokenBlacklist},
     AppState,
@@ -53,6 +53,7 @@ async fn test_refresh_token_flow() {
     
     let login_limiter = create_login_rate_limiter(5, 60);
     let reset_limiter = create_password_reset_rate_limiter(3, 3600);
+    let ip_limiter = create_ip_rate_limiter(100, 60);
 
     let state = AppState {
         config: config.clone(),
@@ -62,6 +63,7 @@ async fn test_refresh_token_flow() {
         redis: redis.clone(),
         login_rate_limiter: login_limiter,
         password_reset_rate_limiter: reset_limiter,
+        ip_rate_limiter: ip_limiter,
     };
 
     // 3. Create Test User

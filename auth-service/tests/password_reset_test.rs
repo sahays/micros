@@ -2,7 +2,7 @@ use auth_service::{
     build_router,
     config::Config,
     init_tracing,
-    middleware::{create_login_rate_limiter, create_password_reset_rate_limiter},
+    middleware::{create_login_rate_limiter, create_password_reset_rate_limiter, create_ip_rate_limiter},
     services::{EmailService, JwtService, MongoDb, MockBlacklist},
     AppState,
 };
@@ -67,6 +67,7 @@ async fn test_password_reset_flow() {
         config.rate_limit.password_reset_attempts,
         config.rate_limit.password_reset_window_seconds,
     );
+    let ip_limiter = create_ip_rate_limiter(100, 60);
 
     let state = AppState {
         config: config.clone(),
@@ -76,6 +77,7 @@ async fn test_password_reset_flow() {
         redis,
         login_rate_limiter: login_limiter,
         password_reset_rate_limiter: reset_limiter,
+        ip_rate_limiter: ip_limiter,
     };
 
     // 3. Build Router

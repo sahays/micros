@@ -73,7 +73,7 @@ rsa = { version = "0.9", features = ["sha2"] }
 base64 = "0.21"
 
 # Rate limiting
-governor = "0.6"
+governor = { version = "0.6", features = ["dashmap"] }
 
 # Configuration
 config = "0.14"

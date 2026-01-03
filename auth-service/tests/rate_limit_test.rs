@@ -12,11 +12,12 @@ use axum::{
 use tower::util::ServiceExt;
 use uuid::Uuid;
 use std::sync::Arc;
+use std::net::SocketAddr;
 
 async fn setup_test_config() -> (Config, String) {
     dotenvy::dotenv().ok();
     let mut config = Config::from_env().expect("Failed to load environment variables for test");
-    let db_name = format!("test_auth_well_known_{}", Uuid::new_v4());
+    let db_name = format!("test_auth_rate_limit_{}", Uuid::new_v4());
     config.mongodb.database = db_name.clone();
     config.log_level = "error".to_string();
     (config, db_name)
@@ -28,7 +29,7 @@ async fn teardown_test_db(uri: &str, db_name: &str) {
 }
 
 #[tokio::test]
-async fn test_jwks_endpoint() {
+async fn test_rate_limit_headers() {
     // 1. Setup
     let (config, db_name) = setup_test_config().await;
 
@@ -40,7 +41,7 @@ async fn test_jwks_endpoint() {
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
     
-    let login_limiter = create_login_rate_limiter(5, 60);
+    let login_limiter = create_login_rate_limiter(1, 60); // 1 per min
     let reset_limiter = create_password_reset_rate_limiter(3, 3600);
     let ip_limiter = create_ip_rate_limiter(100, 60);
 
@@ -58,34 +59,28 @@ async fn test_jwks_endpoint() {
     // 2. Build Router
     let app = build_router(state).await.expect("Failed to build router");
 
-    // 3. Test GET /.well-known/jwks.json
-    let response = app
-        .oneshot(
-            Request::builder()
-                .uri("/.well-known/jwks.json")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+    // 3. Test Request: Login (should be rate limited after 1 attempt)
+    let login_req = || {
+        Request::builder()
+            .method("POST")
+            .uri("/auth/login")
+            .header("Content-Type", "application/json")
+            .body(Body::from(r#"{"email": "test@example.com", "password": "p"}"#))
+            .unwrap()
+    };
 
-    assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(response.headers()["content-type"], "application/json");
-    assert_eq!(response.headers()["cache-control"], "public, max-age=3600");
+    // 1st request
+    let response = app.clone().oneshot(login_req()).await.unwrap();
+    // Might be 401 or 200 depending on DB, but not 429
+    assert_ne!(response.status(), StatusCode::TOO_MANY_REQUESTS);
 
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let body_json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    // 2nd request (rate limited)
+    let response = app.oneshot(login_req()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
     
-    let keys = body_json["keys"].as_array().expect("Expected 'keys' array");
-    assert!(!keys.is_empty());
-    
-    let key = &keys[0];
-    assert_eq!(key["kty"], "RSA");
-    assert_eq!(key["alg"], "RS256");
-    assert_eq!(key["use"], "sig");
-    assert!(key["kid"].is_string());
-    assert!(key["n"].is_string());
-    assert!(key["e"].is_string());
+    // Check headers
+    assert!(response.headers().contains_key("retry-after"));
+    assert!(response.headers().contains_key("x-ratelimit-limit"));
 
     // Cleanup
     teardown_test_db(&config.mongodb.uri, &db_name).await;

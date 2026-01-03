@@ -15,29 +15,14 @@ pub struct MongoDb {
 
 impl MongoDb {
     pub async fn connect(uri: &str, database: &str) -> Result<Self, anyhow::Error> {
-        tracing::info!("Connecting to MongoDB at {}", uri);
-
-        let mut client_options = ClientOptions::parse(uri).await?;
-
-        // Configure connection pool
-        client_options.max_pool_size = Some(10);
-        client_options.min_pool_size = Some(2);
-        client_options.connect_timeout = Some(Duration::from_secs(5));
-        client_options.server_selection_timeout = Some(Duration::from_secs(5));
-
-        let client = Client::with_options(client_options)?;
-
-        // Test connection
-        client
-            .database("admin")
-            .run_command(doc! { "ping": 1 }, None)
-            .await?;
-
+        tracing::info!(uri = %uri, "Connecting to MongoDB");
+        let client = Client::with_uri_str(uri).await?;
         let db = client.database(database);
-
-        tracing::info!("Successfully connected to MongoDB database: {}", database);
-
-        Ok(Self { client, db })
+        tracing::info!(database = %database, "Successfully connected to MongoDB database");
+        Ok(Self {
+            client,
+            db,
+        })
     }
 
     pub async fn initialize_indexes(&self) -> Result<(), anyhow::Error> {

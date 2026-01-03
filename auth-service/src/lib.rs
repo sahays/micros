@@ -15,7 +15,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use std::sync::Arc;
 use crate::config::Config;
-use crate::middleware::{LoginRateLimiter, PasswordResetRateLimiter};
+use crate::middleware::{LoginRateLimiter, PasswordResetRateLimiter, IpRateLimiter};
 use crate::services::{EmailService, JwtService, MongoDb};
 
 #[derive(Clone)]
@@ -27,6 +27,7 @@ pub struct AppState {
     pub redis: Arc<dyn crate::services::TokenBlacklist>,
     pub login_rate_limiter: LoginRateLimiter,
     pub password_reset_rate_limiter: PasswordResetRateLimiter,
+    pub ip_rate_limiter: IpRateLimiter,
 }
 
 pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
@@ -37,9 +38,7 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
     let login_limiter = state.login_rate_limiter.clone();
     let login_route = Router::new()
         .route("/auth/login", post(handlers::auth::login))
-        .layer(from_fn(move |req, next| {
-            middleware::rate_limit_middleware(login_limiter.clone(), req, next)
-        }));
+        .layer(from_fn_with_state(login_limiter, middleware::rate_limit_middleware));
 
     // Create password reset request route with rate limiting
     let reset_request_limiter = state.password_reset_rate_limiter.clone();
@@ -48,10 +47,11 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
             "/auth/password-reset/request",
             post(handlers::auth::request_password_reset),
         )
-        .layer(from_fn(move |req, next| {
-            middleware::rate_limit_middleware(reset_request_limiter.clone(), req, next)
-        }));
+        .layer(from_fn_with_state(reset_request_limiter, middleware::rate_limit_middleware));
 
+    // Create global IP rate limiter
+    let ip_limiter = state.ip_rate_limiter.clone();
+    
     let app = Router::new()
         .route("/health", get(health_check))
         .route("/.well-known/jwks.json", get(handlers::well_known::jwks))
@@ -76,6 +76,10 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
                 .layer(from_fn_with_state(state.clone(), middleware::auth_middleware)),
         )
         .with_state(state)
+        // Global IP rate limiting
+        .layer(from_fn_with_state(ip_limiter, middleware::ip_rate_limit_middleware))
+        // Add tracing middleware for request_id
+        .layer(from_fn(middleware::request_id_middleware))
         // Add CORS layer
         .layer(CorsLayer::permissive()) // TODO: Configure from config
         // Add tracing layer
@@ -89,7 +93,7 @@ pub async fn health_check(
 ) -> Result<axum::Json<serde_json::Value>, (axum::http::StatusCode, String)> {
     // Check MongoDB connection
     state.db.health_check().await.map_err(|e| {
-        tracing::error!("MongoDB health check failed: {}", e);
+        tracing::error!(error = %e, "MongoDB health check failed");
         (
             axum::http::StatusCode::SERVICE_UNAVAILABLE,
             format!("MongoDB unhealthy: {}", e),

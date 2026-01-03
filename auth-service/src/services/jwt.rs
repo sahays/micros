@@ -1,6 +1,7 @@
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::fs;
 use uuid::Uuid;
 
@@ -99,12 +100,9 @@ impl JwtService {
             .map_err(|e| anyhow::anyhow!("Failed to parse public key: {}", e))?;
 
         // Generate a key ID (SHA-256 hash of the public key PEM)
-        use sha2::{Digest, Sha256};
-        let mut hasher = Sha256::new();
-        hasher.update(public_key_pem.as_bytes());
-        let key_id = hex::encode(hasher.finalize())[..16].to_string();
+        let key_id = format!("{:x}", Sha256::digest(public_key_pem.as_bytes()))[..16].to_string();
 
-        tracing::info!("JWT service initialized with RS256 keys. Key ID: {}", key_id);
+        tracing::info!(key_id = %key_id, "JWT service initialized with RS256 keys");
 
         Ok(Self {
             encoding_key,

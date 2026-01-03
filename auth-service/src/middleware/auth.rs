@@ -54,7 +54,7 @@ pub async fn auth_middleware(
         .is_blacklisted(&claims.jti)
         .await
         .map_err(|e| {
-            tracing::error!("Redis error checking blacklist: {}", e);
+            tracing::error!(error = %e, "Redis error checking blacklist");
             // Fail closed: if Redis is down, we assume token is revoked for security
             // Alternatively, fail open if availability is prioritized over immediate revocation
             (

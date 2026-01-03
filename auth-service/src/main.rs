@@ -53,12 +53,12 @@ async fn main() -> Result<(), anyhow::Error> {
         config.rate_limit.password_reset_attempts,
         config.rate_limit.password_reset_window_seconds,
     );
+    let ip_rate_limiter = middleware::create_ip_rate_limiter(
+        100, // Default global IP limit: 100 requests per 1 minute
+        60,
+    );
     tracing::info!(
-        "Rate limiters initialized: Login ({} attempts/{}s), Password Reset ({} attempts/{}s)",
-        config.rate_limit.login_attempts,
-        config.rate_limit.login_window_seconds,
-        config.rate_limit.password_reset_attempts,
-        config.rate_limit.password_reset_window_seconds
+        "Rate limiters initialized: Login, Password Reset, and Global IP"
     );
 
     // Create application state
@@ -70,19 +70,32 @@ async fn main() -> Result<(), anyhow::Error> {
         redis: std::sync::Arc::new(redis),
         login_rate_limiter,
         password_reset_rate_limiter,
+        ip_rate_limiter,
     };
     // Build application router
     let app = build_router(state).await?;
 
     // Start server
     let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
-    tracing::info!("Listening on {}", addr);
+    
+    let service_span = tracing::info_span!(
+        "service",
+        service = %config.service_name,
+        version = %config.service_version,
+        environment = ?config.environment,
+    );
+    let _guard = service_span.enter();
+
+    tracing::info!(address = %addr, "Listening");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await?;
 
     tracing::info!("Service shutdown complete");
     Ok(())

@@ -55,7 +55,7 @@ pub async fn register(
         .find_one(doc! { "email": &req.email }, None)
         .await
         .map_err(|e| {
-            tracing::error!("Database error checking existing user: {}", e);
+            tracing::error!(error = %e, "Database error checking existing user");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -75,7 +75,7 @@ pub async fn register(
 
     // Hash password
     let password_hash = hash_password(&Password::new(req.password)).map_err(|e| {
-        tracing::error!("Password hashing error: {}", e);
+        tracing::error!(error = %e, "Password hashing error");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -93,7 +93,7 @@ pub async fn register(
         .insert_one(&user, None)
         .await
         .map_err(|e| {
-            tracing::error!("Database error creating user: {}", e);
+            tracing::error!(error = %e, "Database error creating user");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -102,7 +102,7 @@ pub async fn register(
             )
         })?;
 
-    tracing::info!("User registered: {}", user.id);
+    tracing::info!(user_id = %user.id, "User registered");
 
     // Generate verification token
     let token = generate_random_token();
@@ -115,7 +115,7 @@ pub async fn register(
         .insert_one(&verification_token, None)
         .await
         .map_err(|e| {
-            tracing::error!("Database error creating verification token: {}", e);
+            tracing::error!(error = %e, "Database error creating verification token");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -131,7 +131,7 @@ pub async fn register(
         .send_verification_email(&req.email, &token, &base_url)
         .await
         .map_err(|e| {
-            tracing::error!("Failed to send verification email: {}", e);
+            tracing::error!(error = %e, "Failed to send verification email");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -171,7 +171,7 @@ pub async fn verify_email(
         .find_one(doc! { "token": &req.token }, None)
         .await
         .map_err(|e| {
-            tracing::error!("Database error finding verification token: {}", e);
+            tracing::error!(error = %e, "Database error finding verification token");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -210,7 +210,7 @@ pub async fn verify_email(
         )
         .await
         .map_err(|e| {
-            tracing::error!("Database error updating user: {}", e);
+            tracing::error!(error = %e, "Database error updating user");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -235,12 +235,12 @@ pub async fn verify_email(
         .delete_one(doc! { "_id": &verification_token.id }, None)
         .await
         .map_err(|e| {
-            tracing::error!("Database error deleting verification token: {}", e);
+            tracing::error!(error = %e, "Database error deleting verification token");
             // Don't fail the request if token deletion fails
         })
         .ok();
 
-    tracing::info!("Email verified for user: {}", verification_token.user_id);
+    tracing::info!(user_id = %verification_token.user_id, "Email verified for user");
 
     Ok((
         StatusCode::OK,
@@ -288,7 +288,7 @@ pub async fn login(
         .find_one(doc! { "email": &req.email }, None)
         .await
         .map_err(|e| {
-            tracing::error!("Database error finding user: {}", e);
+            tracing::error!(error = %e, "Database error finding user");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -339,7 +339,7 @@ pub async fn login(
         .jwt
         .generate_access_token(&user.id, &user.email)
         .map_err(|e| {
-            tracing::error!("Failed to generate access token: {}", e);
+            tracing::error!(error = %e, "Failed to generate access token");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -352,7 +352,7 @@ pub async fn login(
         .jwt
         .generate_refresh_token(&user.id, &refresh_token_id)
         .map_err(|e| {
-            tracing::error!("Failed to generate refresh token: {}", e);
+            tracing::error!(error = %e, "Failed to generate refresh token");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -375,7 +375,7 @@ pub async fn login(
         .insert_one(&refresh_token, None)
         .await
         .map_err(|e| {
-            tracing::error!("Database error storing refresh token: {}", e);
+            tracing::error!(error = %e, "Database error storing refresh token");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -384,7 +384,7 @@ pub async fn login(
             )
         })?;
 
-    tracing::info!("User logged in: {}", user.id);
+    tracing::info!(user_id = %user.id, "User logged in");
 
     Ok((
         StatusCode::OK,
@@ -417,7 +417,7 @@ pub async fn logout(
             .blacklist_token(&access_token_claims.jti, remaining_time)
             .await
             .map_err(|e| {
-                tracing::error!("Failed to blacklist access token: {}", e);
+                tracing::error!(error = %e, "Failed to blacklist access token");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
@@ -456,7 +456,7 @@ pub async fn logout(
         )
         .await
         .map_err(|e| {
-            tracing::error!("Database error revoking refresh token: {}", e);
+            tracing::error!(error = %e, "Database error revoking refresh token");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -474,7 +474,7 @@ pub async fn logout(
         ));
     }
 
-    tracing::info!("User logged out: {}", claims.sub);
+    tracing::info!(user_id = %claims.sub, "User logged out");
 
     Ok((
         StatusCode::OK,
@@ -548,7 +548,7 @@ pub async fn google_callback(
         .send()
         .await
         .map_err(|e| {
-            tracing::error!("Failed to exchange Google code: {}", e);
+            tracing::error!(error = %e, "Failed to exchange Google code");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -559,7 +559,7 @@ pub async fn google_callback(
         .json::<GoogleTokenResponse>()
         .await
         .map_err(|e| {
-            tracing::error!("Failed to parse Google token response: {}", e);
+            tracing::error!(error = %e, "Failed to parse Google token response");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -575,7 +575,7 @@ pub async fn google_callback(
         .send()
         .await
         .map_err(|e| {
-            tracing::error!("Failed to fetch Google user info: {}", e);
+            tracing::error!(error = %e, "Failed to fetch Google user info");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -586,7 +586,7 @@ pub async fn google_callback(
         .json::<GoogleUserInfo>()
         .await
         .map_err(|e| {
-            tracing::error!("Failed to parse Google user info: {}", e);
+            tracing::error!(error = %e, "Failed to parse Google user info");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -602,7 +602,7 @@ pub async fn google_callback(
         .find_one(doc! { "email": &user_info.email }, None)
         .await
         .map_err(|e| {
-            tracing::error!("Database error finding user: {}", e);
+            tracing::error!(error = %e, "Database error finding user");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -630,7 +630,7 @@ pub async fn google_callback(
                 .insert_one(&user, None)
                 .await
                 .map_err(|e| {
-                    tracing::error!("Database error creating social user: {}", e);
+                    tracing::error!(error = %e, "Database error creating social user");
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(ErrorResponse {
@@ -647,7 +647,7 @@ pub async fn google_callback(
         .jwt
         .generate_token_pair(&user.id, &user.email)
         .map_err(|e| {
-            tracing::error!("Failed to generate token pair: {}", e);
+            tracing::error!(error = %e, "Failed to generate token pair");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -670,7 +670,7 @@ pub async fn google_callback(
         .insert_one(&refresh_token, None)
         .await
         .map_err(|e| {
-            tracing::error!("Database error storing refresh token: {}", e);
+            tracing::error!(error = %e, "Database error storing refresh token");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -777,7 +777,7 @@ pub async fn refresh(
         )
         .await
         .map_err(|e| {
-            tracing::error!("Database error finding refresh token: {}", e);
+            tracing::error!(error = %e, "Database error finding refresh token");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -810,7 +810,7 @@ pub async fn refresh(
     // though here we use UUIDs, this checks if the token content matches what we expect)
     if stored_token.token_hash != RefreshToken::hash_token(&req.refresh_token) {
         // This is suspicious - ID matches but content doesn't
-        tracing::warn!("Refresh token hash mismatch for user {}", claims.sub);
+        tracing::warn!(user_id = %claims.sub, "Refresh token hash mismatch");
         return Err((
             StatusCode::UNAUTHORIZED,
             Json(ErrorResponse {
@@ -833,7 +833,7 @@ pub async fn refresh(
         )
         .await
         .map_err(|e| {
-            tracing::error!("Database error revoking old refresh token: {}", e);
+            tracing::error!(error = %e, "Database error revoking old refresh token");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -853,7 +853,7 @@ pub async fn refresh(
         .find_one(doc! { "_id": &claims.sub }, None)
         .await
         .map_err(|e| {
-            tracing::error!("Database error finding user: {}", e);
+            tracing::error!(error = %e, "Database error finding user");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -884,7 +884,7 @@ pub async fn refresh(
         .jwt
         .generate_access_token(&user.id, &user.email)
         .map_err(|e| {
-            tracing::error!("Failed to generate access token: {}", e);
+            tracing::error!(error = %e, "Failed to generate access token");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -897,7 +897,7 @@ pub async fn refresh(
         .jwt
         .generate_refresh_token(&user.id, &new_refresh_token_id)
         .map_err(|e| {
-            tracing::error!("Failed to generate refresh token: {}", e);
+            tracing::error!(error = %e, "Failed to generate refresh token");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -920,7 +920,7 @@ pub async fn refresh(
         .insert_one(&new_refresh_token, None)
         .await
         .map_err(|e| {
-            tracing::error!("Database error storing new refresh token: {}", e);
+            tracing::error!(error = %e, "Database error storing new refresh token");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -929,7 +929,7 @@ pub async fn refresh(
             )
         })?;
 
-    tracing::info!("Token refreshed for user: {}", user.id);
+    tracing::info!(user_id = %user.id, "Token refreshed for user");
 
     Ok((
         StatusCode::OK,
@@ -985,7 +985,7 @@ pub async fn introspect(
     let is_blacklisted = match state.redis.is_blacklisted(&claims.jti).await {
         Ok(blacklisted) => blacklisted,
         Err(e) => {
-            tracing::error!("Redis error checking blacklist during introspection: {}", e);
+            tracing::error!(error = %e, "Redis error checking blacklist during introspection");
             // In case of Redis error, we fail closed (secure)
             true
         }
@@ -1040,7 +1040,7 @@ pub async fn request_password_reset(
         .find_one(doc! { "email": &req.email }, None)
         .await
         .map_err(|e| {
-            tracing::error!("Database error finding user: {}", e);
+            tracing::error!(error = %e, "Database error finding user");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -1061,7 +1061,7 @@ pub async fn request_password_reset(
             .insert_one(&verification_token, None)
             .await
             .map_err(|e| {
-                tracing::error!("Database error creating reset token: {}", e);
+                tracing::error!(error = %e, "Database error creating reset token");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
@@ -1077,7 +1077,7 @@ pub async fn request_password_reset(
             .send_password_reset_email(&req.email, &token, &base_url)
             .await
             .map_err(|e| {
-                tracing::error!("Failed to send reset email: {}", e);
+                tracing::error!(error = %e, "Failed to send reset email");
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     Json(ErrorResponse {
@@ -1086,10 +1086,10 @@ pub async fn request_password_reset(
                 )
             })?;
 
-        tracing::info!("Password reset requested for user: {}", user.id);
+        tracing::info!(user_id = %user.id, "Password reset requested");
     } else {
         // If user doesn't exist, we still return 200 OK to prevent email enumeration
-        tracing::info!("Password reset requested for non-existent email: {}", req.email);
+        tracing::info!(email = %req.email, "Password reset requested for non-existent email");
     }
 
     Ok((
@@ -1135,7 +1135,7 @@ pub async fn confirm_password_reset(
         )
         .await
         .map_err(|e| {
-            tracing::error!("Database error finding reset token: {}", e);
+            tracing::error!(error = %e, "Database error finding reset token");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -1165,7 +1165,7 @@ pub async fn confirm_password_reset(
 
     // Hash new password
     let password_hash = hash_password(&Password::new(req.new_password)).map_err(|e| {
-        tracing::error!("Password hashing error: {}", e);
+        tracing::error!(error = %e, "Password hashing error");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -1176,7 +1176,7 @@ pub async fn confirm_password_reset(
 
     // Update user password and invalidate all refresh tokens
     let session = state.db.client().start_session(None).await.map_err(|e| {
-        tracing::error!("Failed to start database session: {}", e);
+        tracing::error!(error = %e, "Failed to start database session");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -1188,7 +1188,7 @@ pub async fn confirm_password_reset(
     // We use a transaction to ensure atomicity
     let mut session = session;
     session.start_transaction(None).await.map_err(|e| {
-        tracing::error!("Failed to start transaction: {}", e);
+        tracing::error!(error = %e, "Failed to start transaction");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -1214,7 +1214,7 @@ pub async fn confirm_password_reset(
         )
         .await
         .map_err(|e| {
-            tracing::error!("Database error updating user password: {}", e);
+            tracing::error!(error = %e, "Database error updating user password");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -1235,7 +1235,7 @@ pub async fn confirm_password_reset(
         )
         .await
         .map_err(|e| {
-            tracing::error!("Database error revoking refresh tokens: {}", e);
+            tracing::error!(error = %e, "Database error revoking refresh tokens");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -1251,7 +1251,7 @@ pub async fn confirm_password_reset(
         .delete_one_with_session(doc! { "_id": &verification_token.id }, None, &mut session)
         .await
         .map_err(|e| {
-            tracing::error!("Database error deleting reset token: {}", e);
+            tracing::error!(error = %e, "Database error deleting reset token");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -1261,7 +1261,7 @@ pub async fn confirm_password_reset(
         })?;
 
     session.commit_transaction().await.map_err(|e| {
-        tracing::error!("Failed to commit transaction: {}", e);
+        tracing::error!(error = %e, "Failed to commit transaction");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(ErrorResponse {
@@ -1270,7 +1270,7 @@ pub async fn confirm_password_reset(
         )
     })?;
 
-    tracing::info!("Password reset successful for user: {}", verification_token.user_id);
+    tracing::info!(user_id = %verification_token.user_id, "Password reset successful");
 
     Ok((
         StatusCode::OK,

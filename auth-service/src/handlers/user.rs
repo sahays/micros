@@ -37,7 +37,7 @@ pub async fn get_me(
         .find_one(doc! { "_id": &claims.sub }, None)
         .await
         .map_err(|e| {
-            tracing::error!("Database error finding user: {}", e);
+            tracing::error!(error = %e, "Database error finding user");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({ "error": "Internal server error" })),
@@ -76,7 +76,7 @@ pub async fn update_me(
         .find_one(doc! { "_id": &claims.sub }, None)
         .await
         .map_err(|e| {
-            tracing::error!("Database error finding user: {}", e);
+            tracing::error!(error = %e, "Database error finding user");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({ "error": "Internal server error" })),
@@ -102,7 +102,7 @@ pub async fn update_me(
                 .find_one(doc! { "email": new_email }, None)
                 .await
                 .map_err(|e| {
-                    tracing::error!("Database error checking email uniqueness: {}", e);
+                    tracing::error!(error = %e, "Database error checking email uniqueness");
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(serde_json::json!({ "error": "Internal server error" })),
@@ -140,7 +140,7 @@ pub async fn update_me(
         .update_one(doc! { "_id": &user.id }, doc! { "$set": update_doc }, None)
         .await
         .map_err(|e| {
-            tracing::error!("Database error updating user: {}", e);
+            tracing::error!(error = %e, "Database error updating user");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({ "error": "Internal server error" })),
@@ -166,7 +166,7 @@ pub async fn update_me(
             .insert_one(&verification_token, None)
             .await
             .map_err(|e| {
-                tracing::error!("Database error creating verification token: {}", e);
+                tracing::error!(error = %e, "Database error creating verification token");
                 // Non-fatal for the update response, but should be logged
             })
             .ok();
@@ -178,7 +178,7 @@ pub async fn update_me(
             .send_verification_email(&new_email, &token, &base_url)
             .await
             .map_err(|e| {
-                tracing::error!("Failed to send verification email: {}", e);
+                tracing::error!(error = %e, "Failed to send verification email");
             })
             .ok();
     }
@@ -218,7 +218,7 @@ pub async fn change_password(
         .find_one(doc! { "_id": &claims.sub }, None)
         .await
         .map_err(|e| {
-            tracing::error!("Database error finding user: {}", e);
+            tracing::error!(error = %e, "Database error finding user");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({ "error": "Internal server error" })),
@@ -245,7 +245,7 @@ pub async fn change_password(
 
     // 4. Hash new password
     let new_password_hash = hash_password(&Password::new(req.new_password)).map_err(|e| {
-        tracing::error!("Password hashing error: {}", e);
+        tracing::error!(error = %e, "Password hashing error");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({ "error": "Internal server error" })),
@@ -269,7 +269,7 @@ pub async fn change_password(
         )
         .await
         .map_err(|e| {
-            tracing::error!("Database error updating password: {}", e);
+            tracing::error!(error = %e, "Database error updating password");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({ "error": "Internal server error" })),
@@ -287,7 +287,7 @@ pub async fn change_password(
         )
         .await
         .map_err(|e| {
-            tracing::error!("Database error revoking refresh tokens: {}", e);
+            tracing::error!(error = %e, "Database error revoking refresh tokens");
             // Non-fatal for the response
         })
         .ok();

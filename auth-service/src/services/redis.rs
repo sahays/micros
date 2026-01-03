@@ -17,10 +17,9 @@ pub struct RedisService {
 }
 
 impl RedisService {
-    pub async fn new(config: &RedisConfig) -> Result<Self, anyhow::Error> {
-        tracing::info!("Connecting to Redis at {}", config.url);
-        
-        let client = Client::open(config.url.as_str())?;
+    pub async fn new(config: &crate::config::RedisConfig) -> Result<Self, anyhow::Error> {
+        tracing::info!(url = %config.url, "Connecting to Redis");
+        let client = Client::open(config.url.clone())?;
         
         // Use ConnectionManager for automatic reconnection
         let manager = client.get_connection_manager().await?;
