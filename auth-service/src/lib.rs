@@ -61,6 +61,7 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
             "/auth/password-reset/confirm",
             post(handlers::auth::confirm_password_reset),
         )
+        .route("/auth/refresh", post(handlers::auth::refresh))
         .route("/auth/logout", post(handlers::auth::logout))
         .with_state(state)
         // Add CORS layer

@@ -462,6 +462,206 @@ pub async fn logout(
     ))
 }
 
+#[derive(Debug, Deserialize)]
+pub struct RefreshRequest {
+    pub refresh_token: String,
+}
+
+pub async fn refresh(
+    State(state): State<AppState>,
+    Json(req): Json<RefreshRequest>,
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    // Validate JWT signature and claims
+    let claims = state
+        .jwt
+        .validate_refresh_token(&req.refresh_token)
+        .map_err(|_| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse {
+                    error: "Invalid refresh token".to_string(),
+                }),
+            )
+        })?;
+
+    // Find the refresh token in the database
+    let stored_token = state
+        .db
+        .refresh_tokens()
+        .find_one(
+            doc! {
+                "_id": &claims.jti,
+                "user_id": &claims.sub,
+            },
+            None,
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error finding refresh token: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    let stored_token = stored_token.ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "Refresh token not found".to_string(),
+            }),
+        )
+    })?;
+
+    // Verify hashing and status
+    // 1. Check if token is valid (not expired, not revoked)
+    if !stored_token.is_valid() {
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "Refresh token is invalid or expired".to_string(),
+            }),
+        ));
+    }
+
+    // 2. Verify the hash matches (Security check: prevents reuse of old tokens with same ID if we were reusing IDs, 
+    // though here we use UUIDs, this checks if the token content matches what we expect)
+    if stored_token.token_hash != RefreshToken::hash_token(&req.refresh_token) {
+        // This is suspicious - ID matches but content doesn't
+        tracing::warn!("Refresh token hash mismatch for user {}", claims.sub);
+        return Err((
+            StatusCode::UNAUTHORIZED,
+            Json(ErrorResponse {
+                error: "Invalid refresh token".to_string(),
+            }),
+        ));
+    }
+
+    // Generate new tokens (Rotate)
+    // We perform operations sequentially. Transactions would be better but require a replica set.
+    
+    // 1. Revoke the old token
+    state
+        .db
+        .refresh_tokens()
+        .update_one(
+            doc! { "_id": &stored_token.id },
+            doc! { "$set": { "revoked": true } },
+            None,
+        )
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error revoking old refresh token: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    // 2. Generate new tokens
+    let new_refresh_token_id = uuid::Uuid::new_v4().to_string();
+
+    // Note: We need user email for access token. Currently not in RefreshTokenClaims.
+    // We should probably look up the user to get the email and ensure they still exist/are valid.
+    let user = state
+        .db
+        .users()
+        .find_one(doc! { "_id": &claims.sub }, None)
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error finding user: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?
+        .ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                Json(ErrorResponse {
+                    error: "User not found".to_string(),
+                }),
+            )
+        })?;
+    
+    // Check if user is still verified/active
+    if !user.verified {
+        return Err((
+             StatusCode::FORBIDDEN,
+             Json(ErrorResponse {
+                 error: "User account is not verified".to_string(),
+             }),
+        ));
+    }
+
+    let access_token = state
+        .jwt
+        .generate_access_token(&user.id, &user.email)
+        .map_err(|e| {
+            tracing::error!("Failed to generate access token: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    let refresh_token_str = state
+        .jwt
+        .generate_refresh_token(&user.id, &new_refresh_token_id)
+        .map_err(|e| {
+            tracing::error!("Failed to generate refresh token: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    // 3. Store new refresh token
+    let new_refresh_token = RefreshToken::new_with_id(
+        new_refresh_token_id,
+        user.id.clone(),
+        &refresh_token_str,
+        state.config.jwt.refresh_token_expiry_days,
+    );
+
+    state
+        .db
+        .refresh_tokens()
+        .insert_one(&new_refresh_token, None)
+        .await
+        .map_err(|e| {
+            tracing::error!("Database error storing new refresh token: {}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
+            )
+        })?;
+
+    tracing::info!("Token refreshed for user: {}", user.id);
+
+    Ok((
+        StatusCode::OK,
+        Json(TokenResponse {
+            access_token,
+            refresh_token: refresh_token_str,
+            token_type: "Bearer".to_string(),
+            expires_in: state.jwt.access_token_expiry_seconds(),
+        }),
+    ))
+}
+
 #[derive(Debug, Deserialize, Validate)]
 pub struct PasswordResetRequest {
     #[validate(email(message = "Invalid email format"))]
