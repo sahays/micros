@@ -28,6 +28,7 @@ pub struct AppState {
     pub login_rate_limiter: LoginRateLimiter,
     pub password_reset_rate_limiter: PasswordResetRateLimiter,
     pub app_token_rate_limiter: IpRateLimiter,
+    pub client_rate_limiter: crate::middleware::ClientRateLimiter,
     pub ip_rate_limiter: IpRateLimiter,
 }
 
@@ -37,6 +38,14 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
     // Admin routes
     let admin_routes = Router::new()
         .route("/auth/admin/clients", post(handlers::admin::create_client))
+        .route(
+            "/auth/admin/clients/:client_id/rotate",
+            post(handlers::admin::rotate_client_secret),
+        )
+        .route(
+            "/auth/admin/clients/:client_id",
+            axum::routing::delete(handlers::admin::revoke_client),
+        )
         .layer(from_fn_with_state(
             state.clone(),
             middleware::admin_auth_middleware,

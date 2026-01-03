@@ -12,12 +12,18 @@ use governor::{
 };
 use serde_json::json;
 use std::{net::SocketAddr, num::NonZeroU32, sync::Arc, time::Duration};
+use dashmap::DashMap;
+
+use crate::services::AppTokenClaims;
 
 /// Rate limiter for global/unkeyed use
 pub type UnkeyedRateLimiter = Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>;
 
 /// Rate limiter keyed by IP address
 pub type IpRateLimiter = Arc<RateLimiter<SocketAddr, DashMapStateStore<SocketAddr>, DefaultClock>>;
+
+/// Rate limiter keyed by client ID with per-client quotas
+pub type ClientRateLimiter = Arc<DashMap<String, UnkeyedRateLimiter>>;
 
 /// Legacy aliases for backward compatibility
 pub type LoginRateLimiter = UnkeyedRateLimiter;
@@ -63,6 +69,11 @@ pub fn create_ip_rate_limiter(attempts: u32, window_seconds: u64) -> IpRateLimit
         .allow_burst(NonZeroU32::new(attempts).expect("attempts is guaranteed to be non-zero"));
 
     Arc::new(RateLimiter::dashmap(quota))
+}
+
+/// Create a new ClientRateLimiter
+pub fn create_client_rate_limiter() -> ClientRateLimiter {
+    Arc::new(DashMap::new())
 }
 
 /// Middleware for unkeyed rate limiting (Legacy)
@@ -129,6 +140,57 @@ pub async fn ip_rate_limit_middleware(
             tracing::warn!("Could not determine IP for rate limiting");
             next.run(request).await
         }
+    }
+}
+
+/// Middleware for per-client rate limiting
+pub async fn client_rate_limit_middleware(
+    State(limiter_map): State<ClientRateLimiter>,
+    request: Request,
+    next: Next,
+) -> Response {
+    let claims = request.extensions().get::<AppTokenClaims>();
+
+    if let Some(claims) = claims {
+        let client_id = &claims.client_id;
+        let limit_per_min = claims.rate_limit_per_min;
+
+        // Skip if limit is 0 (unlimited)
+        if limit_per_min == 0 {
+            return next.run(request).await;
+        }
+
+        // Get or create limiter for this client
+        let limiter = limiter_map
+            .entry(client_id.clone())
+            .or_insert_with(|| create_login_rate_limiter(limit_per_min, 60))
+            .clone();
+
+        match limiter.check() {
+            Ok(_) => next.run(request).await,
+            Err(negative) => {
+                let wait_time = negative.wait_time_from(DefaultClock::default().now());
+                let x_ratelimit_limit = HeaderName::from_static("x-ratelimit-limit");
+                let x_ratelimit_remaining = HeaderName::from_static("x-ratelimit-remaining");
+                (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    [
+                        (header::RETRY_AFTER, wait_time.as_secs().to_string()),
+                        (x_ratelimit_limit, limit_per_min.to_string()),
+                        (x_ratelimit_remaining, "0".to_string()),
+                    ],
+                    Json(json!({
+                        "error": "Client rate limit exceeded",
+                        "retry_after_seconds": wait_time.as_secs(),
+                        "limit": limit_per_min
+                    })),
+                )
+                    .into_response()
+            }
+        }
+    } else {
+        // No app claims, proceed
+        next.run(request).await
     }
 }
 

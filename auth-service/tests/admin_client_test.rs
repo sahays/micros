@@ -3,7 +3,7 @@ use auth_service::{
     config::Config,
     handlers::admin::CreateClientResponse,
     middleware::{
-        create_ip_rate_limiter, create_login_rate_limiter, create_password_reset_rate_limiter,
+        create_client_rate_limiter, create_ip_rate_limiter, create_login_rate_limiter, create_password_reset_rate_limiter,
     },
     models::ClientType,
     services::{EmailService, JwtService, MockBlacklist, MongoDb},
@@ -68,6 +68,7 @@ async fn test_create_client_flow() {
         login_rate_limiter: login_limiter,
         password_reset_rate_limiter: reset_limiter,
         app_token_rate_limiter: ip_limiter.clone(),
+        client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: ip_limiter,
     };
 

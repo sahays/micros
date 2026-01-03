@@ -191,8 +191,8 @@ pub async fn rotate_client_secret(
                 "$set": {
                     "client_secret_hash": new_secret_hash.into_string(),
                     "previous_client_secret_hash": client.client_secret_hash,
-                    "previous_secret_expiry": mongodb::bson::DateTime::from_chrono(expiry),
-                    "updated_at": mongodb::bson::DateTime::from_chrono(now)
+                    "previous_secret_expiry": expiry,
+                    "updated_at": now
                 }
             },
             None,

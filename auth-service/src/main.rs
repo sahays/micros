@@ -60,7 +60,8 @@ async fn main() -> Result<(), anyhow::Error> {
         config.rate_limit.app_token_limit,
         config.rate_limit.app_token_window_seconds,
     );
-    tracing::info!("Rate limiters initialized: Login, Password Reset, App Token, and Global IP");
+    let client_rate_limiter = middleware::create_client_rate_limiter();
+    tracing::info!("Rate limiters initialized: Login, Password Reset, App Token, Client, and Global IP");
 
     // Create application state
     let state = AppState {
@@ -72,6 +73,7 @@ async fn main() -> Result<(), anyhow::Error> {
         login_rate_limiter,
         password_reset_rate_limiter,
         app_token_rate_limiter,
+        client_rate_limiter,
         ip_rate_limiter,
     };
     // Build application router

@@ -77,6 +77,7 @@ governor = { version = "0.6", features = ["dashmap"] }
 
 # Configuration
 config = "0.14"
+dashmap = "6.1.0"
 
 [dev-dependencies]
 tempfile = "3.24.0"

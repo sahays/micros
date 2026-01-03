@@ -2,7 +2,7 @@ use auth_service::{
     build_router,
     config::Config,
     middleware::{
-        create_ip_rate_limiter, create_login_rate_limiter, create_password_reset_rate_limiter,
+        create_client_rate_limiter, create_ip_rate_limiter, create_login_rate_limiter, create_password_reset_rate_limiter,
     },
     models::{Client, ClientType},
     services::{EmailService, JwtService, MockBlacklist, MongoDb},
@@ -61,6 +61,7 @@ async fn test_app_token_success() {
         login_rate_limiter: login_limiter,
         password_reset_rate_limiter: reset_limiter,
         app_token_rate_limiter: ip_limiter.clone(),
+        client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: ip_limiter,
     };
 
@@ -143,6 +144,7 @@ async fn test_app_token_invalid_secret() {
         login_rate_limiter: create_login_rate_limiter(5, 60),
         password_reset_rate_limiter: create_password_reset_rate_limiter(3, 3600),
         app_token_rate_limiter: create_ip_rate_limiter(10, 60),
+        client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: create_ip_rate_limiter(100, 60),
     };
 
@@ -205,6 +207,7 @@ async fn test_app_token_invalid_grant_type() {
         login_rate_limiter: create_login_rate_limiter(5, 60),
         password_reset_rate_limiter: create_password_reset_rate_limiter(3, 3600),
         app_token_rate_limiter: create_ip_rate_limiter(10, 60),
+        client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: create_ip_rate_limiter(100, 60),
     };
 

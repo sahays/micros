@@ -77,6 +77,8 @@ pub struct AppTokenClaims {
     pub typ: String,
     /// Scopes
     pub scopes: Vec<String>,
+    /// Rate limit per minute
+    pub rate_limit_per_min: u32,
     /// Expiration time (Unix timestamp)
     pub exp: i64,
     /// Issued at (Unix timestamp)
@@ -259,6 +261,7 @@ impl JwtService {
         client_id: &str,
         app_name: &str,
         scopes: Vec<String>,
+        rate_limit_per_min: u32,
     ) -> Result<String, anyhow::Error> {
         let now = Utc::now();
         let exp = now + Duration::minutes(self.app_token_expiry_minutes);
@@ -269,6 +272,7 @@ impl JwtService {
             name: app_name.to_string(),
             typ: "app".to_string(),
             scopes,
+            rate_limit_per_min,
             exp: exp.timestamp(),
             iat: now.timestamp(),
             jti: Uuid::new_v4().to_string(),

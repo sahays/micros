@@ -84,7 +84,8 @@ pub async fn app_token(
             &client.previous_client_secret_hash,
             client.previous_secret_expiry,
         ) {
-            if chrono::Utc::now() < prev_expiry {
+            let now = chrono::Utc::now();
+            if now < prev_expiry {
                 verified = verify_password(
                     &Password::new(req.client_secret.clone()),
                     &PasswordHashString::new(prev_hash.clone()),
@@ -106,7 +107,12 @@ pub async fn app_token(
     // 4. Generate App Token
     let token = state
         .jwt
-        .generate_app_token(&client.client_id, &client.app_name, vec![])
+        .generate_app_token(
+            &client.client_id,
+            &client.app_name,
+            vec![],
+            client.rate_limit_per_min,
+        )
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to generate app token");
             (
