@@ -4,4 +4,4 @@ mod jwt;
 
 pub use database::MongoDb;
 pub use email::EmailService;
-pub use jwt::{JwtService, TokenResponse};
+pub use jwt::{AccessTokenClaims, JwtService, RefreshTokenClaims, TokenResponse};
