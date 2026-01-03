@@ -104,12 +104,12 @@ impl MongoDb {
 
         refresh_tokens.create_index(user_id_index, None).await?;
 
-        // Index on token for fast lookup
+        // Index on token_hash for fast lookup
         let refresh_token_index = IndexModel::builder()
-            .keys(doc! { "token": 1 })
+            .keys(doc! { "token_hash": 1 })
             .options(
                 IndexOptions::builder()
-                    .name("refresh_token_lookup".to_string())
+                    .name("refresh_token_hash_lookup".to_string())
                     .build(),
             )
             .build();

@@ -361,15 +361,12 @@ pub async fn login(
         })?;
 
     // Store refresh token in database with matching ID
-    let refresh_token = RefreshToken {
-        id: refresh_token_id,
-        user_id: user.id.clone(),
-        token: refresh_token_str.clone(),
-        expires_at: chrono::Utc::now()
-            + chrono::Duration::days(state.config.jwt.refresh_token_expiry_days),
-        created_at: chrono::Utc::now(),
-        revoked: false,
-    };
+    let refresh_token = RefreshToken::new_with_id(
+        refresh_token_id,
+        user.id.clone(),
+        &refresh_token_str,
+        state.config.jwt.refresh_token_expiry_days,
+    );
 
     state
         .db
