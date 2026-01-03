@@ -8,7 +8,7 @@ use axum::{
 use serde::Serialize;
 
 use crate::{
-    services::{AccessTokenClaims, JwtService},
+    services::AccessTokenClaims,
     AppState,
 };
 

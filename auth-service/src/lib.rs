@@ -6,7 +6,7 @@ pub mod services;
 pub mod utils;
 
 use axum::{
-    middleware::from_fn,
+    middleware::{from_fn, from_fn_with_state},
     routing::{get, post},
     Router,
 };
@@ -16,7 +16,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use std::sync::Arc;
 use crate::config::Config;
 use crate::middleware::{LoginRateLimiter, PasswordResetRateLimiter};
-use crate::services::{EmailService, JwtService, MongoDb, RedisService, TokenBlacklist};
+use crate::services::{EmailService, JwtService, MongoDb};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -24,7 +24,7 @@ pub struct AppState {
     pub db: MongoDb,
     pub email: EmailService,
     pub jwt: JwtService,
-    pub redis: Arc<dyn TokenBlacklist>,
+    pub redis: Arc<dyn crate::services::TokenBlacklist>,
     pub login_rate_limiter: LoginRateLimiter,
     pub password_reset_rate_limiter: PasswordResetRateLimiter,
 }
@@ -54,9 +54,11 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
 
     let app = Router::new()
         .route("/health", get(health_check))
+        .route("/.well-known/jwks.json", get(handlers::well_known::jwks))
         // Authentication routes
         .route("/auth/register", post(handlers::auth::register))
         .route("/auth/verify", get(handlers::auth::verify_email))
+        .route("/auth/introspect", post(handlers::auth::introspect))
         .merge(login_route)
         .merge(reset_request_route)
         .route(
@@ -64,7 +66,11 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
             post(handlers::auth::confirm_password_reset),
         )
         .route("/auth/refresh", post(handlers::auth::refresh))
-        .route("/auth/logout", post(handlers::auth::logout))
+        .merge(
+            Router::new()
+                .route("/auth/logout", post(handlers::auth::logout))
+                .layer(from_fn_with_state(state.clone(), middleware::auth_middleware)),
+        )
         .with_state(state)
         // Add CORS layer
         .layer(CorsLayer::permissive()) // TODO: Configure from config

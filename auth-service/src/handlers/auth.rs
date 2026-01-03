@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use validator::Validate;
 
 use crate::{
+    middleware::AuthUser,
     models::{RefreshToken, User, VerificationToken},
     services::TokenResponse,
     utils::{hash_password, verify_password, Password, PasswordHashString},
@@ -403,9 +404,30 @@ pub struct LogoutRequest {
 
 pub async fn logout(
     State(state): State<AppState>,
+    user: AuthUser,
     Json(req): Json<LogoutRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
-    // Validate and decode refresh token
+    // 1. Blacklist the current access token
+    let access_token_claims = user.0;
+    let remaining_time = access_token_claims.exp - chrono::Utc::now().timestamp();
+    
+    if remaining_time > 0 {
+        state
+            .redis
+            .blacklist_token(&access_token_claims.jti, remaining_time)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to blacklist access token: {}", e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(ErrorResponse {
+                        error: "Internal server error".to_string(),
+                    }),
+                )
+            })?;
+    }
+
+    // 2. Validate and decode refresh token
     let claims = state
         .jwt
         .validate_refresh_token(&req.refresh_token)
@@ -418,7 +440,7 @@ pub async fn logout(
             )
         })?;
 
-    // Revoke refresh token in database
+    // 3. Revoke refresh token in database
     let result = state
         .db
         .refresh_tokens()
@@ -660,6 +682,77 @@ pub async fn refresh(
             expires_in: state.jwt.access_token_expiry_seconds(),
         }),
     ))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct IntrospectRequest {
+    pub token: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct IntrospectResponse {
+    pub active: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sub: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exp: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub iat: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jti: Option<String>,
+}
+
+pub async fn introspect(
+    State(state): State<AppState>,
+    Json(req): Json<IntrospectRequest>,
+) -> impl IntoResponse {
+    // 1. Validate token signature and expiration
+    let claims = match state.jwt.validate_access_token(&req.token) {
+        Ok(claims) => claims,
+        Err(_) => {
+            return Json(IntrospectResponse {
+                active: false,
+                sub: None,
+                email: None,
+                exp: None,
+                iat: None,
+                jti: None,
+            });
+        }
+    };
+
+    // 2. Check blacklist
+    let is_blacklisted = match state.redis.is_blacklisted(&claims.jti).await {
+        Ok(blacklisted) => blacklisted,
+        Err(e) => {
+            tracing::error!("Redis error checking blacklist during introspection: {}", e);
+            // In case of Redis error, we fail closed (secure)
+            true
+        }
+    };
+
+    if is_blacklisted {
+        return Json(IntrospectResponse {
+            active: false,
+            sub: None,
+            email: None,
+            exp: None,
+            iat: None,
+            jti: None,
+        });
+    }
+
+    // 3. Return active with metadata
+    Json(IntrospectResponse {
+        active: true,
+        sub: Some(claims.sub),
+        email: Some(claims.email),
+        exp: Some(claims.exp),
+        iat: Some(claims.iat),
+        jti: Some(claims.jti),
+    })
 }
 
 #[derive(Debug, Deserialize, Validate)]

@@ -11,8 +11,27 @@ use crate::config::JwtConfig;
 pub struct JwtService {
     encoding_key: EncodingKey,
     decoding_key: DecodingKey,
+    public_key_pem: String,
+    key_id: String,
     access_token_expiry_minutes: i64,
     refresh_token_expiry_days: i64,
+}
+
+/// JWK representation
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Jwk {
+    pub kty: String,
+    pub r#use: String,
+    pub alg: String,
+    pub kid: String,
+    pub n: String,
+    pub e: String,
+}
+
+/// JWKS representation
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Jwks {
+    pub keys: Vec<Jwk>,
 }
 
 /// Claims for access tokens (short-lived)
@@ -79,13 +98,48 @@ impl JwtService {
         let decoding_key = DecodingKey::from_rsa_pem(public_key_pem.as_bytes())
             .map_err(|e| anyhow::anyhow!("Failed to parse public key: {}", e))?;
 
-        tracing::info!("JWT service initialized with RS256 keys");
+        // Generate a key ID (SHA-256 hash of the public key PEM)
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(public_key_pem.as_bytes());
+        let key_id = hex::encode(hasher.finalize())[..16].to_string();
+
+        tracing::info!("JWT service initialized with RS256 keys. Key ID: {}", key_id);
 
         Ok(Self {
             encoding_key,
             decoding_key,
+            public_key_pem,
+            key_id,
             access_token_expiry_minutes: config.access_token_expiry_minutes,
             refresh_token_expiry_days: config.refresh_token_expiry_days,
+        })
+    }
+
+    /// Get the public key set in JWKS format
+    pub fn get_jwks(&self) -> Result<Jwks, anyhow::Error> {
+        use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+        use rsa::traits::PublicKeyParts;
+        use rsa::RsaPublicKey;
+        use rsa::pkcs8::DecodePublicKey;
+
+        // Parse PEM to get RSA components
+        // We might need to strip the PEM headers if DecodePublicKey doesn't handle them
+        let public_key = RsaPublicKey::from_public_key_pem(&self.public_key_pem)
+            .map_err(|e| anyhow::anyhow!("Failed to parse RSA public key for JWKS: {}", e))?;
+
+        let n = URL_SAFE_NO_PAD.encode(public_key.n().to_bytes_be());
+        let e = URL_SAFE_NO_PAD.encode(public_key.e().to_bytes_be());
+
+        Ok(Jwks {
+            keys: vec![Jwk {
+                kty: "RSA".to_string(),
+                r#use: "sig".to_string(),
+                alg: "RS256".to_string(),
+                kid: self.key_id.clone(),
+                n,
+                e,
+            }],
         })
     }
 
@@ -106,7 +160,8 @@ impl JwtService {
             jti: Uuid::new_v4().to_string(),
         };
 
-        let header = Header::new(Algorithm::RS256);
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = Some(self.key_id.clone());
         let token = encode(&header, &claims, &self.encoding_key)
             .map_err(|e| anyhow::anyhow!("Failed to encode access token: {}", e))?;
 
@@ -129,7 +184,8 @@ impl JwtService {
             iat: now.timestamp(),
         };
 
-        let header = Header::new(Algorithm::RS256);
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = Some(self.key_id.clone());
         let token = encode(&header, &claims, &self.encoding_key)
             .map_err(|e| anyhow::anyhow!("Failed to encode refresh token: {}", e))?;
 

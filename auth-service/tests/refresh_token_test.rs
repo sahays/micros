@@ -4,7 +4,7 @@ use auth_service::{
     init_tracing,
     middleware::{create_login_rate_limiter, create_password_reset_rate_limiter},
     models::{RefreshToken, User},
-    services::{EmailService, JwtService, MongoDb, MockBlacklist},
+    services::{EmailService, JwtService, MongoDb, MockBlacklist, TokenBlacklist},
     AppState,
 };
 use axum::{
@@ -59,7 +59,7 @@ async fn test_refresh_token_flow() {
         db: db.clone(),
         email,
         jwt: jwt.clone(),
-        redis,
+        redis: redis.clone(),
         login_rate_limiter: login_limiter,
         password_reset_rate_limiter: reset_limiter,
     };
@@ -93,6 +93,7 @@ async fn test_refresh_token_flow() {
 
     // 6. Test Refresh
     let response = app
+        .clone()
         .oneshot(
             Request::builder()
                 .method("POST")
@@ -128,6 +129,39 @@ async fn test_refresh_token_flow() {
         .unwrap();
     assert!(old_token_in_db.revoked);
 
-    // 9. Cleanup
+    // 10. Test Logout
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/auth/logout")
+                .header("Content-Type", "application/json")
+                .header("Authorization", format!("Bearer {}", new_access_token))
+                .body(Body::from(format!(
+                    r#"{{"refresh_token": "{}"}}"#,
+                    new_refresh_token
+                )))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Verify new refresh token is also revoked
+    let new_claims = jwt.validate_refresh_token(new_refresh_token).unwrap();
+    let new_token_in_db = db
+        .refresh_tokens()
+        .find_one(doc! { "_id": &new_claims.jti }, None)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(new_token_in_db.revoked);
+
+    // Verify access token is blacklisted
+    let access_claims = jwt.validate_access_token(new_access_token).unwrap();
+    assert!(redis.is_blacklisted(&access_claims.jti).await.unwrap());
+
+    // 11. Cleanup
     teardown_test_db(&config.mongodb.uri, &db_name).await;
 }
