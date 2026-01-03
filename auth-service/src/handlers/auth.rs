@@ -1206,7 +1206,7 @@ pub async fn confirm_password_reset(
             doc! {
                 "$set": {
                     "password_hash": password_hash.into_string(),
-                    "updated_at": mongodb::bson::DateTime::now()
+                    "updated_at": chrono::Utc::now()
                 }
             },
             None,

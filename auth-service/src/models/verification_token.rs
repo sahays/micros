@@ -16,7 +16,9 @@ pub struct VerificationToken {
     pub token: String,
     pub user_id: String,
     pub token_type: TokenType,
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub expires_at: DateTime<Utc>,
+    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     pub created_at: DateTime<Utc>,
 }
 

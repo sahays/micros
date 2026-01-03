@@ -71,6 +71,8 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
         .merge(
             Router::new()
                 .route("/auth/logout", post(handlers::auth::logout))
+                .route("/users/me", get(handlers::user::get_me).patch(handlers::user::update_me))
+                .route("/users/me/password", post(handlers::user::change_password))
                 .layer(from_fn_with_state(state.clone(), middleware::auth_middleware)),
         )
         .with_state(state)
