@@ -1,0 +1,36 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Keys
+/keys/
+*.pem
+*.key
+
+# Logs
+*.log
+/logs/
+
+# Testing
+/coverage/
+
+# Docker
+docker-compose.override.yml
+
+# Database
+/data/
