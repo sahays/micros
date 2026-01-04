@@ -35,6 +35,7 @@ pub struct Client {
     pub previous_secret_expiry: Option<chrono::DateTime<chrono::Utc>>,
     pub app_name: String,
     pub app_type: ClientType,
+    pub signing_secret: String,
     pub rate_limit_per_min: u32,
     pub allowed_origins: Vec<String>,
     pub enabled: bool,
@@ -81,6 +82,7 @@ impl Client {
     pub fn new(
         client_id: String,
         client_secret_hash: String,
+        signing_secret: String,
         app_name: String,
         app_type: ClientType,
         rate_limit_per_min: u32,
@@ -95,6 +97,7 @@ impl Client {
             previous_secret_expiry: None,
             app_name,
             app_type,
+            signing_secret,
             rate_limit_per_min,
             allowed_origins,
             enabled: true,

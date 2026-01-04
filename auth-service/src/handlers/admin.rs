@@ -33,6 +33,7 @@ pub struct CreateClientRequest {
 pub struct CreateClientResponse {
     pub client_id: String,
     pub client_secret: String,
+    pub signing_secret: String,
     pub app_name: String,
     pub app_type: ClientType,
 }
@@ -41,6 +42,7 @@ pub struct CreateClientResponse {
 pub struct RotateSecretResponse {
     pub client_id: String,
     pub new_client_secret: String,
+    pub new_signing_secret: String,
     pub previous_secret_expiry: chrono::DateTime<chrono::Utc>,
 }
 
@@ -74,6 +76,14 @@ pub async fn create_client(
         URL_SAFE_NO_PAD.encode(secret_bytes)
     };
 
+    // Generate signing_secret (32 random bytes, URL-safe base64 encoded)
+    let signing_secret = {
+        let mut rng = rand::thread_rng();
+        let mut secret_bytes = [0u8; 32];
+        rng.fill(&mut secret_bytes);
+        URL_SAFE_NO_PAD.encode(secret_bytes)
+    };
+
     // Hash client_secret
     let secret_hash = hash_password(&Password::new(client_secret.clone())).map_err(|e| {
         tracing::error!(error = %e, "Failed to hash client secret");
@@ -89,6 +99,7 @@ pub async fn create_client(
     let client = Client::new(
         client_id.clone(),
         secret_hash.into_string(),
+        signing_secret.clone(),
         req.app_name.clone(),
         req.app_type.clone(),
         req.rate_limit_per_min,
@@ -123,6 +134,7 @@ pub async fn create_client(
         Json(CreateClientResponse {
             client_id,
             client_secret,
+            signing_secret,
             app_name: client.app_name,
             app_type: client.app_type,
         }),
@@ -166,6 +178,14 @@ pub async fn rotate_client_secret(
         URL_SAFE_NO_PAD.encode(secret_bytes)
     };
 
+    // Generate new signing_secret
+    let new_signing_secret = {
+        let mut rng = rand::thread_rng();
+        let mut secret_bytes = [0u8; 32];
+        rng.fill(&mut secret_bytes);
+        URL_SAFE_NO_PAD.encode(secret_bytes)
+    };
+
     // 3. Hash new secret
     let new_secret_hash =
         hash_password(&Password::new(new_client_secret.clone())).map_err(|e| {
@@ -190,6 +210,7 @@ pub async fn rotate_client_secret(
             doc! {
                 "$set": {
                     "client_secret_hash": new_secret_hash.into_string(),
+                    "signing_secret": &new_signing_secret,
                     "previous_client_secret_hash": client.client_secret_hash,
                     "previous_secret_expiry": expiry,
                     "updated_at": now
@@ -215,6 +236,7 @@ pub async fn rotate_client_secret(
         Json(RotateSecretResponse {
             client_id,
             new_client_secret,
+            new_signing_secret,
             previous_secret_expiry: expiry,
         }),
     ))

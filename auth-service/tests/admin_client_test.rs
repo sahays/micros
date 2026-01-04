@@ -129,6 +129,7 @@ async fn test_create_client_flow() {
 
     assert!(!client_res.client_id.is_empty());
     assert!(!client_res.client_secret.is_empty());
+    assert!(!client_res.signing_secret.is_empty());
     assert_eq!(client_res.app_name, "Test App");
     assert_eq!(client_res.app_type, ClientType::Web);
 

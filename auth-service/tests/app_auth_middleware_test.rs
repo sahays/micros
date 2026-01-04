@@ -77,6 +77,7 @@ async fn test_app_auth_middleware() {
     let client = Client::new(
         client_id.to_string(),
         client_secret_hash.into_string(),
+        "dummy_signing_secret".to_string(),
         "Test App".to_string(),
         ClientType::Service,
         100,

@@ -134,11 +134,16 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
                     middleware::auth_middleware,
                 )),
         )
-        .with_state(state)
+        .with_state(state.clone())
         // Global IP rate limiting
         .layer(from_fn_with_state(
             ip_limiter,
             middleware::ip_rate_limit_middleware,
+        ))
+        // Signature validation
+        .layer(from_fn_with_state(
+            state,
+            middleware::signature_validation_middleware,
         ))
         // Add tracing middleware for request_id
         .layer(from_fn(middleware::request_id_middleware))

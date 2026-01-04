@@ -88,6 +88,7 @@ async fn test_client_rotation_and_revocation() {
     let client = Client::new(
         client_id.to_string(),
         old_secret_hash.into_string(),
+        "dummy_signing_secret".to_string(),
         "Test App".to_string(),
         ClientType::Service,
         100,
