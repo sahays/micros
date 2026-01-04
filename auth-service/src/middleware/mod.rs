@@ -2,10 +2,12 @@ pub mod admin;
 pub mod app_auth;
 pub mod auth;
 pub mod rate_limit;
+pub mod scope_auth;
+pub mod service_auth;
 pub mod tracing;
 
 pub use admin::admin_auth_middleware;
-pub use app_auth::{app_auth_middleware, CurrentApp};
+pub use app_auth::app_auth_middleware;
 pub use auth::{auth_middleware, AuthUser};
 pub use rate_limit::{
     client_rate_limit_middleware, create_client_rate_limiter, create_ip_rate_limiter,
@@ -13,4 +15,6 @@ pub use rate_limit::{
     rate_limit_middleware, ClientRateLimiter, IpRateLimiter, LoginRateLimiter,
     PasswordResetRateLimiter,
 };
+pub use scope_auth::require_scopes;
+pub use service_auth::{service_auth_middleware, ServiceAuth, ServiceContext};
 pub use tracing::request_id_middleware;

@@ -46,6 +46,22 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
             "/auth/admin/clients/:client_id",
             axum::routing::delete(handlers::admin::revoke_client),
         )
+        .route(
+            "/auth/admin/services",
+            post(handlers::admin::create_service_account),
+        )
+        .route(
+            "/auth/admin/services/:service_id/rotate",
+            post(handlers::admin::rotate_service_key),
+        )
+        .route(
+            "/auth/admin/services/:service_id",
+            axum::routing::delete(handlers::admin::revoke_service_account),
+        )
+        .route(
+            "/auth/admin/services/:service_id/audit-log",
+            get(handlers::admin::get_service_audit_log),
+        )
         .layer(from_fn_with_state(
             state.clone(),
             middleware::admin_auth_middleware,

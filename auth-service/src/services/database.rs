@@ -3,7 +3,7 @@ use mongodb::{
 };
 use std::time::Duration;
 
-use crate::models::{Client, RefreshToken, User, VerificationToken};
+use crate::models::{AuditLog, Client, RefreshToken, ServiceAccount, User, VerificationToken};
 
 #[derive(Clone)]
 pub struct MongoDb {
@@ -131,6 +131,89 @@ impl MongoDb {
         clients.create_index(client_id_index, None).await?;
         tracing::info!("Created unique index on clients.client_id");
 
+        // Service accounts collection indexes
+        let service_accounts = self.service_accounts();
+
+        // Unique index on service_id
+        let service_id_index = IndexModel::builder()
+            .keys(doc! { "service_id": 1 })
+            .options(
+                IndexOptions::builder()
+                    .unique(true)
+                    .name("service_id_unique".to_string())
+                    .build(),
+            )
+            .build();
+
+        service_accounts
+            .create_index(service_id_index, None)
+            .await?;
+        tracing::info!("Created unique index on service_accounts.service_id");
+
+        // Unique index on api_key_lookup_hash
+        let api_key_lookup_index = IndexModel::builder()
+            .keys(doc! { "api_key_lookup_hash": 1 })
+            .options(
+                IndexOptions::builder()
+                    .unique(true)
+                    .name("api_key_lookup_hash_unique".to_string())
+                    .build(),
+            )
+            .build();
+
+        service_accounts
+            .create_index(api_key_lookup_index, None)
+            .await?;
+        tracing::info!("Created unique index on service_accounts.api_key_lookup_hash");
+
+        // Sparse unique index on previous_api_key_lookup_hash
+        let prev_api_key_lookup_index = IndexModel::builder()
+            .keys(doc! { "previous_api_key_lookup_hash": 1 })
+            .options(
+                IndexOptions::builder()
+                    .unique(true)
+                    .sparse(true)
+                    .name("prev_api_key_lookup_hash_unique".to_string())
+                    .build(),
+            )
+            .build();
+
+        service_accounts
+            .create_index(prev_api_key_lookup_index, None)
+            .await?;
+        tracing::info!(
+            "Created sparse unique index on service_accounts.previous_api_key_lookup_hash"
+        );
+
+        // Audit logs collection indexes
+        let audit_logs = self.audit_logs();
+
+        // Index on service_id for lookup
+        let service_id_index = IndexModel::builder()
+            .keys(doc! { "service_id": 1 })
+            .options(
+                IndexOptions::builder()
+                    .name("service_id_audit_lookup".to_string())
+                    .build(),
+            )
+            .build();
+
+        audit_logs.create_index(service_id_index, None).await?;
+
+        // TTL index on timestamp for 30 days retention
+        let ttl_index = IndexModel::builder()
+            .keys(doc! { "timestamp": 1 })
+            .options(
+                IndexOptions::builder()
+                    .expire_after(Duration::from_secs(30 * 24 * 60 * 60))
+                    .name("audit_log_ttl".to_string())
+                    .build(),
+            )
+            .build();
+
+        audit_logs.create_index(ttl_index, None).await?;
+        tracing::info!("Created indexes on audit_logs collection");
+
         Ok(())
     }
 
@@ -156,6 +239,14 @@ impl MongoDb {
 
     pub fn clients(&self) -> Collection<Client> {
         self.db.collection("clients")
+    }
+
+    pub fn service_accounts(&self) -> Collection<ServiceAccount> {
+        self.db.collection("service_accounts")
+    }
+
+    pub fn audit_logs(&self) -> Collection<AuditLog> {
+        self.db.collection("audit_logs")
     }
 
     pub fn client(&self) -> &MongoClient {

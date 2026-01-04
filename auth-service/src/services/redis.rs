@@ -9,6 +9,13 @@ pub trait TokenBlacklist: Send + Sync {
         expiry_seconds: i64,
     ) -> Result<(), anyhow::Error>;
     async fn is_blacklisted(&self, token_jti: &str) -> Result<bool, anyhow::Error>;
+    async fn set_cache(
+        &self,
+        key: &str,
+        value: &str,
+        expiry_seconds: i64,
+    ) -> Result<(), anyhow::Error>;
+    async fn get_cache(&self, key: &str) -> Result<Option<String>, anyhow::Error>;
     async fn health_check(&self) -> Result<(), anyhow::Error>;
 }
 
@@ -77,10 +84,37 @@ impl TokenBlacklist for RedisService {
 
         Ok(exists)
     }
+
+    async fn set_cache(
+        &self,
+        key: &str,
+        value: &str,
+        expiry_seconds: i64,
+    ) -> Result<(), anyhow::Error> {
+        let mut conn = self.manager.clone();
+        redis::cmd("SET")
+            .arg(key)
+            .arg(value)
+            .arg("EX")
+            .arg(expiry_seconds)
+            .query_async(&mut conn)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to set cache: {}", e))
+    }
+
+    async fn get_cache(&self, key: &str) -> Result<Option<String>, anyhow::Error> {
+        let mut conn = self.manager.clone();
+        redis::cmd("GET")
+            .arg(key)
+            .query_async(&mut conn)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get cache: {}", e))
+    }
 }
 
 pub struct MockBlacklist {
     pub blacklisted_tokens: std::sync::Mutex<std::collections::HashSet<String>>,
+    pub cache: std::sync::Mutex<std::collections::HashMap<String, String>>,
 }
 
 impl Default for MockBlacklist {
@@ -93,6 +127,7 @@ impl MockBlacklist {
     pub fn new() -> Self {
         Self {
             blacklisted_tokens: std::sync::Mutex::new(std::collections::HashSet::new()),
+            cache: std::sync::Mutex::new(std::collections::HashMap::new()),
         }
     }
 }
@@ -122,5 +157,28 @@ impl TokenBlacklist for MockBlacklist {
             .map_err(|e| anyhow::anyhow!("Mock blacklist mutex poisoned: {}", e))?
             .contains(token_jti);
         Ok(contains)
+    }
+
+    async fn set_cache(
+        &self,
+        key: &str,
+        value: &str,
+        _expiry_seconds: i64,
+    ) -> Result<(), anyhow::Error> {
+        self.cache
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Mock cache mutex poisoned: {}", e))?
+            .insert(key.to_string(), value.to_string());
+        Ok(())
+    }
+
+    async fn get_cache(&self, key: &str) -> Result<Option<String>, anyhow::Error> {
+        let val = self
+            .cache
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Mock cache mutex poisoned: {}", e))?
+            .get(key)
+            .cloned();
+        Ok(val)
     }
 }
