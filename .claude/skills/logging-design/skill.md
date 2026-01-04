@@ -2,30 +2,35 @@
 name: logging-design
 description:
   Design effective application logging from a software engineering perspective. Use when implementing logging in code,
-  choosing log levels, or defining what to log. Focuses on structured logging, security, and developer best practices.
+  choosing log levels, or defining what to log. Focuses on structured logging with OpenTelemetry standards for SigNoz.
 ---
 
 # Logging Design for Engineers
 
 ## Structured Logging
 
-Use structured formats (JSON) with consistent fields. Makes logs machine-readable and searchable.
+Use structured formats (JSON) with consistent fields. Makes logs machine-readable and searchable. Follow OpenTelemetry semantic conventions for compatibility with SigNoz and other observability platforms.
 
 **Every log entry must include**:
 
-- `timestamp`: ISO 8601 with timezone
-- `level`: Severity level
-- `message`: Human-readable description
-- `service`: Service name
-- `request_id`: Correlation ID
+- `timestamp`: Unix nanoseconds or ISO 8601 with timezone (OpenTelemetry standard)
+- `severity_text`: Severity level (use: TRACE, DEBUG, INFO, WARN, ERROR, FATAL)
+- `severity_number`: Numeric severity (1=TRACE, 5=DEBUG, 9=INFO, 13=WARN, 17=ERROR, 21=FATAL)
+- `body`: Human-readable log message
+- `resource.service.name`: Service identifier
+- `trace_id`: 16-byte trace ID (32 hex chars) for distributed tracing
+- `span_id`: 8-byte span ID (16 hex chars) for current operation
 
-**Add context as separate fields, not in message string**:
+**Add context as separate attributes, not in body string**:
 
-- `user_id`, `session_id`, `tenant_id`
-- `operation`, `duration_ms`
-- `error_code`, `stack_trace`
+- `user.id`, `session.id`, `enduser.id`
+- `http.method`, `http.status_code`, `http.route`, `http.target`
+- `db.system`, `db.operation`, `db.statement`
+- `rpc.service`, `rpc.method`
+- `exception.type`, `exception.message`, `exception.stacktrace`
+- `code.function`, `code.namespace`, `code.filepath`, `code.lineno`
 
-**Good**: `log.info("User login", {user_id: "123", method: "oauth"})`
+**Good**: `log.info("User login", {attributes: {"user.id": "123", "http.method": "POST", "enduser.id": "user-123"}})`
 
 **Bad**: `log.info("User 123 login via oauth")`
 
@@ -73,11 +78,11 @@ Use structured formats (JSON) with consistent fields. Makes logs machine-readabl
 
 ## Context and Correlation
 
-**Generate request ID at entry point**: Propagate through entire request lifecycle. Include in all logs.
+**Generate trace ID at entry point**: Propagate through entire request lifecycle. Include in all logs as `trace_id`. Use OpenTelemetry SDK to generate W3C Trace Context compliant IDs.
 
-**Propagate context**: Pass request_id, user_id, trace_id through function calls and async operations.
+**Propagate context**: Pass `trace_id`, `span_id`, `trace_flags` through function calls and async operations using OpenTelemetry Context API.
 
-**Log at boundaries**: Service entry/exit, external API calls, database operations.
+**Log at boundaries**: Service entry/exit, external API calls, database operations. Use semantic convention attributes like `http.method`, `db.operation`, `rpc.method` to identify operations.
 
 ## Performance
 
@@ -93,15 +98,18 @@ Use structured formats (JSON) with consistent fields. Makes logs machine-readabl
 
 **Include full context**:
 
-- Exception type and message
-- Complete stack trace
-- Request details that triggered error
-- User context (sanitized)
-- What was attempted and why it failed
+- `exception.type`: Exception class name
+- `exception.message`: Exception message
+- `exception.stacktrace`: Complete stack trace
+- `http.*`: Request details that triggered error using OpenTelemetry HTTP semantic conventions
+- `user.id` or `enduser.id`: User context (sanitized)
+- `error.code`: Application-specific error code
 
-**Use error codes**: Unique identifiers for error categories. Makes searching and monitoring easier.
+**Use error codes**: Set `error.code` attribute with unique identifiers for error categories. Makes searching and monitoring easier.
 
 **Log once per error**: Catch and log at appropriate level. Don't re-log as error bubbles up.
+
+**Link to traces**: Ensure `trace_id` and `span_id` are present so logs correlate with distributed traces in SigNoz.
 
 ## Security
 
