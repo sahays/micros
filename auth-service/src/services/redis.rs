@@ -110,12 +110,17 @@ impl TokenBlacklist for MockBlacklist {
     ) -> Result<(), anyhow::Error> {
         self.blacklisted_tokens
             .lock()
-            .unwrap()
+            .map_err(|e| anyhow::anyhow!("Mock blacklist mutex poisoned: {}", e))?
             .insert(token_jti.to_string());
         Ok(())
     }
 
     async fn is_blacklisted(&self, token_jti: &str) -> Result<bool, anyhow::Error> {
-        Ok(self.blacklisted_tokens.lock().unwrap().contains(token_jti))
+        let contains = self
+            .blacklisted_tokens
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Mock blacklist mutex poisoned: {}", e))?
+            .contains(token_jti);
+        Ok(contains)
     }
 }

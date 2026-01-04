@@ -25,11 +25,13 @@ pub type PasswordResetRateLimiter = UnkeyedRateLimiter;
 
 /// Create a rate limiter for login attempts (unkeyed)
 pub fn create_login_rate_limiter(attempts: u32, window_seconds: u64) -> LoginRateLimiter {
-    let quota = Quota::with_period(Duration::from_millis(
-        (window_seconds * 1000) / attempts as u64,
-    ))
-    .unwrap()
-    .allow_burst(NonZeroU32::new(attempts).unwrap());
+    // Ensure attempts is at least 1 to prevent division by zero and invalid NonZeroU32
+    let attempts = attempts.max(1);
+
+    let period = Duration::from_millis((window_seconds * 1000) / attempts as u64);
+    let quota = Quota::with_period(period)
+        .expect("Failed to create quota with valid period")
+        .allow_burst(NonZeroU32::new(attempts).expect("attempts is guaranteed to be non-zero"));
 
     Arc::new(RateLimiter::direct(quota))
 }
@@ -39,22 +41,26 @@ pub fn create_password_reset_rate_limiter(
     attempts: u32,
     window_seconds: u64,
 ) -> PasswordResetRateLimiter {
-    let quota = Quota::with_period(Duration::from_millis(
-        (window_seconds * 1000) / attempts as u64,
-    ))
-    .unwrap()
-    .allow_burst(NonZeroU32::new(attempts).unwrap());
+    // Ensure attempts is at least 1 to prevent division by zero and invalid NonZeroU32
+    let attempts = attempts.max(1);
+
+    let period = Duration::from_millis((window_seconds * 1000) / attempts as u64);
+    let quota = Quota::with_period(period)
+        .expect("Failed to create quota with valid period")
+        .allow_burst(NonZeroU32::new(attempts).expect("attempts is guaranteed to be non-zero"));
 
     Arc::new(RateLimiter::direct(quota))
 }
 
 /// Create a keyed rate limiter (by IP)
 pub fn create_ip_rate_limiter(attempts: u32, window_seconds: u64) -> IpRateLimiter {
-    let quota = Quota::with_period(Duration::from_millis(
-        (window_seconds * 1000) / attempts as u64,
-    ))
-    .unwrap()
-    .allow_burst(NonZeroU32::new(attempts).unwrap());
+    // Ensure attempts is at least 1 to prevent division by zero and invalid NonZeroU32
+    let attempts = attempts.max(1);
+
+    let period = Duration::from_millis((window_seconds * 1000) / attempts as u64);
+    let quota = Quota::with_period(period)
+        .expect("Failed to create quota with valid period")
+        .allow_burst(NonZeroU32::new(attempts).expect("attempts is guaranteed to be non-zero"));
 
     Arc::new(RateLimiter::dashmap(quota))
 }

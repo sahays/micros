@@ -5,7 +5,7 @@ use auth_service::{
     middleware::{
         create_ip_rate_limiter, create_login_rate_limiter, create_password_reset_rate_limiter,
     },
-    models::{Client, ClientType},
+    models::ClientType,
     services::{EmailService, JwtService, MockBlacklist, MongoDb},
     AppState,
 };

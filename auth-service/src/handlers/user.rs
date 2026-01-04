@@ -149,7 +149,13 @@ pub async fn update_me(
 
     // 6. If email changed, trigger verification flow
     if email_changed {
-        let new_email = req.email.unwrap();
+        // We know email is Some because email_changed is only true when email is Some
+        let new_email = req.email.ok_or_else(|| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": "Internal server error" })),
+            )
+        })?;
         // Generate verification token
         let token = {
             let mut rng = rand::thread_rng();
@@ -190,8 +196,21 @@ pub async fn update_me(
         .users()
         .find_one(doc! { "_id": &user.id }, None)
         .await
-        .unwrap() // Safe after successful update
-        .unwrap();
+        .map_err(|e| {
+            tracing::error!(error = %e, "Database error fetching updated user");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": "Internal server error" })),
+            )
+        })?
+        .ok_or_else(|| {
+            // This shouldn't happen after a successful update, but handle it gracefully
+            tracing::error!(user_id = %user.id, "User not found after update");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": "Internal server error" })),
+            )
+        })?;
 
     Ok(Json(updated_user.sanitized()))
 }

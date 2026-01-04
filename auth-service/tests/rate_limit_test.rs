@@ -11,7 +11,6 @@ use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
-use std::net::SocketAddr;
 use std::sync::Arc;
 use tower::util::ServiceExt;
 use uuid::Uuid;
