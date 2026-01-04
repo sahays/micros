@@ -1,37 +1,49 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ServiceAccount {
     #[serde(rename = "_id")]
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub id: String,
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub service_id: String,
-    pub api_key_hash: String,        // Argon2 hash for verification
+    #[schema(read_only)]
+    pub api_key_hash: String, // Argon2 hash for verification
+    #[schema(read_only)]
     pub api_key_lookup_hash: String, // SHA-256 hex for lookup
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(read_only)]
     pub previous_api_key_hash: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(read_only)]
     pub previous_api_key_lookup_hash: Option<String>,
     #[serde(
         default,
         with = "crate::models::client::optional_chrono_datetime_as_bson_datetime",
         skip_serializing_if = "Option::is_none"
     )]
+    #[schema(value_type = Option<String>, format = "date-time")]
     pub previous_key_expiry: Option<DateTime<Utc>>,
+    #[schema(example = "Payments Service")]
     pub service_name: String,
     pub scopes: Vec<String>,
     pub enabled: bool,
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[schema(value_type = String, format = "date-time")]
     pub created_at: DateTime<Utc>,
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[schema(value_type = String, format = "date-time")]
     pub updated_at: DateTime<Utc>,
     #[serde(
         default,
         with = "crate::models::client::optional_chrono_datetime_as_bson_datetime",
         skip_serializing_if = "Option::is_none"
     )]
+    #[schema(value_type = Option<String>, format = "date-time")]
     pub last_used_at: Option<DateTime<Utc>>,
 }
 

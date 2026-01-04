@@ -37,6 +37,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Initialize email service
     let email = EmailService::new(&config.gmail)?;
+    let email = std::sync::Arc::new(email);
     tracing::info!("Email service initialized");
 
     // Initialize JWT service
@@ -44,11 +45,15 @@ async fn main() -> Result<(), anyhow::Error> {
     tracing::info!("JWT service initialized");
 
     // Initialize rate limiters
-    let login_rate_limiter = middleware::create_login_rate_limiter(
+    let login_rate_limiter = middleware::create_ip_rate_limiter(
         config.rate_limit.login_attempts,
         config.rate_limit.login_window_seconds,
     );
-    let password_reset_rate_limiter = middleware::create_password_reset_rate_limiter(
+    let register_rate_limiter = middleware::create_ip_rate_limiter(
+        config.rate_limit.register_attempts,
+        config.rate_limit.register_window_seconds,
+    );
+    let password_reset_rate_limiter = middleware::create_ip_rate_limiter(
         config.rate_limit.password_reset_attempts,
         config.rate_limit.password_reset_window_seconds,
     );
@@ -62,9 +67,8 @@ async fn main() -> Result<(), anyhow::Error> {
     );
     let client_rate_limiter = middleware::create_client_rate_limiter();
     tracing::info!(
-        "Rate limiters initialized: Login, Password Reset, App Token, Client, and Global IP"
+        "Rate limiters initialized: Login, Register, Password Reset, App Token, Client, and Global IP"
     );
-
     // Create application state
     let state = AppState {
         config: config.clone(),
@@ -73,6 +77,7 @@ async fn main() -> Result<(), anyhow::Error> {
         jwt,
         redis: std::sync::Arc::new(redis),
         login_rate_limiter,
+        register_rate_limiter,
         password_reset_rate_limiter,
         app_token_rate_limiter,
         client_rate_limiter,

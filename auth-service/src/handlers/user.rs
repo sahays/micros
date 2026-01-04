@@ -1,34 +1,61 @@
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use axum::{
+    extract::{ConnectInfo, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
 use mongodb::bson::doc;
 use serde::Deserialize;
+use std::net::SocketAddr;
+use utoipa::ToSchema;
 use validator::Validate;
 
 use crate::{
+    handlers::auth::ErrorResponse,
     middleware::AuthUser,
-    models::VerificationToken,
+    models::{AuditLog, VerificationToken},
     utils::{hash_password, verify_password, Password, PasswordHashString},
     AppState,
 };
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct ChangePasswordRequest {
+    #[schema(example = "oldpassword123")]
     pub current_password: String,
     #[validate(length(min = 8, message = "New password must be at least 8 characters"))]
+    #[schema(example = "newpassword123", min_length = 8)]
     pub new_password: String,
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct UpdateUserRequest {
+    #[schema(example = "John Smith")]
     pub name: Option<String>,
     #[validate(email(message = "Invalid email format"))]
+    #[schema(example = "john.smith@example.com")]
     pub email: Option<String>,
 }
 
+/// Get current user profile
+#[utoipa::path(
+    get,
+    path = "/users/me",
+    responses(
+        (status = 200, description = "Current user profile returned", body = SanitizedUser),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+        (status = 404, description = "User not found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "User",
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 #[axum::debug_handler]
 pub async fn get_me(
     State(state): State<AppState>,
     user: AuthUser,
-) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
     let claims = user.0;
 
     let user = state
@@ -40,30 +67,53 @@ pub async fn get_me(
             tracing::error!(error = %e, "Database error finding user");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": "Internal server error" })),
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
             )
         })?
         .ok_or_else(|| {
             (
                 StatusCode::NOT_FOUND,
-                Json(serde_json::json!({ "error": "User not found" })),
+                Json(ErrorResponse {
+                    error: "User not found".to_string(),
+                }),
             )
         })?;
 
     Ok(Json(user.sanitized()))
 }
 
+/// Update current user profile
+#[utoipa::path(
+    patch,
+    path = "/users/me",
+    request_body = UpdateUserRequest,
+    responses(
+        (status = 200, description = "User profile updated successfully", body = SanitizedUser),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+        (status = 409, description = "Email already in use", body = ErrorResponse),
+        (status = 422, description = "Validation error", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "User",
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 #[axum::debug_handler]
 pub async fn update_me(
     State(state): State<AppState>,
     user_claims: AuthUser,
     Json(req): Json<UpdateUserRequest>,
-) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
     // 1. Validate request
     req.validate().map_err(|e| {
         (
             StatusCode::UNPROCESSABLE_ENTITY,
-            Json(serde_json::json!({ "error": format!("Validation error: {}", e) })),
+            Json(ErrorResponse {
+                error: format!("Validation error: {}", e),
+            }),
         )
     })?;
 
@@ -79,13 +129,17 @@ pub async fn update_me(
             tracing::error!(error = %e, "Database error finding user");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": "Internal server error" })),
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
             )
         })?
         .ok_or_else(|| {
             (
                 StatusCode::NOT_FOUND,
-                Json(serde_json::json!({ "error": "User not found" })),
+                Json(ErrorResponse {
+                    error: "User not found".to_string(),
+                }),
             )
         })?;
 
@@ -105,14 +159,18 @@ pub async fn update_me(
                     tracing::error!(error = %e, "Database error checking email uniqueness");
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(serde_json::json!({ "error": "Internal server error" })),
+                        Json(ErrorResponse {
+                            error: "Internal server error".to_string(),
+                        }),
                     )
                 })?;
 
             if existing.is_some() {
                 return Err((
                     StatusCode::CONFLICT,
-                    Json(serde_json::json!({ "error": "Email already in use" })),
+                    Json(ErrorResponse {
+                        error: "Email already in use".to_string(),
+                    }),
                 ));
             }
 
@@ -143,7 +201,9 @@ pub async fn update_me(
             tracing::error!(error = %e, "Database error updating user");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": "Internal server error" })),
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
             )
         })?;
 
@@ -153,7 +213,9 @@ pub async fn update_me(
         let new_email = req.email.ok_or_else(|| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": "Internal server error" })),
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
             )
         })?;
         // Generate verification token
@@ -200,7 +262,9 @@ pub async fn update_me(
             tracing::error!(error = %e, "Database error fetching updated user");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": "Internal server error" })),
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
             )
         })?
         .ok_or_else(|| {
@@ -208,24 +272,46 @@ pub async fn update_me(
             tracing::error!(user_id = %user.id, "User not found after update");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": "Internal server error" })),
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
             )
         })?;
 
     Ok(Json(updated_user.sanitized()))
 }
 
+/// Change current user password
+#[utoipa::path(
+    post,
+    path = "/users/me/password",
+    request_body = ChangePasswordRequest,
+    responses(
+        (status = 200, description = "Password changed successfully"),
+        (status = 401, description = "Unauthorized or incorrect password", body = ErrorResponse),
+        (status = 422, description = "Validation error", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "User",
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 #[axum::debug_handler]
 pub async fn change_password(
     State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     user_claims: AuthUser,
     Json(req): Json<ChangePasswordRequest>,
-) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    let ip_address = addr.to_string();
     // 1. Validate request
     req.validate().map_err(|e| {
         (
             StatusCode::UNPROCESSABLE_ENTITY,
-            Json(serde_json::json!({ "error": format!("Validation error: {}", e) })),
+            Json(ErrorResponse {
+                error: format!("Validation error: {}", e),
+            }),
         )
     })?;
 
@@ -241,13 +327,17 @@ pub async fn change_password(
             tracing::error!(error = %e, "Database error finding user");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": "Internal server error" })),
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
             )
         })?
         .ok_or_else(|| {
             (
                 StatusCode::NOT_FOUND,
-                Json(serde_json::json!({ "error": "User not found" })),
+                Json(ErrorResponse {
+                    error: "User not found".to_string(),
+                }),
             )
         })?;
 
@@ -259,7 +349,9 @@ pub async fn change_password(
     .map_err(|_| {
         (
             StatusCode::UNAUTHORIZED,
-            Json(serde_json::json!({ "error": "Incorrect current password" })),
+            Json(ErrorResponse {
+                error: "Incorrect current password".to_string(),
+            }),
         )
     })?;
 
@@ -268,7 +360,9 @@ pub async fn change_password(
         tracing::error!(error = %e, "Password hashing error");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({ "error": "Internal server error" })),
+            Json(ErrorResponse {
+                error: "Internal server error".to_string(),
+            }),
         )
     })?;
 
@@ -292,7 +386,9 @@ pub async fn change_password(
             tracing::error!(error = %e, "Database error updating password");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(serde_json::json!({ "error": "Internal server error" })),
+                Json(ErrorResponse {
+                    error: "Internal server error".to_string(),
+                }),
             )
         })?;
 
@@ -311,6 +407,20 @@ pub async fn change_password(
             // Non-fatal for the response
         })
         .ok();
+
+    // Audit log password change
+    let audit_log = AuditLog::new(
+        "password_change".to_string(),
+        Some(user.id.clone()),
+        "/users/me/password".to_string(),
+        "POST".to_string(),
+        StatusCode::OK.as_u16(),
+        ip_address.clone(),
+    );
+    let db = state.db.clone();
+    tokio::spawn(async move {
+        let _ = db.audit_logs().insert_one(audit_log, None).await;
+    });
 
     Ok(Json(serde_json::json!({
         "message": "Password changed successfully. All other sessions have been logged out."

@@ -87,12 +87,18 @@ pub struct AppTokenClaims {
     pub jti: String,
 }
 
+use utoipa::ToSchema;
+
 /// Token response returned to client
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct TokenResponse {
+    #[schema(example = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...")]
     pub access_token: String,
+    #[schema(example = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...")]
     pub refresh_token: String,
+    #[schema(example = "Bearer")]
     pub token_type: String,
+    #[schema(example = 900)]
     pub expires_in: i64,
 }
 

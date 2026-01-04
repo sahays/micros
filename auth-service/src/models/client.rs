@@ -1,8 +1,9 @@
 use mongodb::bson::oid::ObjectId;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ClientType {
     Web,
@@ -20,28 +21,38 @@ impl fmt::Display for ClientType {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Client {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<String>)]
     pub id: Option<ObjectId>,
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub client_id: String,
+    #[schema(read_only)]
     pub client_secret_hash: String,
+    #[schema(read_only)]
     pub previous_client_secret_hash: Option<String>,
     #[serde(
         default,
         with = "optional_chrono_datetime_as_bson_datetime",
         skip_serializing_if = "Option::is_none"
     )]
+    #[schema(value_type = Option<String>, format = "date-time")]
     pub previous_secret_expiry: Option<chrono::DateTime<chrono::Utc>>,
+    #[schema(example = "My BFF App")]
     pub app_name: String,
     pub app_type: ClientType,
+    #[schema(example = "signing-secret-key")]
     pub signing_secret: String,
+    #[schema(example = 100)]
     pub rate_limit_per_min: u32,
     pub allowed_origins: Vec<String>,
     pub enabled: bool,
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[schema(value_type = String, format = "date-time")]
     pub created_at: chrono::DateTime<chrono::Utc>,
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
+    #[schema(value_type = String, format = "date-time")]
     pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 

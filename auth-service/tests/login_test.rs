@@ -50,17 +50,19 @@ async fn test_login_creates_hashed_refresh_token() {
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
 
-    let login_limiter = create_login_rate_limiter(5, 60);
-    let reset_limiter = create_password_reset_rate_limiter(3, 3600);
+    let login_limiter = create_ip_rate_limiter(5, 60);
+    let register_limiter = create_ip_rate_limiter(5, 60);
+    let reset_limiter = create_ip_rate_limiter(3, 3600);
     let ip_limiter = create_ip_rate_limiter(100, 60);
 
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        email,
+        email: Arc::new(email),
         jwt,
         redis,
         login_rate_limiter: login_limiter,
+        register_rate_limiter: register_limiter,
         password_reset_rate_limiter: reset_limiter,
         app_token_rate_limiter: ip_limiter.clone(),
         client_rate_limiter: create_client_rate_limiter(),
@@ -90,6 +92,10 @@ async fn test_login_creates_hashed_refresh_token() {
                 .method("POST")
                 .uri("/auth/login")
                 .header("Content-Type", "application/json")
+                .extension(axum::extract::ConnectInfo(std::net::SocketAddr::from((
+                    [127, 0, 0, 1],
+                    8080,
+                ))))
                 .body(Body::from(format!(
                     r#"{{"email": "{}", "password": "{}"}}"#,
                     user.email, password

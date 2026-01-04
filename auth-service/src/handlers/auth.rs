@@ -1,43 +1,71 @@
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use axum::{
+    extract::{ConnectInfo, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
 use mongodb::bson::doc;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use std::net::SocketAddr;
+use utoipa::{IntoParams, ToSchema};
 use validator::Validate;
 
 use crate::{
     middleware::AuthUser,
-    models::{RefreshToken, User, VerificationToken},
+    models::{AuditLog, RefreshToken, User, VerificationToken},
     services::TokenResponse,
     utils::{hash_password, verify_password, Password, PasswordHashString},
     AppState,
 };
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct RegisterRequest {
     #[validate(email(message = "Invalid email format"))]
+    #[schema(example = "user@example.com")]
     pub email: String,
 
     #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
+    #[schema(example = "password123", min_length = 8)]
     pub password: String,
 
+    #[schema(example = "John Doe")]
     pub name: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct RegisterResponse {
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub user_id: String,
+    #[schema(example = "Registration successful. Please check your email to verify your account.")]
     pub message: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ErrorResponse {
+    #[schema(example = "Invalid email or password")]
     pub error: String,
 }
 
+/// Register a new user
+#[utoipa::path(
+    post,
+    path = "/auth/register",
+    request_body = RegisterRequest,
+    responses(
+        (status = 201, description = "User registered successfully", body = RegisterResponse),
+        (status = 409, description = "Email already registered", body = ErrorResponse),
+        (status = 422, description = "Validation error", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "Authentication"
+)]
 pub async fn register(
     State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Json(req): Json<RegisterRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    let ip_address = addr.to_string();
     // Validate request
     req.validate().map_err(|e| {
         (
@@ -104,6 +132,20 @@ pub async fn register(
 
     tracing::info!(user_id = %user.id, "User registered");
 
+    // Audit log registration
+    let audit_log = AuditLog::new(
+        "user_registration".to_string(),
+        Some(user.id.clone()),
+        "/auth/register".to_string(),
+        "POST".to_string(),
+        StatusCode::CREATED.as_u16(),
+        ip_address.clone(),
+    );
+    let db = state.db.clone();
+    tokio::spawn(async move {
+        let _ = db.audit_logs().insert_one(audit_log, None).await;
+    });
+
     // Generate verification token
     let token = generate_random_token();
     let verification_token =
@@ -150,16 +192,31 @@ pub async fn register(
     ))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
 pub struct VerifyRequest {
+    #[param(example = "a1b2c3d4e5f6...")]
     pub token: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct VerifyResponse {
+    #[schema(example = "Email verified successfully")]
     pub message: String,
 }
 
+/// Verify user email
+#[utoipa::path(
+    get,
+    path = "/auth/verify",
+    params(VerifyRequest),
+    responses(
+        (status = 200, description = "Email verified successfully", body = VerifyResponse),
+        (status = 400, description = "Token expired", body = ErrorResponse),
+        (status = 404, description = "Invalid token", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "Authentication"
+)]
 pub async fn verify_email(
     State(state): State<AppState>,
     axum::extract::Query(req): axum::extract::Query<VerifyRequest>,
@@ -258,19 +315,37 @@ fn generate_random_token() -> String {
 
 // Login/Logout endpoints
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct LoginRequest {
     #[validate(email(message = "Invalid email format"))]
+    #[schema(example = "user@example.com")]
     pub email: String,
 
     #[validate(length(min = 1, message = "Password is required"))]
+    #[schema(example = "password123")]
     pub password: String,
 }
 
+/// Login with email and password
+#[utoipa::path(
+    post,
+    path = "/auth/login",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "Login successful", body = TokenResponse),
+        (status = 401, description = "Invalid credentials", body = ErrorResponse),
+        (status = 403, description = "Email not verified", body = ErrorResponse),
+        (status = 422, description = "Validation error", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "Authentication"
+)]
 pub async fn login(
     State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Json(req): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    let ip_address = addr.to_string();
     // Validate request
     req.validate().map_err(|e| {
         (
@@ -386,6 +461,20 @@ pub async fn login(
 
     tracing::info!(user_id = %user.id, "User logged in");
 
+    // Audit log login
+    let audit_log = AuditLog::new(
+        "user_login".to_string(),
+        Some(user.id.clone()),
+        "/auth/login".to_string(),
+        "POST".to_string(),
+        StatusCode::OK.as_u16(),
+        ip_address.clone(),
+    );
+    let db = state.db.clone();
+    tokio::spawn(async move {
+        let _ = db.audit_logs().insert_one(audit_log, None).await;
+    });
+
     Ok((
         StatusCode::OK,
         Json(TokenResponse {
@@ -397,16 +486,34 @@ pub async fn login(
     ))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct LogoutRequest {
+    #[schema(example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")]
     pub refresh_token: String,
 }
 
+/// Logout and invalidate tokens
+#[utoipa::path(
+    post,
+    path = "/auth/logout",
+    request_body = LogoutRequest,
+    responses(
+        (status = 200, description = "Logged out successfully"),
+        (status = 401, description = "Invalid token", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "Authentication",
+    security(
+        ("bearer_auth" = [])
+    )
+)]
 pub async fn logout(
     State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     user: AuthUser,
     Json(req): Json<LogoutRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    let ip_address = addr.to_string();
     // 1. Blacklist the current access token
     let access_token_claims = user.0;
     let remaining_time = access_token_claims.exp - chrono::Utc::now().timestamp();
@@ -475,6 +582,20 @@ pub async fn logout(
     }
 
     tracing::info!(user_id = %claims.sub, "User logged out");
+
+    // Audit log logout
+    let audit_log = AuditLog::new(
+        "user_logout".to_string(),
+        Some(claims.sub.clone()),
+        "/auth/logout".to_string(),
+        "POST".to_string(),
+        StatusCode::OK.as_u16(),
+        ip_address.clone(),
+    );
+    let db = state.db.clone();
+    tokio::spawn(async move {
+        let _ = db.audit_logs().insert_one(audit_log, None).await;
+    });
 
     Ok((
         StatusCode::OK,
@@ -742,11 +863,25 @@ pub async fn google_login(
     (updated_jar, axum::response::Redirect::to(&google_url))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct RefreshRequest {
+    #[schema(example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")]
     pub refresh_token: String,
 }
 
+/// Refresh access token using refresh token
+#[utoipa::path(
+    post,
+    path = "/auth/refresh",
+    request_body = RefreshRequest,
+    responses(
+        (status = 200, description = "Token refreshed successfully", body = TokenResponse),
+        (status = 401, description = "Invalid or expired refresh token", body = ErrorResponse),
+        (status = 403, description = "User not verified", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "Authentication"
+)]
 pub async fn refresh(
     State(state): State<AppState>,
     Json(req): Json<RefreshRequest>,
@@ -942,26 +1077,43 @@ pub async fn refresh(
     ))
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct IntrospectRequest {
+    #[schema(example = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...")]
     pub token: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct IntrospectResponse {
+    #[schema(example = true)]
     pub active: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub sub: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "user@example.com")]
     pub email: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 1704326400)]
     pub exp: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = 1704322800)]
     pub iat: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(example = "jti-uuid")]
     pub jti: Option<String>,
 }
 
+/// Introspect an access token
+#[utoipa::path(
+    post,
+    path = "/auth/introspect",
+    request_body = IntrospectRequest,
+    responses(
+        (status = 200, description = "Token status returned", body = IntrospectResponse)
+    ),
+    tag = "Authentication"
+)]
 pub async fn introspect(
     State(state): State<AppState>,
     Json(req): Json<IntrospectRequest>,
@@ -1013,16 +1165,31 @@ pub async fn introspect(
     })
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct PasswordResetRequest {
     #[validate(email(message = "Invalid email format"))]
+    #[schema(example = "user@example.com")]
     pub email: String,
 }
 
+/// Request a password reset link
+#[utoipa::path(
+    post,
+    path = "/auth/password-reset/request",
+    request_body = PasswordResetRequest,
+    responses(
+        (status = 200, description = "Request received"),
+        (status = 422, description = "Validation error", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "Authentication"
+)]
 pub async fn request_password_reset(
     State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Json(req): Json<PasswordResetRequest>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    let ip_address = addr.to_string();
     // Validate request
     req.validate().map_err(|e| {
         (
@@ -1088,6 +1255,20 @@ pub async fn request_password_reset(
             })?;
 
         tracing::info!(user_id = %user.id, "Password reset requested");
+
+        // Audit log request
+        let audit_log = AuditLog::new(
+            "password_reset_request".to_string(),
+            Some(user.id.clone()),
+            "/auth/password-reset/request".to_string(),
+            "POST".to_string(),
+            StatusCode::OK.as_u16(),
+            ip_address.clone(),
+        );
+        let db = state.db.clone();
+        tokio::spawn(async move {
+            let _ = db.audit_logs().insert_one(audit_log, None).await;
+        });
     } else {
         // If user doesn't exist, we still return 200 OK to prevent email enumeration
         tracing::info!(email = %req.email, "Password reset requested for non-existent email");
@@ -1101,18 +1282,35 @@ pub async fn request_password_reset(
     ))
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct PasswordResetConfirm {
+    #[schema(example = "a1b2c3d4e5f6...")]
     pub token: String,
 
     #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
+    #[schema(example = "newpassword123", min_length = 8)]
     pub new_password: String,
 }
 
+/// Confirm password reset with token
+#[utoipa::path(
+    post,
+    path = "/auth/password-reset/confirm",
+    request_body = PasswordResetConfirm,
+    responses(
+        (status = 200, description = "Password reset successful"),
+        (status = 400, description = "Invalid or expired token", body = ErrorResponse),
+        (status = 422, description = "Validation error", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "Authentication"
+)]
 pub async fn confirm_password_reset(
     State(state): State<AppState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Json(req): Json<PasswordResetConfirm>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+    let ip_address = addr.to_string();
     // Validate request
     req.validate().map_err(|e| {
         (
@@ -1272,6 +1470,20 @@ pub async fn confirm_password_reset(
     })?;
 
     tracing::info!(user_id = %verification_token.user_id, "Password reset successful");
+
+    // Audit log confirm
+    let audit_log = AuditLog::new(
+        "password_reset_confirm".to_string(),
+        Some(verification_token.user_id.clone()),
+        "/auth/password-reset/confirm".to_string(),
+        "POST".to_string(),
+        StatusCode::OK.as_u16(),
+        ip_address.clone(),
+    );
+    let db = state.db.clone();
+    tokio::spawn(async move {
+        let _ = db.audit_logs().insert_one(audit_log, None).await;
+    });
 
     Ok((
         StatusCode::OK,

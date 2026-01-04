@@ -63,11 +63,12 @@ async fn test_password_reset_flow() {
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
 
-    let login_limiter = create_login_rate_limiter(
+    let login_limiter = create_ip_rate_limiter(
         config.rate_limit.login_attempts,
         config.rate_limit.login_window_seconds,
     );
-    let reset_limiter = create_password_reset_rate_limiter(
+    let register_limiter = create_ip_rate_limiter(5, 60);
+    let reset_limiter = create_ip_rate_limiter(
         config.rate_limit.password_reset_attempts,
         config.rate_limit.password_reset_window_seconds,
     );
@@ -76,10 +77,11 @@ async fn test_password_reset_flow() {
     let state = AppState {
         config: config.clone(),
         db,
-        email,
+        email: Arc::new(email),
         jwt,
         redis,
         login_rate_limiter: login_limiter,
+        register_rate_limiter: register_limiter,
         password_reset_rate_limiter: reset_limiter,
         app_token_rate_limiter: ip_limiter.clone(),
         client_rate_limiter: create_client_rate_limiter(),
@@ -97,6 +99,10 @@ async fn test_password_reset_flow() {
                 .method("POST")
                 .uri("/auth/password-reset/request")
                 .header("Content-Type", "application/json")
+                .extension(axum::extract::ConnectInfo(std::net::SocketAddr::from((
+                    [127, 0, 0, 1],
+                    8080,
+                ))))
                 .body(Body::from(r#"{"email": "nonexistent@example.com"}"#))
                 .unwrap(),
         )

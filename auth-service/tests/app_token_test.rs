@@ -6,7 +6,7 @@ use auth_service::{
         create_password_reset_rate_limiter,
     },
     models::{Client, ClientType},
-    services::{EmailService, JwtService, MockBlacklist, MongoDb},
+    services::{EmailService, JwtService, MockBlacklist, MockEmailService, MongoDb},
     utils::{hash_password, Password},
     AppState,
 };
@@ -49,17 +49,19 @@ async fn test_app_token_success() {
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
 
-    let login_limiter = create_login_rate_limiter(5, 60);
-    let reset_limiter = create_password_reset_rate_limiter(3, 3600);
+    let login_limiter = create_ip_rate_limiter(5, 60);
+    let register_limiter = create_ip_rate_limiter(5, 60);
+    let reset_limiter = create_ip_rate_limiter(3, 3600);
     let ip_limiter = create_ip_rate_limiter(100, 60);
 
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        email,
+        email: Arc::new(email),
         jwt: jwt.clone(),
         redis,
         login_rate_limiter: login_limiter,
+        register_rate_limiter: register_limiter,
         password_reset_rate_limiter: reset_limiter,
         app_token_rate_limiter: ip_limiter.clone(),
         client_rate_limiter: create_client_rate_limiter(),
@@ -137,21 +139,23 @@ async fn test_app_token_invalid_secret() {
     let db = MongoDb::connect(&config.mongodb.uri, &config.mongodb.database)
         .await
         .expect("Failed to connect to DB");
-    db.initialize_indexes()
-        .await
-        .expect("Failed to init indexes");
+    let login_limiter = create_ip_rate_limiter(5, 60);
+    let register_limiter = create_ip_rate_limiter(5, 60);
+    let reset_limiter = create_ip_rate_limiter(3, 3600);
+    let ip_limiter = create_ip_rate_limiter(100, 60);
 
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        email: EmailService::new(&config.gmail).unwrap(),
+        email: Arc::new(MockEmailService),
         jwt: JwtService::new(&config.jwt).unwrap(),
         redis: Arc::new(MockBlacklist::new()),
-        login_rate_limiter: create_login_rate_limiter(5, 60),
-        password_reset_rate_limiter: create_password_reset_rate_limiter(3, 3600),
-        app_token_rate_limiter: create_ip_rate_limiter(10, 60),
+        login_rate_limiter: login_limiter,
+        register_rate_limiter: register_limiter,
+        password_reset_rate_limiter: reset_limiter,
+        app_token_rate_limiter: ip_limiter.clone(),
         client_rate_limiter: create_client_rate_limiter(),
-        ip_rate_limiter: create_ip_rate_limiter(100, 60),
+        ip_rate_limiter: ip_limiter,
     };
 
     // 3. Create Test Client
@@ -205,17 +209,23 @@ async fn test_app_token_invalid_grant_type() {
         .await
         .expect("Failed to connect to DB");
 
+    let login_limiter = create_ip_rate_limiter(5, 60);
+    let register_limiter = create_ip_rate_limiter(5, 60);
+    let reset_limiter = create_ip_rate_limiter(3, 3600);
+    let ip_limiter = create_ip_rate_limiter(100, 60);
+
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        email: EmailService::new(&config.gmail).unwrap(),
+        email: Arc::new(MockEmailService),
         jwt: JwtService::new(&config.jwt).unwrap(),
         redis: Arc::new(MockBlacklist::new()),
-        login_rate_limiter: create_login_rate_limiter(5, 60),
-        password_reset_rate_limiter: create_password_reset_rate_limiter(3, 3600),
-        app_token_rate_limiter: create_ip_rate_limiter(10, 60),
+        login_rate_limiter: login_limiter,
+        register_rate_limiter: register_limiter,
+        password_reset_rate_limiter: reset_limiter,
+        app_token_rate_limiter: ip_limiter.clone(),
         client_rate_limiter: create_client_rate_limiter(),
-        ip_rate_limiter: create_ip_rate_limiter(100, 60),
+        ip_rate_limiter: ip_limiter,
     };
 
     // 4. Build Router

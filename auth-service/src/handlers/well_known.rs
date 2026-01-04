@@ -1,6 +1,15 @@
 use crate::AppState;
 use axum::{extract::State, http::header, response::IntoResponse, Json};
 
+/// Get JSON Web Key Set (JWKS)
+#[utoipa::path(
+    get,
+    path = "/.well-known/jwks.json",
+    responses(
+        (status = 200, description = "Public JWKS returned")
+    ),
+    tag = "Well-Known"
+)]
 pub async fn jwks(State(state): State<AppState>) -> impl IntoResponse {
     match state.jwt.get_jwks() {
         Ok(jwks) => (

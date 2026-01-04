@@ -8,49 +8,73 @@ use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use mongodb::bson::doc;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use validator::Validate;
 
 use crate::{
+    handlers::auth::ErrorResponse,
     models::{Client, ClientType, ServiceAccount},
     utils::{hash_password, Password},
     AppState,
 };
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct CreateClientRequest {
     #[validate(length(min = 1, message = "App name is required"))]
+    #[schema(example = "My BFF App")]
     pub app_name: String,
 
     pub app_type: ClientType,
 
     #[validate(range(min = 1, message = "Rate limit must be at least 1"))]
+    #[schema(example = 100)]
     pub rate_limit_per_min: u32,
 
+    #[schema(example = "[\"http://localhost:3000\"]")]
     pub allowed_origins: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct CreateClientResponse {
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub client_id: String,
+    #[schema(example = "client-secret-123")]
     pub client_secret: String,
+    #[schema(example = "signing-secret-key")]
     pub signing_secret: String,
+    #[schema(example = "My BFF App")]
     pub app_name: String,
     pub app_type: ClientType,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct RotateSecretResponse {
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub client_id: String,
+    #[schema(example = "new-client-secret-456")]
     pub new_client_secret: String,
+    #[schema(example = "new-signing-secret-key")]
     pub new_signing_secret: String,
+    #[schema(value_type = String, format = "date-time")]
     pub previous_secret_expiry: chrono::DateTime<chrono::Utc>,
 }
 
-#[derive(Debug, Serialize)]
-pub struct ErrorResponse {
-    pub error: String,
-}
-
+/// Create a new OAuth client
+#[utoipa::path(
+    post,
+    path = "/auth/admin/clients",
+    request_body = CreateClientRequest,
+    responses(
+        (status = 201, description = "Client created successfully", body = CreateClientResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+        (status = 422, description = "Validation error", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "Admin",
+    security(
+        ("admin_api_key" = [])
+    )
+)]
 pub async fn create_client(
     State(state): State<AppState>,
     Json(req): Json<CreateClientRequest>,
@@ -141,6 +165,24 @@ pub async fn create_client(
     ))
 }
 
+/// Rotate client secrets
+#[utoipa::path(
+    post,
+    path = "/auth/admin/clients/{client_id}/rotate",
+    params(
+        ("client_id" = String, Path, description = "Client ID to rotate")
+    ),
+    responses(
+        (status = 200, description = "Secret rotated successfully", body = RotateSecretResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+        (status = 404, description = "Client not found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "Admin",
+    security(
+        ("admin_api_key" = [])
+    )
+)]
 pub async fn rotate_client_secret(
     State(state): State<AppState>,
     Path(client_id): Path<String>,
@@ -242,6 +284,24 @@ pub async fn rotate_client_secret(
     ))
 }
 
+/// Revoke a client
+#[utoipa::path(
+    delete,
+    path = "/auth/admin/clients/{client_id}",
+    params(
+        ("client_id" = String, Path, description = "Client ID to revoke")
+    ),
+    responses(
+        (status = 200, description = "Client revoked successfully"),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+        (status = 404, description = "Client not found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "Admin",
+    security(
+        ("admin_api_key" = [])
+    )
+)]
 pub async fn revoke_client(
     State(state): State<AppState>,
     Path(client_id): Path<String>,
@@ -303,21 +363,42 @@ pub async fn revoke_client(
     ))
 }
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct CreateServiceAccountRequest {
     #[validate(length(min = 1, message = "Service name is required"))]
+    #[schema(example = "Payments Service")]
     pub service_name: String,
+    #[schema(example = "[\"read:payments\", \"write:payments\"]")]
     pub scopes: Vec<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct CreateServiceAccountResponse {
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub service_id: String,
+    #[schema(example = "svc_live_random_part_123")]
     pub api_key: String,
+    #[schema(example = "Payments Service")]
     pub service_name: String,
     pub scopes: Vec<String>,
 }
 
+/// Create a new service account
+#[utoipa::path(
+    post,
+    path = "/auth/admin/services",
+    request_body = CreateServiceAccountRequest,
+    responses(
+        (status = 201, description = "Service account created successfully", body = CreateServiceAccountResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+        (status = 422, description = "Validation error", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "Admin",
+    security(
+        ("admin_api_key" = [])
+    )
+)]
 pub async fn create_service_account(
     State(state): State<AppState>,
     Json(req): Json<CreateServiceAccountRequest>,
@@ -405,13 +486,34 @@ pub async fn create_service_account(
     ))
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct RotateServiceKeyResponse {
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub service_id: String,
+    #[schema(example = "svc_live_new_random_part_456")]
     pub new_api_key: String,
+    #[schema(value_type = String, format = "date-time")]
     pub previous_key_expiry: chrono::DateTime<chrono::Utc>,
 }
 
+/// Rotate service account API key
+#[utoipa::path(
+    post,
+    path = "/auth/admin/services/{service_id}/rotate",
+    params(
+        ("service_id" = String, Path, description = "Service ID to rotate")
+    ),
+    responses(
+        (status = 200, description = "Key rotated successfully", body = RotateServiceKeyResponse),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+        (status = 404, description = "Service account not found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "Admin",
+    security(
+        ("admin_api_key" = [])
+    )
+)]
 pub async fn rotate_service_key(
     State(state): State<AppState>,
     Path(service_id): Path<String>,
@@ -517,6 +619,24 @@ pub async fn rotate_service_key(
     ))
 }
 
+/// Revoke a service account
+#[utoipa::path(
+    delete,
+    path = "/auth/admin/services/{service_id}",
+    params(
+        ("service_id" = String, Path, description = "Service ID to revoke")
+    ),
+    responses(
+        (status = 200, description = "Service account revoked successfully"),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+        (status = 404, description = "Service account not found", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "Admin",
+    security(
+        ("admin_api_key" = [])
+    )
+)]
 pub async fn revoke_service_account(
     State(state): State<AppState>,
     Path(service_id): Path<String>,
@@ -589,6 +709,23 @@ pub async fn revoke_service_account(
     ))
 }
 
+/// Get audit logs for a service account
+#[utoipa::path(
+    get,
+    path = "/auth/admin/services/{service_id}/audit-log",
+    params(
+        ("service_id" = String, Path, description = "Service ID to fetch logs for")
+    ),
+    responses(
+        (status = 200, description = "Audit logs returned", body = [AuditLog]),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "Admin",
+    security(
+        ("admin_api_key" = [])
+    )
+)]
 pub async fn get_service_audit_log(
     State(state): State<AppState>,
     Path(service_id): Path<String>,

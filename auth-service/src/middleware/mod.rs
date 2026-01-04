@@ -3,6 +3,7 @@ pub mod app_auth;
 pub mod auth;
 pub mod rate_limit;
 pub mod scope_auth;
+pub mod security_headers;
 pub mod service_auth;
 pub mod signature;
 pub mod tracing;
@@ -17,6 +18,7 @@ pub use rate_limit::{
     PasswordResetRateLimiter,
 };
 pub use scope_auth::require_scopes;
+pub use security_headers::security_headers_middleware;
 pub use service_auth::{service_auth_middleware, ServiceContext};
 pub use signature::signature_validation_middleware;
 pub use tracing::request_id_middleware;

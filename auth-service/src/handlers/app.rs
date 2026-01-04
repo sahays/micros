@@ -1,26 +1,40 @@
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use mongodb::bson::doc;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use utoipa::ToSchema;
 use validator::Validate;
 
 use crate::{
+    handlers::auth::ErrorResponse,
     services::TokenResponse,
     utils::{verify_password, Password, PasswordHashString},
     AppState,
 };
 
-#[derive(Debug, Deserialize, Validate)]
+#[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct AppTokenRequest {
+    #[schema(example = "client-uuid")]
     pub client_id: String,
+    #[schema(example = "client-secret-123")]
     pub client_secret: String,
+    #[schema(example = "client_credentials")]
     pub grant_type: String,
 }
 
-#[derive(Debug, Serialize)]
-pub struct ErrorResponse {
-    pub error: String,
-}
-
+/// Get a service-to-service app token
+#[utoipa::path(
+    post,
+    path = "/auth/app/token",
+    request_body = AppTokenRequest,
+    responses(
+        (status = 200, description = "App token issued successfully", body = TokenResponse),
+        (status = 400, description = "Unsupported grant type", body = ErrorResponse),
+        (status = 401, description = "Invalid client credentials", body = ErrorResponse),
+        (status = 403, description = "Client is disabled", body = ErrorResponse),
+        (status = 500, description = "Internal server error", body = ErrorResponse)
+    ),
+    tag = "Service Authentication"
+)]
 pub async fn app_token(
     State(state): State<AppState>,
     Json(req): Json<AppTokenRequest>,

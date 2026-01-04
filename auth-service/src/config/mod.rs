@@ -97,120 +97,136 @@ impl Config {
         // Load .env file if it exists (for local development)
         dotenvy::dotenv().ok();
 
+        let env_str = env::var("ENVIRONMENT").unwrap_or_else(|_| "dev".to_string());
+        let environment: Environment = env_str
+            .parse()
+            .map_err(|_| anyhow::anyhow!("Invalid ENVIRONMENT value: {}", env_str))?;
+
+        let is_prod = environment == Environment::Prod;
+
         let config = Config {
-            environment: env::var("ENVIRONMENT")
-                .unwrap_or_else(|_| "dev".to_string())
-                .parse()
-                .map_err(|_| anyhow::anyhow!("Invalid ENVIRONMENT value"))?,
-            service_name: env::var("SERVICE_NAME").unwrap_or_else(|_| "auth-service".to_string()),
-            service_version: env::var("SERVICE_VERSION")
-                .unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_string()),
-            log_level: env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
-            port: env::var("PORT")
-                .unwrap_or_else(|_| "3000".to_string())
+            environment: environment.clone(),
+            service_name: get_env("SERVICE_NAME", Some("auth-service"), is_prod)?,
+            service_version: get_env("SERVICE_VERSION", Some(env!("CARGO_PKG_VERSION")), is_prod)?,
+            log_level: get_env("LOG_LEVEL", Some("info"), is_prod)?,
+            port: get_env("PORT", Some("3000"), is_prod)?
                 .parse()
                 .map_err(|_| anyhow::anyhow!("Invalid PORT value"))?,
             mongodb: MongoConfig {
-                uri: env::var("MONGODB_URI")
-                    .map_err(|_| anyhow::anyhow!("MONGODB_URI is required"))?,
-                database: env::var("MONGODB_DATABASE")
-                    .map_err(|_| anyhow::anyhow!("MONGODB_DATABASE is required"))?,
+                uri: get_env("MONGODB_URI", None, true)?,
+                database: get_env("MONGODB_DATABASE", None, true)?,
             },
             redis: RedisConfig {
-                url: env::var("REDIS_URL").map_err(|_| anyhow::anyhow!("REDIS_URL is required"))?,
+                url: get_env("REDIS_URL", None, true)?,
             },
             jwt: JwtConfig {
-                private_key_path: env::var("JWT_PRIVATE_KEY_PATH")
-                    .map_err(|_| anyhow::anyhow!("JWT_PRIVATE_KEY_PATH is required"))?,
-                public_key_path: env::var("JWT_PUBLIC_KEY_PATH")
-                    .map_err(|_| anyhow::anyhow!("JWT_PUBLIC_KEY_PATH is required"))?,
-                access_token_expiry_minutes: env::var("JWT_ACCESS_TOKEN_EXPIRY_MINUTES")
-                    .unwrap_or_else(|_| "15".to_string())
-                    .parse()
-                    .map_err(|_| anyhow::anyhow!("Invalid JWT_ACCESS_TOKEN_EXPIRY_MINUTES"))?,
-                refresh_token_expiry_days: env::var("JWT_REFRESH_TOKEN_EXPIRY_DAYS")
-                    .unwrap_or_else(|_| "7".to_string())
-                    .parse()
-                    .map_err(|_| anyhow::anyhow!("Invalid JWT_REFRESH_TOKEN_EXPIRY_DAYS"))?,
-                app_token_expiry_minutes: env::var("JWT_APP_TOKEN_EXPIRY_MINUTES")
-                    .unwrap_or_else(|_| "60".to_string())
-                    .parse()
-                    .map_err(|_| anyhow::anyhow!("Invalid JWT_APP_TOKEN_EXPIRY_MINUTES"))?,
+                private_key_path: get_env("JWT_PRIVATE_KEY_PATH", None, true)?,
+                public_key_path: get_env("JWT_PUBLIC_KEY_PATH", None, true)?,
+                access_token_expiry_minutes: get_env(
+                    "JWT_ACCESS_TOKEN_EXPIRY_MINUTES",
+                    Some("15"),
+                    is_prod,
+                )?
+                .parse()
+                .map_err(|_| anyhow::anyhow!("Invalid JWT_ACCESS_TOKEN_EXPIRY_MINUTES"))?,
+                refresh_token_expiry_days: get_env(
+                    "JWT_REFRESH_TOKEN_EXPIRY_DAYS",
+                    Some("7"),
+                    is_prod,
+                )?
+                .parse()
+                .map_err(|_| anyhow::anyhow!("Invalid JWT_REFRESH_TOKEN_EXPIRY_DAYS"))?,
+                app_token_expiry_minutes: get_env(
+                    "JWT_APP_TOKEN_EXPIRY_MINUTES",
+                    Some("60"),
+                    is_prod,
+                )?
+                .parse()
+                .map_err(|_| anyhow::anyhow!("Invalid JWT_APP_TOKEN_EXPIRY_MINUTES"))?,
             },
             google: GoogleOAuthConfig {
-                client_id: env::var("GOOGLE_CLIENT_ID")
-                    .map_err(|_| anyhow::anyhow!("GOOGLE_CLIENT_ID is required"))?,
-                client_secret: env::var("GOOGLE_CLIENT_SECRET")
-                    .map_err(|_| anyhow::anyhow!("GOOGLE_CLIENT_SECRET is required"))?,
-                redirect_uri: env::var("GOOGLE_REDIRECT_URI")
-                    .map_err(|_| anyhow::anyhow!("GOOGLE_REDIRECT_URI is required"))?,
+                client_id: get_env("GOOGLE_CLIENT_ID", None, is_prod)?,
+                client_secret: get_env("GOOGLE_CLIENT_SECRET", None, is_prod)?,
+                redirect_uri: get_env("GOOGLE_REDIRECT_URI", None, is_prod)?,
             },
             gmail: GmailConfig {
-                user: env::var("GMAIL_USER")
-                    .map_err(|_| anyhow::anyhow!("GMAIL_USER is required"))?,
-                app_password: env::var("GMAIL_APP_PASSWORD")
-                    .map_err(|_| anyhow::anyhow!("GMAIL_APP_PASSWORD is required"))?,
+                user: get_env("GMAIL_USER", None, is_prod)?,
+                app_password: get_env("GMAIL_APP_PASSWORD", None, is_prod)?,
             },
             security: SecurityConfig {
-                allowed_origins: env::var("ALLOWED_ORIGINS")
-                    .unwrap_or_else(|_| "http://localhost:3000".to_string())
-                    .split(',')
-                    .map(|s| s.trim().to_string())
-                    .collect(),
-                require_signatures: env::var("REQUIRE_SIGNATURES")
-                    .unwrap_or_else(|_| "false".to_string())
+                allowed_origins: get_env(
+                    "ALLOWED_ORIGINS",
+                    Some("http://localhost:3000"),
+                    is_prod,
+                )?
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .collect(),
+                require_signatures: get_env("REQUIRE_SIGNATURES", Some("false"), is_prod)?
                     .parse()
                     .unwrap_or(false),
-                admin_api_key: env::var("ADMIN_API_KEY")
-                    .map_err(|_| anyhow::anyhow!("ADMIN_API_KEY is required"))?,
+                admin_api_key: get_env("ADMIN_API_KEY", None, true)?,
             },
             swagger: SwaggerConfig {
-                enabled: env::var("ENABLE_SWAGGER")
-                    .unwrap_or_else(|_| "public".to_string())
+                enabled: get_env("ENABLE_SWAGGER", Some("public"), is_prod)?
                     .parse()
                     .map_err(|_| anyhow::anyhow!("Invalid ENABLE_SWAGGER value"))?,
             },
             rate_limit: RateLimitConfig {
-                login_attempts: env::var("RATE_LIMIT_LOGIN_ATTEMPTS")
-                    .unwrap_or_else(|_| "5".to_string())
+                login_attempts: get_env("RATE_LIMIT_LOGIN_ATTEMPTS", Some("5"), is_prod)?
                     .parse()
                     .unwrap_or(5),
-                login_window_seconds: env::var("RATE_LIMIT_LOGIN_WINDOW_SECONDS")
-                    .unwrap_or_else(|_| "900".to_string())
-                    .parse()
-                    .unwrap_or(900),
-                register_attempts: env::var("RATE_LIMIT_REGISTER_ATTEMPTS")
-                    .unwrap_or_else(|_| "3".to_string())
-                    .parse()
-                    .unwrap_or(3),
-                register_window_seconds: env::var("RATE_LIMIT_REGISTER_WINDOW_SECONDS")
-                    .unwrap_or_else(|_| "3600".to_string())
-                    .parse()
-                    .unwrap_or(3600),
-                password_reset_attempts: env::var("RATE_LIMIT_PASSWORD_RESET_ATTEMPTS")
-                    .unwrap_or_else(|_| "3".to_string())
+                login_window_seconds: get_env(
+                    "RATE_LIMIT_LOGIN_WINDOW_SECONDS",
+                    Some("900"),
+                    is_prod,
+                )?
+                .parse()
+                .unwrap_or(900),
+                register_attempts: get_env("RATE_LIMIT_REGISTER_ATTEMPTS", Some("3"), is_prod)?
                     .parse()
                     .unwrap_or(3),
-                password_reset_window_seconds: env::var("RATE_LIMIT_PASSWORD_RESET_WINDOW_SECONDS")
-                    .unwrap_or_else(|_| "3600".to_string())
-                    .parse()
-                    .unwrap_or(3600),
-                global_ip_limit: env::var("RATE_LIMIT_GLOBAL_IP_LIMIT")
-                    .unwrap_or_else(|_| "100".to_string())
+                register_window_seconds: get_env(
+                    "RATE_LIMIT_REGISTER_WINDOW_SECONDS",
+                    Some("3600"),
+                    is_prod,
+                )?
+                .parse()
+                .unwrap_or(3600),
+                password_reset_attempts: get_env(
+                    "RATE_LIMIT_PASSWORD_RESET_ATTEMPTS",
+                    Some("3"),
+                    is_prod,
+                )?
+                .parse()
+                .unwrap_or(3),
+                password_reset_window_seconds: get_env(
+                    "RATE_LIMIT_PASSWORD_RESET_WINDOW_SECONDS",
+                    Some("3600"),
+                    is_prod,
+                )?
+                .parse()
+                .unwrap_or(3600),
+                global_ip_limit: get_env("RATE_LIMIT_GLOBAL_IP_LIMIT", Some("100"), is_prod)?
                     .parse()
                     .unwrap_or(100),
-                global_ip_window_seconds: env::var("RATE_LIMIT_GLOBAL_IP_WINDOW_SECONDS")
-                    .unwrap_or_else(|_| "60".to_string())
-                    .parse()
-                    .unwrap_or(60),
-                app_token_limit: env::var("RATE_LIMIT_APP_TOKEN_LIMIT")
-                    .unwrap_or_else(|_| "10".to_string())
+                global_ip_window_seconds: get_env(
+                    "RATE_LIMIT_GLOBAL_IP_WINDOW_SECONDS",
+                    Some("60"),
+                    is_prod,
+                )?
+                .parse()
+                .unwrap_or(60),
+                app_token_limit: get_env("RATE_LIMIT_APP_TOKEN_LIMIT", Some("10"), is_prod)?
                     .parse()
                     .unwrap_or(10),
-                app_token_window_seconds: env::var("RATE_LIMIT_APP_TOKEN_WINDOW_SECONDS")
-                    .unwrap_or_else(|_| "60".to_string())
-                    .parse()
-                    .unwrap_or(60),
+                app_token_window_seconds: get_env(
+                    "RATE_LIMIT_APP_TOKEN_WINDOW_SECONDS",
+                    Some("60"),
+                    is_prod,
+                )?
+                .parse()
+                .unwrap_or(60),
             },
         };
 
@@ -250,6 +266,24 @@ impl Config {
         }
 
         Ok(())
+    }
+}
+
+fn get_env(key: &str, default: Option<&str>, is_prod: bool) -> Result<String, anyhow::Error> {
+    match env::var(key) {
+        Ok(val) => Ok(val),
+        Err(_) => {
+            if is_prod {
+                Err(anyhow::anyhow!(
+                    "{} is required in production but not set",
+                    key
+                ))
+            } else if let Some(def) = default {
+                Ok(def.to_string())
+            } else {
+                Err(anyhow::anyhow!("{} is required but not set", key))
+            }
+        }
     }
 }
 

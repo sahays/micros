@@ -1,11 +1,8 @@
 use auth_service::{
     config::Config,
-    middleware::{
-        admin_auth_middleware, create_client_rate_limiter, create_ip_rate_limiter,
-        create_login_rate_limiter, create_password_reset_rate_limiter,
-    },
+    middleware::{admin_auth_middleware, create_client_rate_limiter, create_ip_rate_limiter},
     models::{Client, ClientType},
-    services::{EmailService, JwtService, MockBlacklist, MongoDb},
+    services::{JwtService, MockBlacklist, MockEmailService, MongoDb},
     utils::{hash_password, Password},
     AppState,
 };
@@ -44,21 +41,26 @@ async fn test_client_rotation_and_revocation() {
         .expect("Failed to connect to DB");
     db.initialize_indexes().await.unwrap();
 
-    let email = EmailService::new(&config.gmail).expect("Failed to create email service");
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
+
+    let login_limiter = create_ip_rate_limiter(5, 60);
+    let register_limiter = create_ip_rate_limiter(5, 60);
+    let reset_limiter = create_ip_rate_limiter(3, 3600);
+    let ip_limiter = create_ip_rate_limiter(100, 60);
 
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        email,
+        email: Arc::new(MockEmailService),
         jwt: jwt.clone(),
         redis: redis.clone(),
-        login_rate_limiter: create_login_rate_limiter(5, 60),
-        password_reset_rate_limiter: create_password_reset_rate_limiter(3, 3600),
-        app_token_rate_limiter: create_ip_rate_limiter(10, 60),
+        login_rate_limiter: login_limiter,
+        register_rate_limiter: register_limiter,
+        password_reset_rate_limiter: reset_limiter,
+        app_token_rate_limiter: ip_limiter.clone(),
         client_rate_limiter: create_client_rate_limiter(),
-        ip_rate_limiter: create_ip_rate_limiter(100, 60),
+        ip_rate_limiter: ip_limiter,
     };
 
     // 2. Build App

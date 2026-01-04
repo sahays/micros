@@ -12,21 +12,121 @@ use axum::{
 };
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use utoipa::{
+    openapi::security::{ApiKey, ApiKeyValue, SecurityScheme},
+    Modify, OpenApi,
+};
+use utoipa_swagger_ui::SwaggerUi;
 
 use crate::config::Config;
-use crate::middleware::{IpRateLimiter, LoginRateLimiter, PasswordResetRateLimiter};
-use crate::services::{EmailService, JwtService, MongoDb};
+use crate::middleware::IpRateLimiter;
+use crate::services::{EmailProvider, JwtService, MongoDb};
 use std::sync::Arc;
+
+#[derive(OpenApi)]
+#[openapi(
+    paths(
+        health_check,
+        handlers::well_known::jwks,
+        handlers::auth::register,
+        handlers::auth::verify_email,
+        handlers::auth::login,
+        handlers::auth::logout,
+        handlers::auth::refresh,
+        handlers::auth::introspect,
+        handlers::auth::request_password_reset,
+        handlers::auth::confirm_password_reset,
+        handlers::app::app_token,
+        handlers::user::get_me,
+        handlers::user::update_me,
+        handlers::user::change_password,
+        handlers::admin::create_client,
+        handlers::admin::rotate_client_secret,
+        handlers::admin::revoke_client,
+        handlers::admin::create_service_account,
+        handlers::admin::rotate_service_key,
+        handlers::admin::revoke_service_account,
+        handlers::admin::get_service_audit_log,
+    ),
+    components(
+        schemas(
+            handlers::auth::RegisterRequest,
+            handlers::auth::RegisterResponse,
+            handlers::auth::ErrorResponse,
+            handlers::auth::VerifyResponse,
+            handlers::auth::LoginRequest,
+            handlers::auth::LogoutRequest,
+            handlers::auth::RefreshRequest,
+            handlers::auth::IntrospectRequest,
+            handlers::auth::IntrospectResponse,
+            handlers::auth::PasswordResetRequest,
+            handlers::auth::PasswordResetConfirm,
+            handlers::app::AppTokenRequest,
+            services::TokenResponse,
+            handlers::user::ChangePasswordRequest,
+            handlers::user::UpdateUserRequest,
+            handlers::admin::CreateClientRequest,
+            handlers::admin::CreateClientResponse,
+            handlers::admin::RotateSecretResponse,
+            handlers::admin::CreateServiceAccountRequest,
+            handlers::admin::CreateServiceAccountResponse,
+            handlers::admin::RotateServiceKeyResponse,
+            models::User,
+            models::SanitizedUser,
+            models::Client,
+            models::ClientType,
+            models::ServiceAccount,
+            models::AuditLog,
+        )
+    ),
+    modifiers(&SecurityAddon),
+    tags(
+        (name = "Authentication", description = "User authentication and token management"),
+        (name = "Service Authentication", description = "Service-to-service authentication"),
+        (name = "User", description = "User profile management"),
+        (name = "Admin", description = "Administrative operations"),
+        (name = "Well-Known", description = "Public service metadata"),
+        (name = "Observability", description = "Service health and monitoring"),
+    )
+)]
+pub struct ApiDoc;
+
+struct SecurityAddon;
+
+impl Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "bearer_auth",
+                SecurityScheme::Http(
+                    utoipa::openapi::security::HttpBuilder::new()
+                        .scheme(utoipa::openapi::security::HttpAuthScheme::Bearer)
+                        .bearer_format("JWT")
+                        .build(),
+                ),
+            );
+            components.add_security_scheme(
+                "admin_api_key",
+                SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("x-admin-api-key"))),
+            );
+            components.add_security_scheme(
+                "app_token",
+                SecurityScheme::ApiKey(ApiKey::Header(ApiKeyValue::new("x-app-token"))),
+            );
+        }
+    }
+}
 
 #[derive(Clone)]
 pub struct AppState {
     pub config: Config,
     pub db: MongoDb,
-    pub email: EmailService,
+    pub email: Arc<dyn EmailProvider>,
     pub jwt: JwtService,
     pub redis: Arc<dyn crate::services::TokenBlacklist>,
-    pub login_rate_limiter: LoginRateLimiter,
-    pub password_reset_rate_limiter: PasswordResetRateLimiter,
+    pub login_rate_limiter: IpRateLimiter,
+    pub register_rate_limiter: IpRateLimiter,
+    pub password_reset_rate_limiter: IpRateLimiter,
     pub app_token_rate_limiter: IpRateLimiter,
     pub client_rate_limiter: crate::middleware::ClientRateLimiter,
     pub ip_rate_limiter: IpRateLimiter,
@@ -73,7 +173,16 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
         .route("/auth/login", post(handlers::auth::login))
         .layer(from_fn_with_state(
             login_limiter,
-            middleware::rate_limit_middleware,
+            middleware::ip_rate_limit_middleware,
+        ));
+
+    // Create register route with rate limiting
+    let register_limiter = state.register_rate_limiter.clone();
+    let register_route = Router::new()
+        .route("/auth/register", post(handlers::auth::register))
+        .layer(from_fn_with_state(
+            register_limiter,
+            middleware::ip_rate_limit_middleware,
         ));
 
     // Create password reset request route with rate limiting
@@ -85,7 +194,7 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
         )
         .layer(from_fn_with_state(
             reset_request_limiter,
-            middleware::rate_limit_middleware,
+            middleware::ip_rate_limit_middleware,
         ));
 
     // Create app token route with rate limiting
@@ -100,11 +209,33 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
     // Create global IP rate limiter
     let ip_limiter = state.ip_rate_limiter.clone();
 
-    let app = Router::new()
+    // Configure Swagger UI
+    let mut app = Router::new()
         .route("/health", get(health_check))
-        .route("/.well-known/jwks.json", get(handlers::well_known::jwks))
+        .route("/.well-known/jwks.json", get(handlers::well_known::jwks));
+
+    // Only add Swagger UI if enabled in config
+    let swagger_enabled = match state.config.environment {
+        crate::config::Environment::Dev => true,
+        crate::config::Environment::Prod => match state.config.swagger.enabled {
+            crate::config::SwaggerMode::Public | crate::config::SwaggerMode::Authenticated => true,
+            crate::config::SwaggerMode::Disabled => false,
+        },
+    };
+
+    if swagger_enabled {
+        app =
+            app.merge(SwaggerUi::new("/docs").url("/.well-known/openapi.json", ApiDoc::openapi()));
+    } else {
+        // If Swagger UI is disabled, still provide the OpenAPI JSON for programmatic access
+        app = app.route(
+            "/.well-known/openapi.json",
+            get(|| async { axum::Json(ApiDoc::openapi()) }),
+        );
+    }
+
+    let app = app
         // Authentication routes
-        .route("/auth/register", post(handlers::auth::register))
         .route("/auth/verify", get(handlers::auth::verify_email))
         .route("/auth/introspect", post(handlers::auth::introspect))
         .route("/auth/google", get(handlers::auth::google_login))
@@ -114,6 +245,7 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
         )
         .merge(app_token_route)
         .merge(login_route)
+        .merge(register_route)
         .merge(reset_request_route)
         .merge(admin_routes)
         .route(
@@ -142,19 +274,62 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
         ))
         // Signature validation
         .layer(from_fn_with_state(
-            state,
+            state.clone(),
             middleware::signature_validation_middleware,
         ))
         // Add tracing middleware for request_id
         .layer(from_fn(middleware::request_id_middleware))
+        // Add security headers middleware
+        .layer(from_fn(middleware::security_headers_middleware))
         // Add CORS layer
-        .layer(CorsLayer::permissive()) // TODO: Configure from config
+        .layer(
+            CorsLayer::new()
+                .allow_origin(
+                    state
+                        .config
+                        .security
+                        .allowed_origins
+                        .iter()
+                        .map(|o| {
+                            o.parse::<axum::http::HeaderValue>()
+                                .expect("Invalid CORS origin")
+                        })
+                        .collect::<Vec<axum::http::HeaderValue>>(),
+                )
+                .allow_methods([
+                    axum::http::Method::GET,
+                    axum::http::Method::POST,
+                    axum::http::Method::PATCH,
+                    axum::http::Method::DELETE,
+                    axum::http::Method::OPTIONS,
+                ])
+                .allow_headers([
+                    axum::http::header::AUTHORIZATION,
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::header::HeaderName::from_static("x-admin-api-key"),
+                    axum::http::header::HeaderName::from_static("x-app-token"),
+                    axum::http::header::HeaderName::from_static("x-client-id"),
+                    axum::http::header::HeaderName::from_static("x-timestamp"),
+                    axum::http::header::HeaderName::from_static("x-nonce"),
+                    axum::http::header::HeaderName::from_static("x-signature"),
+                ]),
+        )
         // Add tracing layer
         .layer(TraceLayer::new_for_http());
 
     Ok(app)
 }
 
+/// Service health check
+#[utoipa::path(
+    get,
+    path = "/health",
+    responses(
+        (status = 200, description = "Service is healthy"),
+        (status = 503, description = "Service is unhealthy")
+    ),
+    tag = "Observability"
+)]
 pub async fn health_check(
     axum::extract::State(state): axum::extract::State<AppState>,
 ) -> Result<axum::Json<serde_json::Value>, (axum::http::StatusCode, String)> {
@@ -167,7 +342,14 @@ pub async fn health_check(
         )
     })?;
 
-    // TODO: Check Redis connection
+    // Check Redis connection
+    state.redis.health_check().await.map_err(|e| {
+        tracing::error!(error = %e, "Redis health check failed");
+        (
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            format!("Redis unhealthy: {}", e),
+        )
+    })?;
 
     Ok(axum::Json(serde_json::json!({
         "status": "healthy",
@@ -175,7 +357,8 @@ pub async fn health_check(
         "version": state.config.service_version,
         "environment": format!("{:?}", state.config.environment),
         "checks": {
-            "mongodb": "up"
+            "mongodb": "up",
+            "redis": "up"
         }
     })))
 }
