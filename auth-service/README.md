@@ -60,6 +60,9 @@ Access the interactive documentation at:
 
 - [BFF Request Signing Guide](docs/bff-request-signing.md): Implementation details for securing Frontend-to-Backend communication.
 - [Service Integration Guide](docs/service-integration.md): How to authenticate other microservices with Auth Service.
+- [Social Login Guide](docs/social-login.md): Google OAuth 2.0 integration details.
+- [Audit Logging](docs/audit-logging.md): Events, schema, and admin access.
+- [Observability & GCP](docs/observability.md): Structured logging, tracing, and Google Cloud integration.
 
 ## Deployment
 
