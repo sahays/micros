@@ -8,6 +8,7 @@ services:
     volumes:
       - ./config/prometheus:/etc/prometheus
       - prometheus_data:/prometheus
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -78,8 +79,13 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - RUST_LOG=info
       - PORT=3000
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=3000"
+      - "prometheus.io/path=/metrics"
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     networks:
       - micros-net
     logging:
@@ -98,6 +104,12 @@ services:
       - mongo_data:/data/db
     networks:
       - micros-net
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
 
 networks:
   micros-net:
