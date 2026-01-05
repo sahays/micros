@@ -55,6 +55,7 @@ services:
       - ./config/promtail:/etc/promtail
       - /var/log:/var/log
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     command: -config.file=/etc/promtail/promtail.yaml
     ports:
       - "9080:9080"
