@@ -1,20 +1,14 @@
-import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
+import { createRootRoute, Outlet } from "@tanstack/react-router";
 import { TanStackRouterDevtools } from "@tanstack/router-devtools";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { AppShell } from "@/components/layout/AppShell";
 
 export const Route = createRootRoute({
   component: () => (
     <>
-      <div className="p-2 flex gap-2">
-        <Link to="/" className="[&.active]:font-bold">
-          Home
-        </Link>{" "}
-        <Link to="/dashboard" className="[&.active]:font-bold">
-          Dashboard
-        </Link>
-      </div>
-      <hr />
-      <Outlet />
+      <AppShell>
+        <Outlet />
+      </AppShell>
       <TanStackRouterDevtools />
       <ReactQueryDevtools />
     </>

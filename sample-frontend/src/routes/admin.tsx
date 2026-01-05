@@ -1,52 +1,41 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export const Route = createFileRoute("/dashboard")({
-  component: Dashboard,
+export const Route = createFileRoute("/admin")({
+  component: Admin,
 });
 
-function Dashboard() {
+function Admin() {
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-sidebar-foreground">
-          Dashboard
+          Admin Console
         </h1>
         <p className="text-muted-foreground mt-2">
-          Overview of your application metrics
+          Manage clients, services, and system configuration
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Analytics</CardTitle>
+            <CardTitle>Client Management</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Track user behavior and engagement metrics
+              Register and manage BFF and mobile clients
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Performance</CardTitle>
+            <CardTitle>Service Accounts</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Monitor system performance and health
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Reports</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Generate and export detailed reports
+              Configure service-to-service authentication
             </p>
           </CardContent>
         </Card>
