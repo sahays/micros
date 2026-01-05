@@ -215,6 +215,7 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
     // Configure Swagger UI
     let mut app = Router::new()
         .route("/health", get(health_check))
+        .route("/metrics", get(handlers::metrics::metrics))
         .route("/.well-known/jwks.json", get(handlers::well_known::jwks));
 
     // Only add Swagger UI if enabled in config
@@ -280,6 +281,8 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
             state.clone(),
             middleware::signature_validation_middleware,
         ))
+        // Add metrics middleware
+        .layer(from_fn(middleware::metrics_middleware))
         // Add tracing layer
         .layer(
             TraceLayer::new_for_http().make_span_with(|request: &axum::http::Request<_>| {

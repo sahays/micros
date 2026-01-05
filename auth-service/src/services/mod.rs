@@ -4,6 +4,7 @@ mod database;
 mod email;
 pub mod error;
 mod jwt;
+pub mod metrics;
 pub mod redis;
 
 pub use auth::AuthService;

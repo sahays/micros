@@ -15,6 +15,8 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Initialize tracing/logging
     init_tracing(&config);
+    // Initialize metrics
+    auth_service::services::metrics::init_metrics();
 
     tracing::info!(
         service = %config.service_name,
