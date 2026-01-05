@@ -1,0 +1,119 @@
+version: '3.8'
+
+services:
+  # Observability Stack
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./config/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    networks:
+      - micros-net
+
+  loki:
+    image: grafana/loki:latest
+    container_name: loki
+    volumes:
+      - ./config/loki:/etc/loki
+      - loki_data:/loki
+    command: -config.file=/etc/loki/loki.yaml
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+    networks:
+      - micros-net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - micros-net
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: promtail
+    volumes:
+      - ./config/promtail:/etc/promtail
+      - /var/log:/var/log
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/promtail.yaml
+    ports:
+      - "9080:9080"
+    restart: unless-stopped
+    depends_on:
+      - loki
+    networks:
+      - micros-net
+
+  # Application Stack
+  auth-service:
+    build: ./auth-service
+    container_name: auth-service
+    ports:
+      - "8080:3000"
+    environment:
+      - DATABASE_URL=mongodb://mongo:27017/auth_db
+      - REDIS_URL=redis://redis:6379/0
+      - RUST_LOG=info
+      - PORT=3000
+    depends_on:
+      - mongo
+      - redis
+    networks:
+      - micros-net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+
+  mongo:
+    image: mongo:6.0
+    container_name: mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - micros-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - micros-net
+
+networks:
+  micros-net:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  loki_data:
+  grafana_data:
+  mongo_data:
+  redis_data:
