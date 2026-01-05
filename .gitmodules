@@ -1,4 +1,4 @@
 [submodule ".claude/skills"]
-	path = .claude/skills
+	path = skills
 	url = https://github.com/sahays/ai-skills-and-specs
 	branch = main
