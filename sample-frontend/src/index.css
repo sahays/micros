@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  /* Color Palette Definition - MaterialM Blue Theme */
+  --color-primary: #2196f3; /* Material Blue */
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary: #e8f7ff; /* Tinted Background */
+  --color-secondary-foreground: #2196f3; /* Blue Text on Tint */
+
+  --color-success: #13deb9;
+  --color-warning: #ffae1f;
+  --color-error: #fa896b;
+
+  /* Layout Colors */
+  --color-sidebar: #ffffff;
+  --color-sidebar-foreground: #2a3547;
+  --color-background: #f5f7fa; /* Dashboard Canvas */
+  --color-surface: #ffffff; /* Card Background */
+
+  /* Typography overrides */
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+
+  /* Radius overrides for MD3 "Roundness" */
+  --radius-lg: 16px; /* Cards */
+  --radius-md: 8px; /* Inputs/Buttons */
+  --radius-sm: 4px;
+
+  /* Shadcn standard variables mapping to our theme */
+  --color-border: #e2e8f0;
+  --color-input: #e2e8f0;
+  --color-ring: #2196f3;
+  --color-muted: #f1f5f9;
+  --color-muted-foreground: #64748b;
+  --color-accent: #f1f5f9;
+  --color-accent-foreground: #0f172a;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #0f172a;
+  --color-card: #ffffff;
+  --color-card-foreground: #0f172a;
+}
+
+/* Material Design Utilities */
+@utility material-shadow {
+  box-shadow: 0px 7px 30px 0px rgba(90, 114, 123, 0.11);
+}
+
+@utility sidebar-shadow {
+  box-shadow: 0px 4px 20px 0px rgba(0, 0, 0, 0.05);
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-sidebar-foreground);
+  font-family: var(--font-sans);
+}

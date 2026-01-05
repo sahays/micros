@@ -38,4 +38,7 @@ if [ -n "$STAGED_RS_FILES" ]; then
     cd ..
 fi
 
+# Run frontend checks
+./scripts/pre-commit-frontend.sh
+
 echo -e "${GREEN}All checks passed!${NC}"
