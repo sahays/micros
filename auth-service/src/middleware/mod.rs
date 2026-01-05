@@ -1,6 +1,7 @@
 pub mod admin;
 pub mod app_auth;
 pub mod auth;
+pub mod bot_detection;
 pub mod metrics;
 pub mod rate_limit;
 pub mod scope_auth;
@@ -12,6 +13,7 @@ pub mod tracing;
 pub use admin::admin_auth_middleware;
 pub use app_auth::app_auth_middleware;
 pub use auth::{auth_middleware, AuthUser};
+pub use bot_detection::bot_detection_middleware;
 pub use metrics::metrics_middleware;
 pub use rate_limit::{
     client_rate_limit_middleware, create_client_rate_limiter, create_ip_rate_limiter,

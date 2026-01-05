@@ -305,6 +305,8 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
         .layer(from_fn(middleware::request_id_middleware))
         // Add security headers middleware
         .layer(from_fn(middleware::security_headers_middleware))
+        // Add bot detection middleware
+        .layer(from_fn(middleware::bot_detection_middleware))
         // Add CORS layer
         .layer(
             CorsLayer::new()
