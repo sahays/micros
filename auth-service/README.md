@@ -56,6 +56,11 @@ Access the interactive documentation at:
 - **Swagger UI**: `http://localhost:3000/docs`
 - **Spec**: `http://localhost:3000/.well-known/openapi.json`
 
+## Detailed Documentation
+
+- [BFF Request Signing Guide](docs/bff-request-signing.md): Implementation details for securing Frontend-to-Backend communication.
+- [Service Integration Guide](docs/service-integration.md): How to authenticate other microservices with Auth Service.
+
 ## Deployment
 
 Production deployments are handled via `scripts/deploy.sh`, which implements atomic release switching and health-check driven rollbacks.
