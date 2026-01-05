@@ -49,11 +49,22 @@ async fn test_app_auth_middleware() {
     let reset_limiter = create_ip_rate_limiter(3, 3600);
     let ip_limiter = create_ip_rate_limiter(100, 60);
 
+    let email = Arc::new(MockEmailService);
+    let auth_service = auth_service::services::AuthService::new(
+        db.clone(),
+        email.clone(),
+        jwt.clone(),
+        redis.clone(),
+    );
+    let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        email: Arc::new(MockEmailService),
+        email: email.clone(),
         jwt: jwt.clone(),
+        auth_service,
+        admin_service,
         redis: redis.clone(),
         login_rate_limiter: login_limiter,
         register_rate_limiter: register_limiter,

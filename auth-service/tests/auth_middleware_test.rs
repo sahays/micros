@@ -39,6 +39,7 @@ async fn test_auth_middleware() {
         .expect("Failed to connect to DB");
 
     let email = EmailService::new(&config.gmail).expect("Failed to create email service");
+    let email = Arc::new(email);
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
 
@@ -47,11 +48,21 @@ async fn test_auth_middleware() {
     let reset_limiter = create_ip_rate_limiter(3, 3600);
     let ip_limiter = create_ip_rate_limiter(100, 60);
 
+    let auth_service = auth_service::services::AuthService::new(
+        db.clone(),
+        email.clone(),
+        jwt.clone(),
+        redis.clone(),
+    );
+    let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+
     let state = AppState {
         config: config.clone(),
-        db,
-        email: Arc::new(email),
-        jwt: jwt.clone(), // Clone for use in test
+        db: db.clone(),
+        email: email.clone(),
+        jwt: jwt.clone(),
+        auth_service,
+        admin_service,
         redis: redis.clone(),
         login_rate_limiter: login_limiter,
         register_rate_limiter: register_limiter,

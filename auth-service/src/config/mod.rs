@@ -50,6 +50,7 @@ pub struct GoogleOAuthConfig {
     pub client_id: String,
     pub client_secret: String,
     pub redirect_uri: String,
+    pub frontend_url: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -148,6 +149,11 @@ impl Config {
                 client_id: get_env("GOOGLE_CLIENT_ID", None, is_prod)?,
                 client_secret: get_env("GOOGLE_CLIENT_SECRET", None, is_prod)?,
                 redirect_uri: get_env("GOOGLE_REDIRECT_URI", None, is_prod)?,
+                frontend_url: get_env(
+                    "GOOGLE_FRONTEND_URL",
+                    Some("http://localhost:3000"),
+                    is_prod,
+                )?,
             },
             gmail: GmailConfig {
                 user: get_env("GMAIL_USER", None, is_prod)?,

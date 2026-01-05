@@ -1,10 +1,7 @@
 use auth_service::{
     build_router,
     config::Config,
-    middleware::{
-        create_client_rate_limiter, create_ip_rate_limiter, create_login_rate_limiter,
-        create_password_reset_rate_limiter,
-    },
+    middleware::{create_client_rate_limiter, create_ip_rate_limiter},
     models::{SanitizedUser, User},
     services::{EmailService, JwtService, MockBlacklist, MongoDb},
     utils::{hash_password, Password},
@@ -41,7 +38,8 @@ async fn test_user_profile_flow() {
         .await
         .expect("Failed to connect to DB");
 
-    let email_service = EmailService::new(&config.gmail).expect("Failed to create email service");
+    let email = EmailService::new(&config.gmail).expect("Failed to create email service");
+    let email = Arc::new(email);
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
 
@@ -50,12 +48,22 @@ async fn test_user_profile_flow() {
     let reset_limiter = create_ip_rate_limiter(3, 3600);
     let ip_limiter = create_ip_rate_limiter(100, 60);
 
+    let auth_service = auth_service::services::AuthService::new(
+        db.clone(),
+        email.clone(),
+        jwt.clone(),
+        redis.clone(),
+    );
+    let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        email: Arc::new(email_service),
+        email: email.clone(),
         jwt: jwt.clone(),
-        redis,
+        auth_service,
+        admin_service,
+        redis: redis.clone(),
         login_rate_limiter: login_limiter,
         register_rate_limiter: register_limiter,
         password_reset_rate_limiter: reset_limiter,
@@ -73,6 +81,7 @@ async fn test_user_profile_flow() {
         password_hash: password_hash.into_string(),
         name: Some("Initial Name".to_string()),
         verified: true,
+        google_id: None,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
     };

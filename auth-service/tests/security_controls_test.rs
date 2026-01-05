@@ -36,12 +36,26 @@ async fn test_security_headers_and_cors() {
     let db = MongoDb::connect(&config.mongodb.uri, &config.mongodb.database)
         .await
         .unwrap();
+
+    let email = Arc::new(MockEmailService);
+    let jwt = JwtService::new(&config.jwt).unwrap();
+    let redis = Arc::new(MockBlacklist::new());
+    let auth_service = auth_service::services::AuthService::new(
+        db.clone(),
+        email.clone(),
+        jwt.clone(),
+        redis.clone(),
+    );
+    let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        email: Arc::new(MockEmailService),
-        jwt: JwtService::new(&config.jwt).unwrap(),
-        redis: Arc::new(MockBlacklist::new()),
+        email: email.clone(),
+        jwt: jwt.clone(),
+        auth_service,
+        admin_service,
+        redis,
         login_rate_limiter: create_ip_rate_limiter(100, 60),
         register_rate_limiter: create_ip_rate_limiter(100, 60),
         password_reset_rate_limiter: create_ip_rate_limiter(100, 60),
@@ -116,12 +130,25 @@ async fn test_input_validation_and_audit_logging() {
         .unwrap();
     db.initialize_indexes().await.unwrap();
 
+    let email = Arc::new(MockEmailService);
+    let jwt = JwtService::new(&config.jwt).unwrap();
+    let redis = Arc::new(MockBlacklist::new());
+    let auth_service = auth_service::services::AuthService::new(
+        db.clone(),
+        email.clone(),
+        jwt.clone(),
+        redis.clone(),
+    );
+    let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        email: Arc::new(MockEmailService),
-        jwt: JwtService::new(&config.jwt).unwrap(),
-        redis: Arc::new(MockBlacklist::new()),
+        email: email.clone(),
+        jwt: jwt.clone(),
+        auth_service,
+        admin_service,
+        redis,
         login_rate_limiter: create_ip_rate_limiter(100, 60),
         register_rate_limiter: create_ip_rate_limiter(100, 60),
         password_reset_rate_limiter: create_ip_rate_limiter(100, 60),
@@ -198,13 +225,26 @@ async fn test_endpoint_specific_rate_limiting() {
         .await
         .unwrap();
 
+    let email = Arc::new(MockEmailService);
+    let jwt = JwtService::new(&config.jwt).unwrap();
+    let redis = Arc::new(MockBlacklist::new());
+    let auth_service = auth_service::services::AuthService::new(
+        db.clone(),
+        email.clone(),
+        jwt.clone(),
+        redis.clone(),
+    );
+    let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+
     // Set tight limit for registration
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        email: Arc::new(MockEmailService),
-        jwt: JwtService::new(&config.jwt).unwrap(),
-        redis: Arc::new(MockBlacklist::new()),
+        email: email.clone(),
+        jwt: jwt.clone(),
+        auth_service,
+        admin_service,
+        redis,
         login_rate_limiter: create_ip_rate_limiter(100, 60),
         register_rate_limiter: create_ip_rate_limiter(1, 60), // 1 per min
         password_reset_rate_limiter: create_ip_rate_limiter(100, 60),

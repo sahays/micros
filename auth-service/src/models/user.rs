@@ -15,6 +15,7 @@ pub struct User {
     #[schema(example = "John Doe")]
     pub name: Option<String>,
     pub verified: bool,
+    pub google_id: Option<String>,
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     #[schema(value_type = String, format = "date-time")]
     pub created_at: DateTime<Utc>,
@@ -40,6 +41,7 @@ impl User {
             password_hash,
             name,
             verified: false,
+            google_id: None,
             created_at: now,
             updated_at: now,
         }
@@ -51,6 +53,7 @@ impl User {
             email: self.email.clone(),
             name: self.name.clone(),
             verified: self.verified,
+            google_id: self.google_id.clone(),
             created_at: self.created_at,
             updated_at: self.updated_at,
         }
@@ -67,6 +70,7 @@ pub struct SanitizedUser {
     #[schema(example = "John Doe")]
     pub name: Option<String>,
     pub verified: bool,
+    pub google_id: Option<String>,
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
     #[schema(value_type = String, format = "date-time")]
     pub created_at: DateTime<Utc>,

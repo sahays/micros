@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 use validator::Validate;
 
 use crate::{
-    handlers::auth::ErrorResponse,
+    dtos::ErrorResponse,
     services::TokenResponse,
     utils::{verify_password, Password, PasswordHashString},
     AppState,

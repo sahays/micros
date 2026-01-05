@@ -257,3 +257,35 @@ impl MongoDb {
         &self.db
     }
 }
+
+/// Macro to generate type-safe find_by_* methods for MongoDB collections.
+///
+/// Usage:
+/// ```rust,ignore
+/// impl_find_by!(
+///     User, "users", find_user_by_email, "email", String;
+///     VerificationToken, "verification_tokens", find_token_by_token, "token", String
+/// );
+/// ```
+macro_rules! impl_find_by {
+    ($($model:ty, $collection_name:expr, $method_name:ident, $field_name:expr, $field_type:ty);+ $(;)?) => {
+        impl MongoDb {
+            $(
+                pub async fn $method_name(&self, value: &$field_type) -> Result<Option<$model>, mongodb::error::Error> {
+                    self.db.collection::<$model>($collection_name)
+                        .find_one(doc! { $field_name: value }, None)
+                        .await
+                }
+            )+
+        }
+    };
+}
+
+impl_find_by!(
+    User, "users", find_user_by_email, "email", str;
+    User, "users", find_user_by_id, "_id", str;
+    VerificationToken, "verification_tokens", find_token_by_token, "token", str;
+    RefreshToken, "refresh_tokens", find_refresh_token_by_id, "_id", str;
+    Client, "clients", find_client_by_id, "client_id", str;
+    ServiceAccount, "service_accounts", find_service_account_by_id, "service_id", str
+);

@@ -261,6 +261,11 @@ impl JwtService {
         self.access_token_expiry_minutes * 60
     }
 
+    /// Get refresh token expiry in days
+    pub fn refresh_token_expiry_days(&self) -> i64 {
+        self.refresh_token_expiry_days
+    }
+
     /// Generate an app token for a client
     pub fn generate_app_token(
         &self,

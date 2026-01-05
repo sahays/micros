@@ -1,10 +1,7 @@
 use auth_service::{
     build_router,
     config::Config,
-    middleware::{
-        create_client_rate_limiter, create_ip_rate_limiter, create_login_rate_limiter,
-        create_password_reset_rate_limiter,
-    },
+    middleware::{create_client_rate_limiter, create_ip_rate_limiter},
     models::{Client, ClientType},
     services::{EmailService, JwtService, MockBlacklist, MockEmailService, MongoDb},
     utils::{hash_password, Password},
@@ -46,6 +43,7 @@ async fn test_app_token_success() {
         .expect("Failed to init indexes");
 
     let email = EmailService::new(&config.gmail).expect("Failed to create email service");
+    let email = Arc::new(email);
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
 
@@ -54,11 +52,21 @@ async fn test_app_token_success() {
     let reset_limiter = create_ip_rate_limiter(3, 3600);
     let ip_limiter = create_ip_rate_limiter(100, 60);
 
+    let auth_service = auth_service::services::AuthService::new(
+        db.clone(),
+        email.clone(),
+        jwt.clone(),
+        redis.clone(),
+    );
+    let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        email: Arc::new(email),
+        email: email.clone(),
         jwt: jwt.clone(),
+        auth_service,
+        admin_service,
         redis,
         login_rate_limiter: login_limiter,
         register_rate_limiter: register_limiter,
@@ -144,12 +152,25 @@ async fn test_app_token_invalid_secret() {
     let reset_limiter = create_ip_rate_limiter(3, 3600);
     let ip_limiter = create_ip_rate_limiter(100, 60);
 
+    let email = Arc::new(MockEmailService);
+    let jwt = JwtService::new(&config.jwt).unwrap();
+    let redis = Arc::new(MockBlacklist::new());
+    let auth_service = auth_service::services::AuthService::new(
+        db.clone(),
+        email.clone(),
+        jwt.clone(),
+        redis.clone(),
+    );
+    let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        email: Arc::new(MockEmailService),
-        jwt: JwtService::new(&config.jwt).unwrap(),
-        redis: Arc::new(MockBlacklist::new()),
+        email: email.clone(),
+        jwt: jwt.clone(),
+        auth_service,
+        admin_service,
+        redis,
         login_rate_limiter: login_limiter,
         register_rate_limiter: register_limiter,
         password_reset_rate_limiter: reset_limiter,
@@ -214,12 +235,25 @@ async fn test_app_token_invalid_grant_type() {
     let reset_limiter = create_ip_rate_limiter(3, 3600);
     let ip_limiter = create_ip_rate_limiter(100, 60);
 
+    let email = Arc::new(MockEmailService);
+    let jwt = JwtService::new(&config.jwt).unwrap();
+    let redis = Arc::new(MockBlacklist::new());
+    let auth_service = auth_service::services::AuthService::new(
+        db.clone(),
+        email.clone(),
+        jwt.clone(),
+        redis.clone(),
+    );
+    let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        email: Arc::new(MockEmailService),
-        jwt: JwtService::new(&config.jwt).unwrap(),
-        redis: Arc::new(MockBlacklist::new()),
+        email: email.clone(),
+        jwt: jwt.clone(),
+        auth_service,
+        admin_service,
+        redis,
         login_rate_limiter: login_limiter,
         register_rate_limiter: register_limiter,
         password_reset_rate_limiter: reset_limiter,

@@ -11,7 +11,7 @@ use utoipa::ToSchema;
 use validator::Validate;
 
 use crate::{
-    handlers::auth::ErrorResponse,
+    dtos::ErrorResponse,
     middleware::AuthUser,
     models::{AuditLog, VerificationToken},
     utils::{hash_password, verify_password, Password, PasswordHashString},

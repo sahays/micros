@@ -45,6 +45,7 @@ async fn test_client_rate_limiting() {
     db.initialize_indexes().await.unwrap();
 
     let email = EmailService::new(&config.gmail).expect("Failed to create email service");
+    let email = Arc::new(email);
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
 
@@ -53,12 +54,22 @@ async fn test_client_rate_limiting() {
     let reset_limiter = create_ip_rate_limiter(3, 3600);
     let ip_limiter = create_ip_rate_limiter(100, 60);
 
+    let auth_service = auth_service::services::AuthService::new(
+        db.clone(),
+        email.clone(),
+        jwt.clone(),
+        redis.clone(),
+    );
+    let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        email: Arc::new(email),
+        email: email.clone(),
         jwt: jwt.clone(),
-        redis: redis.clone(),
+        auth_service,
+        admin_service,
+        redis,
         login_rate_limiter: login_limiter,
         register_rate_limiter: register_limiter,
         password_reset_rate_limiter: reset_limiter,

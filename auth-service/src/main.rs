@@ -69,13 +69,26 @@ async fn main() -> Result<(), anyhow::Error> {
     tracing::info!(
         "Rate limiters initialized: Login, Register, Password Reset, App Token, Client, and Global IP"
     );
+
+    // Initialize services
+    let redis = std::sync::Arc::new(redis);
+    let auth_service = auth_service::services::AuthService::new(
+        db.clone(),
+        email.clone(),
+        jwt.clone(),
+        redis.clone(),
+    );
+    let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+
     // Create application state
     let state = AppState {
         config: config.clone(),
         db,
         email,
         jwt,
-        redis: std::sync::Arc::new(redis),
+        auth_service,
+        admin_service,
+        redis,
         login_rate_limiter,
         register_rate_limiter,
         password_reset_rate_limiter,

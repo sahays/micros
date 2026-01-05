@@ -1,11 +1,8 @@
 use auth_service::{
     build_router,
     config::Config,
-    handlers::admin::CreateServiceAccountResponse,
-    middleware::{
-        create_client_rate_limiter, create_ip_rate_limiter, create_login_rate_limiter,
-        create_password_reset_rate_limiter,
-    },
+    dtos::admin::CreateServiceAccountResponse,
+    middleware::{create_client_rate_limiter, create_ip_rate_limiter},
     services::{EmailService, JwtService, MockBlacklist, MongoDb, TokenBlacklist},
     AppState,
 };
@@ -48,14 +45,25 @@ async fn test_create_service_account_flow() {
         .expect("Failed to initialize indexes");
 
     let email = EmailService::new(&config.gmail).expect("Failed to create email service");
+    let email = Arc::new(email);
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
+
+    let auth_service = auth_service::services::AuthService::new(
+        db.clone(),
+        email.clone(),
+        jwt.clone(),
+        redis.clone(),
+    );
+    let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
 
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        email: Arc::new(email),
+        email: email.clone(),
         jwt,
+        auth_service,
+        admin_service,
         redis,
         login_rate_limiter: create_ip_rate_limiter(5, 60),
         register_rate_limiter: create_ip_rate_limiter(5, 60),
@@ -147,14 +155,25 @@ async fn test_service_auth_middleware() {
         .expect("Failed to initialize indexes");
 
     let email = EmailService::new(&config.gmail).expect("Failed to create email service");
+    let email = Arc::new(email);
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
+
+    let auth_service = auth_service::services::AuthService::new(
+        db.clone(),
+        email.clone(),
+        jwt.clone(),
+        redis.clone(),
+    );
+    let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
 
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        email: Arc::new(email),
+        email: email.clone(),
         jwt,
+        auth_service,
+        admin_service,
         redis: redis.clone(),
         login_rate_limiter: create_ip_rate_limiter(5, 60),
         register_rate_limiter: create_ip_rate_limiter(5, 60),
@@ -293,14 +312,25 @@ async fn test_scope_validation() {
         .expect("Failed to initialize indexes");
 
     let email = EmailService::new(&config.gmail).expect("Failed to create email service");
+    let email = Arc::new(email);
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
+
+    let auth_service = auth_service::services::AuthService::new(
+        db.clone(),
+        email.clone(),
+        jwt.clone(),
+        redis.clone(),
+    );
+    let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
 
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        email: Arc::new(email),
+        email: email.clone(),
         jwt,
+        auth_service,
+        admin_service,
         redis,
         login_rate_limiter: create_ip_rate_limiter(5, 60),
         register_rate_limiter: create_ip_rate_limiter(5, 60),
@@ -311,7 +341,7 @@ async fn test_scope_validation() {
     };
 
     use auth_service::middleware::{require_scopes, service_auth_middleware, ServiceContext};
-    use axum::middleware::{from_fn, from_fn_with_state};
+    use axum::middleware::from_fn_with_state;
     use axum::routing::get;
 
     async fn protected_handler(
@@ -449,14 +479,25 @@ async fn test_service_rotation_revocation() {
         .expect("Failed to initialize indexes");
 
     let email = EmailService::new(&config.gmail).expect("Failed to create email service");
+    let email = Arc::new(email);
     let jwt = JwtService::new(&config.jwt).expect("Failed to create JWT service");
     let redis = Arc::new(MockBlacklist::new());
+
+    let auth_service = auth_service::services::AuthService::new(
+        db.clone(),
+        email.clone(),
+        jwt.clone(),
+        redis.clone(),
+    );
+    let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
 
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
-        email: Arc::new(email),
+        email: email.clone(),
         jwt,
+        auth_service,
+        admin_service,
         redis: redis.clone(),
         login_rate_limiter: create_ip_rate_limiter(5, 60),
         register_rate_limiter: create_ip_rate_limiter(5, 60),
@@ -507,7 +548,7 @@ async fn test_service_rotation_revocation() {
     let body = axum::body::to_bytes(response.into_body(), usize::MAX)
         .await
         .unwrap();
-    let rotate_res: auth_service::handlers::admin::RotateServiceKeyResponse =
+    let rotate_res: auth_service::dtos::admin::RotateServiceKeyResponse =
         serde_json::from_slice(&body).unwrap();
     let api_key_2 = rotate_res.new_api_key;
     assert_ne!(api_key_1, api_key_2);
