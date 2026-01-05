@@ -58,6 +58,7 @@ Access the interactive documentation at:
 
 ## Detailed Documentation
 
+- [Email/Password Auth Guide](docs/email-password-auth.md): Registration, login, and password management flows.
 - [BFF Request Signing Guide](docs/bff-request-signing.md): Implementation details for securing Frontend-to-Backend communication.
 - [Service Integration Guide](docs/service-integration.md): How to authenticate other microservices with Auth Service.
 - [Social Login Guide](docs/social-login.md): Google OAuth 2.0 integration details.
