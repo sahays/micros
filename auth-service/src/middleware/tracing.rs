@@ -1,6 +1,5 @@
 use axum::http::HeaderValue;
 use axum::{extract::Request, middleware::Next, response::Response};
-use tracing::info_span;
 use uuid::Uuid;
 
 pub const REQUEST_ID_HEADER: &str = "x-request-id";
@@ -18,18 +17,7 @@ pub async fn request_id_middleware(mut req: Request, next: Next) -> Response {
         req.headers_mut().insert(REQUEST_ID_HEADER, header_value);
     }
 
-    // Create a span for the request that includes the request_id
-    let span = info_span!(
-        "http_request",
-        request_id = %request_id,
-        method = %req.method(),
-        uri = %req.uri(),
-    );
-
-    let mut response = {
-        let _guard = span.enter();
-        next.run(req).await
-    };
+    let mut response = next.run(req).await;
 
     // Add request_id to response headers
     if let Ok(header_value) = HeaderValue::from_str(&request_id) {

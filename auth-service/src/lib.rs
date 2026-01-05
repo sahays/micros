@@ -280,6 +280,24 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
             state.clone(),
             middleware::signature_validation_middleware,
         ))
+        // Add tracing layer
+        .layer(
+            TraceLayer::new_for_http().make_span_with(|request: &axum::http::Request<_>| {
+                let request_id = request
+                    .headers()
+                    .get("x-request-id")
+                    .and_then(|value| value.to_str().ok())
+                    .unwrap_or("-");
+
+                tracing::info_span!(
+                    "http_request",
+                    request_id = %request_id,
+                    method = %request.method(),
+                    uri = %request.uri(),
+                    version = ?request.version(),
+                )
+            }),
+        )
         // Add tracing middleware for request_id
         .layer(from_fn(middleware::request_id_middleware))
         // Add security headers middleware
@@ -316,9 +334,7 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
                     axum::http::header::HeaderName::from_static("x-nonce"),
                     axum::http::header::HeaderName::from_static("x-signature"),
                 ]),
-        )
-        // Add tracing layer
-        .layer(TraceLayer::new_for_http());
+        );
 
     Ok(app)
 }
@@ -372,6 +388,12 @@ pub fn init_tracing(config: &Config) {
 
     tracing_subscriber::registry()
         .with(env_filter)
-        .with(tracing_subscriber::fmt::layer().json())
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_file(true)
+                .with_line_number(true)
+                .json()
+                .flatten_event(true),
+        )
         .init();
 }
