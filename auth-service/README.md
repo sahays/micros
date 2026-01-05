@@ -81,6 +81,33 @@ docker build -t auth-service .
 docker run -p 3000:3000 --env-file .env auth-service
 ```
 
+### 3. Run with Docker Compose (Full Stack)
+
+To run the Auth Service alongside MongoDB, Redis, and the PLG Observability stack:
+
+```bash
+docker-compose up -d
+```
+
+**Port Configuration:**
+To avoid port conflicts on your host machine, you can customize the exposed ports using environment variables in a `.env` file (in the root directory) or by exporting them:
+
+```bash
+export AUTH_SERVICE_PORT=8081
+export REDIS_PORT=6380
+export MONGO_PORT=27018
+docker-compose up -d
+```
+
+Default ports:
+- Auth Service: 8080
+- MongoDB: 27017
+- Redis: 6379
+- Grafana: 3000
+- Prometheus: 9090
+- Loki: 3100
+- Promtail: 9080
+
 ## Usage Guide
 
 ### Authentication
@@ -117,7 +144,7 @@ Access the interactive documentation at:
 - [Service Integration Guide](docs/service-integration.md): How to authenticate other microservices with Auth Service.
 - [Social Login Guide](docs/social-login.md): Google OAuth 2.0 integration details.
 - [Audit Logging](docs/audit-logging.md): Events, schema, and admin access.
-- [Observability & GCP](docs/observability.md): Structured logging, tracing, and Google Cloud integration.
+- [Observability & PLG Stack](docs/observability.md): Structured logging, tracing, and PLG integration.
 
 ## Deployment
 
