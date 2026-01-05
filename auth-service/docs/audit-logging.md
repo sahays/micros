@@ -61,13 +61,16 @@ Administrators can fetch logs for specific service accounts via the Admin API.
 
 ## 4. Integration Scenarios
 
-### Scenario: Security Monitoring Dashboard
+### Scenario: Security Monitoring Dashboard (PLG)
 
 To build a dashboard showing recent suspicious activities:
 
-1.  **Ingest:** Use a log shipper (like Fluentd or Vector) to tail the application's stdout/JSON logs (see [Observability](./observability.md)).
-2.  **Filter:** Filter for `event_type` fields.
-3.  **Alert:** Set up alerts for high-frequency `user_login` events from the same IP (potential brute force) or `password_reset_confirm` (account takeover risk).
+1.  **Ingest:** Promtail automatically ships the application's JSON logs to Loki (see [Observability](./observability.md)).
+2.  **Filter:** In Grafana, use LogQL to filter for `event_type` fields.
+    ```
+    {container="auth-service"} | json | event_type="user_login"
+    ```
+3.  **Alert:** Set up Grafana Alerts based on Loki queries (e.g., high-frequency `user_login` failures from the same IP or `password_reset_confirm`).
 
 ### Scenario: Compliance Reporting
 

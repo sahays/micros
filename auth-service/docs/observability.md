@@ -1,82 +1,80 @@
-# Observability & Google Cloud Integration
+# Observability & PLG Stack
 
-The Auth Service is designed with "Observability by Default". It outputs structured JSON logs and traces compatible with Google Cloud Logging and Cloud Trace.
+The Auth Service is designed with "Observability by Default". It uses a self-hosted PLG stack (Prometheus, Loki, Grafana) for metrics and logs.
 
 ## 1. Structured Logging
 
-We use `tracing` with a JSON formatter. All logs are emitted to `stdout`.
+We use `tracing` with a JSON formatter. All logs are emitted to `stdout` and collected by Promtail. Events are flattened to the root of the JSON object for easier parsing.
 
 **Format:**
 ```json
 {
   "timestamp": "2024-01-05T12:00:00Z",
   "level": "INFO",
-  "fields": {
-    "message": "User logged in",
-    "user_id": "550e8400-...",
-    "request_id": "d290f1ee-...",
-    "service": "auth-service",
-    "environment": "prod"
-  },
-  "target": "auth_service::handlers::auth"
+  "message": "User logged in",
+  "user_id": "550e8400-...",
+  "request_id": "d290f1ee-...",
+  "service": "auth-service",
+  "environment": "prod",
+  "target": "auth_service::handlers::auth",
+  "file": "src/handlers/auth.rs",
+  "line": 42
 }
 ```
 
-### Google Cloud Logging Integration
+### PLG Stack Integration
 
-When deployed to Google Cloud (Cloud Run, GKE, or GCE):
+The stack is defined in `docker-compose.yml` and consists of:
 
-1.  **Automatic Ingestion:** The Cloud Logging agent (fluentd-based) automatically captures `stdout`.
-2.  **JSON Parsing:** GCP detects the JSON format and parses fields into `jsonPayload`.
-3.  **Searching:** You can query logs in the Logs Explorer using structured filters:
-    ```
-    jsonPayload.fields.user_id="550e8400..." AND severity="INFO"
-    ```
+1.  **Promtail:** Scrapes Docker container logs (stdout/stderr) via the Docker socket. It parses the JSON logs and extracts labels like `level`, `container`, etc.
+2.  **Loki:** Stores the log streams.
+3.  **Grafana:** Visualizes logs using the Loki datasource.
+
+**Querying Logs in Grafana:**
+Use LogQL in the Explore view:
+```
+{container="auth-service"} | json | level="INFO"
+```
 
 ## 2. Request Tracing
 
 ### X-Request-ID
 Every request is assigned a unique `X-Request-ID`.
--   If the header is present in the incoming request, it is preserved.
+-   If the header is present, it is preserved.
 -   If missing, a new UUID is generated.
 -   It is included in the response headers.
--   It is attached to every log entry within that request's scope.
+-   It is attached to the main `http_request` span and propagated to all log entries.
 
 **Scenario: Debugging a Failure**
 1.  Client reports an error with `X-Request-ID: abc-123`.
-2.  Go to Google Cloud Logging.
-3.  Query: `jsonPayload.fields.request_id="abc-123"`.
-4.  You will see all logs (Info, Warn, Error) associated with that single request flow.
+2.  Go to Grafana -> Explore -> Loki.
+3.  Query: `{container="auth-service"} | json | request_id="abc-123"`.
 
-## 3. Health Checks
+## 3. Metrics (Prometheus)
+
+The service exposes a `/metrics` endpoint compatible with Prometheus.
+
+**Exposed Metrics:**
+-   `http_requests_total{method, path, status}`: Counter of total requests.
+-   `http_request_duration_seconds{method, path, status}`: Histogram of request latency.
+
+### Prometheus Integration
+Prometheus is configured to automatically discover the service via Docker labels (`prometheus.io/scrape=true`).
+
+**Querying Metrics in Grafana:**
+-   Rate of requests: `rate(http_requests_total[5m])`
+-   99th percentile latency: `histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))`
+
+## 4. Health Checks
 
 **Endpoint:** `GET /health`
 
-Returns the status of the service and its dependencies (MongoDB, Redis).
+Returns the status of the service and dependencies (MongoDB, Redis). The Docker container uses this endpoint for its internal health check.
 
-**Response:**
-```json
-{
-  "status": "healthy",
-  "service": "auth-service",
-  "checks": {
-    "mongodb": "up",
-    "redis": "up"
-  }
-}
+## 5. Local Development
+
+To start the observability stack alongside the service:
+```bash
+docker-compose up -d
 ```
-
-### Google Cloud Monitoring (Stackdriver)
-
-Configure a **Uptime Check** in Google Cloud Monitoring pointing to `/health`.
--   **Frequency:** Every 1-5 minutes.
--   **Alerting:** Trigger an alert if status is not `200 OK` or response JSON `status` != `healthy`.
-
-## 4. Performance Metrics
-
-While current implementation focuses on logs, the `tracing` spans include duration data.
-
-**Querying Latency in Logs:**
-You can approximate latency metrics by analyzing the `http_request` span logs which record `time.busy` or duration.
-
-For dedicated metrics, future integration with `prometheus` or `opentelemetry` exporters would be required.
+Access Grafana at `http://localhost:3000` (User: `admin`, Password: `admin`).
