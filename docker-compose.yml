@@ -77,7 +77,6 @@ services:
       - PORT=3000
     depends_on:
       - mongo
-      - redis
     networks:
       - micros-net
     logging:
@@ -97,16 +96,6 @@ services:
     networks:
       - micros-net
 
-  redis:
-    image: redis:7-alpine
-    container_name: redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - micros-net
-
 networks:
   micros-net:
     driver: bridge
@@ -116,4 +105,3 @@ volumes:
   loki_data:
   grafana_data:
   mongo_data:
-  redis_data:
