@@ -40,8 +40,8 @@ services:
       - ./config/grafana/provisioning:/etc/grafana/provisioning
       - ./config/grafana/dashboards:/var/lib/grafana/dashboards
     environment:
-      - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
     ports:
       - "${GRAFANA_PORT:-3000}:3000"
     restart: unless-stopped
@@ -75,10 +75,16 @@ services:
     ports:
       - "${AUTH_SERVICE_PORT:-8080}:3000"
     environment:
-      - DATABASE_URL=mongodb://mongo:27017/auth_db
-      - REDIS_URL=redis://redis:6379/0
-      - RUST_LOG=info
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:27017}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-auth_db}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - RUST_LOG=${LOG_LEVEL:-info}
       - PORT=3000
+      - ENVIRONMENT=dev
+      - SERVICE_NAME=auth-service
+      - JWT_PRIVATE_KEY_PATH=keys/private.pem
+      - JWT_PUBLIC_KEY_PATH=keys/public.pem
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-dev-admin-key}
     labels:
       - "prometheus.io/scrape=true"
       - "prometheus.io/port=3000"
