@@ -49,6 +49,22 @@ The service follows a **Layered Architecture** to ensure separation of concerns 
 **State Management:**
 Configuration and database connections are encapsulated in a thread-safe `AppState` struct, injected into handlers via Axum's `State` extractor.
 
+## Security-First Architecture
+
+The service is built on a "Zero Trust" and "Defense in Depth" philosophy.
+
+### 1. The BFF Pattern (Backend-for-Frontend)
+Instead of exposing the Auth Service directly to browsers, we encourage using a **BFF**.
+*   **Isolation:** The BFF acts as a trusted proxy.
+*   **Request Signing:** The BFF signs requests using a shared secret (`signing_secret`), ensuring that no malicious actor can bypass the frontend logic or replay requests.
+*   **Client Registry:** Only registered BFFs (Known Clients) can interact with the system, enforced via `client_id` checks.
+
+### 2. Service Accounts & Scopes
+Internal communication follows **Least Privilege**:
+*   **No Implicit Trust:** Being on the internal network is not enough.
+*   **Scoped Access:** A "Billing Service" can be restricted to `user:read` but denied `user:write`.
+*   **Audit Trails:** Every service-to-service call is cryptographically tied to a Service ID and logged for compliance.
+
 ## Quick Start
 
 ### 1. Setup Environment
@@ -96,6 +112,7 @@ Access the interactive documentation at:
 ## Detailed Documentation
 
 - [Email/Password Auth Guide](docs/email-password-auth.md): Registration, login, and password management flows.
+- [Security Controls & Defenses](docs/security-controls.md): Rate limiting, bot protection, and client registries.
 - [BFF Request Signing Guide](docs/bff-request-signing.md): Implementation details for securing Frontend-to-Backend communication.
 - [Service Integration Guide](docs/service-integration.md): How to authenticate other microservices with Auth Service.
 - [Social Login Guide](docs/social-login.md): Google OAuth 2.0 integration details.
