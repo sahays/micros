@@ -12,6 +12,43 @@ A high-performance, secure authentication microservice built with Axum and Mongo
 - **Observability**: Structured JSON logging, health checks, and audit trails.
 - **Documentation**: Automatic OpenAPI 3.0 generation and interactive Swagger UI.
 
+## Tech Stack
+
+- **Language:** Rust (2021 Edition)
+- **Web Framework:** [Axum 0.7](https://github.com/tokio-rs/axum) - Ergonomic and modular web framework.
+- **Runtime:** [Tokio](https://tokio.rs/) - Asynchronous runtime.
+- **Database:** [MongoDB](https://www.mongodb.com/) - Primary data store for users and logs.
+- **Caching/State:** [Redis](https://redis.io/) - Used for token blacklisting and rate limiting state.
+- **Authentication:**
+    - `jsonwebtoken` for RS256 JWT handling.
+    - `argon2` for secure password hashing.
+    - `oauth2` / `reqwest` for Social Login flows.
+- **Documentation:** `utoipa` - Code-first OpenAPI/Swagger generation.
+- **Infrastructure:** Docker (Multistage builds based on `debian:bookworm-slim`).
+
+## Architecture
+
+The service follows a **Layered Architecture** to ensure separation of concerns and testability:
+
+1.  **Transport Layer (Handlers):**
+    -   Defines HTTP endpoints using Axum.
+    -   Handles request deserialization and response serialization.
+    -   Performs initial input validation.
+2.  **Middleware Layer:**
+    -   **Security:** Request signing verification, Headers (CORS, HSTS).
+    -   **Traffic Control:** Distributed rate limiting via Redis (Governor).
+    -   **Observability:** Request tracing and ID propagation.
+3.  **Service Layer:**
+    -   Contains business logic (e.g., `JwtService`, `EmailService`).
+    -   Orchestrates operations between data access and external providers.
+4.  **Data Access Layer (Models/DB):**
+    -   Type-safe interactions with MongoDB.
+    -   Defines data models (Users, Clients, Tokens).
+    -   Handles Redis interactions for ephemeral state.
+
+**State Management:**
+Configuration and database connections are encapsulated in a thread-safe `AppState` struct, injected into handlers via Axum's `State` extractor.
+
 ## Quick Start
 
 ### 1. Setup Environment
