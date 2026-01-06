@@ -14,7 +14,7 @@ COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 # Build application
 COPY . .
-RUN cargo build --release --bin auth-service
+RUN cargo build --release --bin secure-frontend
 
 # Stage 4: Runtime (The final image)
 FROM debian:bookworm-slim AS runtime
@@ -28,14 +28,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary from the builder stage
-COPY --from=builder /app/target/release/auth-service /app/auth-service
+COPY --from=builder /app/target/release/secure-frontend /usr/local/bin/secure-frontend
+
+# Copy static assets and templates if they are not embedded
+# Askama embeds templates, but static files might be needed
+RUN mkdir -p /app/secure-frontend
+COPY --from=builder /app/static /app/secure-frontend/static
+COPY --from=builder /app/config /app/secure-frontend/config
 
 # Expose the service port
-EXPOSE 3000
-
-# Set healthcheck
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/health || exit 1
+EXPOSE 8080
 
 # Run the binary
-CMD ["/app/auth-service"]
+CMD ["secure-frontend"]

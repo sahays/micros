@@ -24,6 +24,11 @@ pub async fn bot_detection_middleware(
         return Ok(next.run(request).await);
     }
 
+    // Skip Health Check
+    if request.uri().path() == "/health" {
+        return Ok(next.run(request).await);
+    }
+
     let user_agent = headers
         .get("User-Agent")
         .and_then(|h| h.to_str().ok())

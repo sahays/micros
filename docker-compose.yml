@@ -82,9 +82,21 @@ services:
       - PORT=3000
       - ENVIRONMENT=dev
       - SERVICE_NAME=auth-service
+      - SERVICE_VERSION=${SERVICE_VERSION:-0.1.0}
       - JWT_PRIVATE_KEY_PATH=keys/private.pem
       - JWT_PUBLIC_KEY_PATH=keys/public.pem
+      - JWT_ACCESS_TOKEN_EXPIRY_MINUTES=${JWT_ACCESS_TOKEN_EXPIRY_MINUTES:-15}
+      - JWT_REFRESH_TOKEN_EXPIRY_DAYS=${JWT_REFRESH_TOKEN_EXPIRY_DAYS:-7}
+      - JWT_APP_TOKEN_EXPIRY_MINUTES=${JWT_APP_TOKEN_EXPIRY_MINUTES:-60}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - GMAIL_USER=${GMAIL_USER}
+      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
       - ADMIN_API_KEY=${ADMIN_API_KEY:-dev-admin-key}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
+      - REQUIRE_SIGNATURES=${REQUIRE_SIGNATURES:-false}
+      - ENABLE_SWAGGER=${ENABLE_SWAGGER:-public}
     labels:
       - "prometheus.io/scrape=true"
       - "prometheus.io/port=3000"
@@ -94,14 +106,16 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - micros-net
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
         tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    volumes:
+      - ./auth-service/keys:/app/keys
+    networks:
+      - micros-net
 
   secure-frontend:
     build: ./secure-frontend
