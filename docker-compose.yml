@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # Observability Stack
@@ -10,9 +10,9 @@ services:
       - prometheus_data:/prometheus
       - /var/run/docker.sock:/var/run/docker.sock:ro
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=15d'
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
     ports:
       - "${PROMETHEUS_PORT:-9090}:9090"
     restart: unless-stopped
@@ -111,10 +111,10 @@ services:
     environment:
       - APP_SERVER__HOST=0.0.0.0
       - APP_SERVER__PORT=8080
-      - APP_AUTH_SERVICE__URL=${AUTH_SERVICE_URL:-http://auth-service:3000}
-      - APP_AUTH_SERVICE__CLIENT_ID=${AUTH_CLIENT_ID:-secure-frontend}
-      - APP_AUTH_SERVICE__SIGNING_SECRET=${AUTH_SIGNING_SECRET:-secret}
-      - APP_SERVER__SESSION_SECRET=${SESSION_SECRET:-secret}
+      - APP_AUTH_SERVICE__URL=${APP_AUTH_SERVICE__URL:-http://auth-service:3000}
+      - APP_AUTH_SERVICE__CLIENT_ID=${APP_AUTH_SERVICE__CLIENT_ID:-secure-frontend}
+      - APP_AUTH_SERVICE__SIGNING_SECRET=${APP_AUTH_SERVICE__SIGNING_SECRET}
+      - APP_SERVER__SESSION_SECRET=${APP_SERVER__SESSION_SECRET}
     depends_on:
       - auth-service
     networks:
