@@ -100,13 +100,43 @@ function createApiClient(): AxiosInstance {
       if (error.response?.status === 401 && !originalRequest._retry) {
         originalRequest._retry = true;
 
-        // TODO: Implement token refresh logic
-        // For now, just logout the user
-        const { logout } = useAuthStore.getState();
-        logout();
+        try {
+          // Try to refresh the token
+          const refreshToken = localStorage.getItem("refresh_token");
 
-        // Optionally redirect to login
-        // window.location.href = '/login';
+          if (refreshToken) {
+            const response = await axios.post(
+              `${API_BASE_URL}/auth/refresh`,
+              { refresh_token: refreshToken },
+            );
+
+            const { access_token, refresh_token: newRefreshToken } = response.data;
+
+            // Update tokens in store and localStorage
+            const { setUser } = useAuthStore.getState();
+            localStorage.setItem("refresh_token", newRefreshToken);
+
+            // Get updated user profile
+            const profileResponse = await axios.get(`${API_BASE_URL}/users/me`, {
+              headers: { Authorization: `Bearer ${access_token}` },
+            });
+
+            setUser(profileResponse.data);
+
+            // Retry original request with new token
+            originalRequest.headers.Authorization = `Bearer ${access_token}`;
+            return client(originalRequest);
+          }
+        } catch (refreshError) {
+          // Refresh failed, logout user
+          const { logout } = useAuthStore.getState();
+          logout();
+          localStorage.removeItem("refresh_token");
+
+          if (typeof window !== "undefined") {
+            window.location.href = "/auth/login";
+          }
+        }
 
         return Promise.reject(error);
       }
