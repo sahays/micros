@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Shield, Zap, Lock, Users, ArrowRight } from "lucide-react";
+import { Shield, Zap, Lock, ArrowRight } from "lucide-react";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { useAuth } from "@/hooks/useAuth";
 import { useEffect } from "react";
@@ -36,9 +36,7 @@ function LandingPage() {
             <div className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground text-lg font-bold">
               M
             </div>
-            <span className="text-xl font-bold text-foreground">
-              MaterialM
-            </span>
+            <span className="text-xl font-bold text-foreground">MaterialM</span>
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
@@ -61,8 +59,7 @@ function LandingPage() {
             ✨ Powered by AI & Modern Web Technologies
           </div>
           <h1 className="text-5xl md:text-7xl font-bold text-foreground leading-tight">
-            Intelligent access to{" "}
-            <span className="text-primary">1000+</span>
+            Intelligent access to <span className="text-primary">1000+</span>
             <br />
             AI-powered services
           </h1>
@@ -100,7 +97,9 @@ function LandingPage() {
               <div className="flex size-14 items-center justify-center rounded-xl bg-primary/10 mb-4 group-hover:bg-primary/20 transition-colors">
                 <Shield className="size-7 text-primary" />
               </div>
-              <CardTitle className="text-xl">Enterprise-grade security</CardTitle>
+              <CardTitle className="text-xl">
+                Enterprise-grade security
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">
@@ -115,7 +114,9 @@ function LandingPage() {
               <div className="flex size-14 items-center justify-center rounded-xl bg-primary/10 mb-4 group-hover:bg-primary/20 transition-colors">
                 <Zap className="size-7 text-primary" />
               </div>
-              <CardTitle className="text-xl">Lightning-fast authentication</CardTitle>
+              <CardTitle className="text-xl">
+                Lightning-fast authentication
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">
@@ -150,7 +151,9 @@ function LandingPage() {
               <div className="flex size-8 items-center justify-center rounded-md bg-primary text-primary-foreground text-lg font-bold">
                 M
               </div>
-              <span className="text-lg font-bold text-foreground">MaterialM</span>
+              <span className="text-lg font-bold text-foreground">
+                MaterialM
+              </span>
             </div>
             <p className="text-sm text-muted-foreground">
               Built with React 19, TanStack Router, and Tailwind CSS v4

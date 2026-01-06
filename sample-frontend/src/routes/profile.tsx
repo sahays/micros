@@ -16,7 +16,10 @@ import {
 } from "@/components/ui/form";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useAuth } from "@/hooks/useAuth";
-import { updateProfileSchema, type UpdateProfileFormData } from "@/lib/validations/auth";
+import {
+  updateProfileSchema,
+  type UpdateProfileFormData,
+} from "@/lib/validations/auth";
 import { authService } from "@/services/authService";
 import { useState } from "react";
 import { CheckCircle2, AlertCircle, User as UserIcon } from "lucide-react";
@@ -83,19 +86,26 @@ function ProfilePage() {
 
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-foreground">Profile Information</CardTitle>
+            <CardTitle className="text-foreground">
+              Profile Information
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Avatar Section */}
             <div className="flex items-center gap-4">
               <Avatar className="size-20">
                 <AvatarFallback className="bg-primary text-primary-foreground text-2xl">
-                  {profile?.name?.[0]?.toUpperCase() || profile?.email?.[0]?.toUpperCase() || <UserIcon />}
+                  {profile?.name?.[0]?.toUpperCase() ||
+                    profile?.email?.[0]?.toUpperCase() || <UserIcon />}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <h3 className="font-semibold text-lg">{profile?.name || "User"}</h3>
-                <p className="text-sm text-muted-foreground">{profile?.email}</p>
+                <h3 className="font-semibold text-lg">
+                  {profile?.name || "User"}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {profile?.email}
+                </p>
               </div>
             </div>
 
@@ -116,7 +126,10 @@ function ProfilePage() {
 
             {/* Edit Form */}
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="space-y-4"
+              >
                 <FormField
                   control={form.control}
                   name="name"
@@ -138,7 +151,11 @@ function ProfilePage() {
                     <FormItem>
                       <FormLabel>Email</FormLabel>
                       <FormControl>
-                        <Input type="email" placeholder="you@example.com" {...field} />
+                        <Input
+                          type="email"
+                          placeholder="you@example.com"
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -173,21 +190,27 @@ function ProfilePage() {
           <CardContent className="space-y-3">
             <div className="flex justify-between items-center py-2 border-b">
               <span className="text-sm font-medium">User ID</span>
-              <span className="text-sm text-muted-foreground">{profile?.id}</span>
+              <span className="text-sm text-muted-foreground">
+                {profile?.id}
+              </span>
             </div>
             <div className="flex justify-between items-center py-2 border-b">
               <span className="text-sm font-medium">Email Verified</span>
-              <span className={cn(
-                "text-sm font-medium",
-                profile?.verified ? "text-success" : "text-warning"
-              )}>
+              <span
+                className={cn(
+                  "text-sm font-medium",
+                  profile?.verified ? "text-success" : "text-warning",
+                )}
+              >
                 {profile?.verified ? "Yes" : "Pending"}
               </span>
             </div>
             <div className="flex justify-between items-center py-2">
               <span className="text-sm font-medium">Member Since</span>
               <span className="text-sm text-muted-foreground">
-                {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : "N/A"}
+                {profile?.created_at
+                  ? new Date(profile.created_at).toLocaleDateString()
+                  : "N/A"}
               </span>
             </div>
           </CardContent>

@@ -106,9 +106,7 @@ export function Header({
             </DropdownMenuItem>
             <DropdownMenuItem>Settings</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-error">
-              Logout
-            </DropdownMenuItem>
+            <DropdownMenuItem className="text-error">Logout</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

@@ -23,7 +23,12 @@ export function AuthCard({
         <div className="absolute left-0 right-0 top-0 -z-10 m-auto h-[500px] w-[500px] rounded-full bg-primary/10 blur-[150px]" />
       </div>
 
-      <Card className={cn("w-full max-w-md bg-card border-border material-shadow", className)}>
+      <Card
+        className={cn(
+          "w-full max-w-md bg-card border-border material-shadow",
+          className,
+        )}
+      >
         {(title || description) && (
           <CardHeader className="space-y-1 text-center">
             {title && (
@@ -34,9 +39,7 @@ export function AuthCard({
               </div>
             )}
             {title && (
-              <h1 className="text-2xl font-bold text-foreground">
-                {title}
-              </h1>
+              <h1 className="text-2xl font-bold text-foreground">{title}</h1>
             )}
             {description && (
               <p className="text-sm text-muted-foreground">{description}</p>

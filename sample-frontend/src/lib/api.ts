@@ -3,7 +3,8 @@ import CryptoJS from "crypto-js";
 import { useAuthStore } from "@/stores/useAuthStore";
 
 // Environment configuration
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 const CLIENT_ID = import.meta.env.VITE_CLIENT_ID || "";
 const SIGNING_SECRET = import.meta.env.VITE_SIGNING_SECRET || "";
 
@@ -105,21 +106,24 @@ function createApiClient(): AxiosInstance {
           const refreshToken = localStorage.getItem("refresh_token");
 
           if (refreshToken) {
-            const response = await axios.post(
-              `${API_BASE_URL}/auth/refresh`,
-              { refresh_token: refreshToken },
-            );
+            const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+              refresh_token: refreshToken,
+            });
 
-            const { access_token, refresh_token: newRefreshToken } = response.data;
+            const { access_token, refresh_token: newRefreshToken } =
+              response.data;
 
             // Update tokens in store and localStorage
             const { setUser } = useAuthStore.getState();
             localStorage.setItem("refresh_token", newRefreshToken);
 
             // Get updated user profile
-            const profileResponse = await axios.get(`${API_BASE_URL}/users/me`, {
-              headers: { Authorization: `Bearer ${access_token}` },
-            });
+            const profileResponse = await axios.get(
+              `${API_BASE_URL}/users/me`,
+              {
+                headers: { Authorization: `Bearer ${access_token}` },
+              },
+            );
 
             setUser(profileResponse.data);
 

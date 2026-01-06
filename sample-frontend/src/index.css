@@ -15,7 +15,7 @@
 /* Light Mode (Default) */
 :root {
   /* Primary Accent - Emerald Green */
-  --color-primary: #00D4AA;
+  --color-primary: #00d4aa;
   --color-primary-foreground: #ffffff;
   --color-primary-hover: #00c19a;
 
@@ -41,7 +41,7 @@
   /* UI Elements */
   --color-border: #e4e4e7;
   --color-input: #e4e4e7;
-  --color-ring: #00D4AA;
+  --color-ring: #00d4aa;
   --color-muted: #f4f4f5;
   --color-accent: #f4f4f5;
   --color-accent-foreground: #18181b;
@@ -52,7 +52,7 @@
 /* Dark Mode */
 .dark {
   /* Primary Accent - Emerald Green (same in both modes) */
-  --color-primary: #00D4AA;
+  --color-primary: #00d4aa;
   --color-primary-foreground: #ffffff;
   --color-primary-hover: #00c19a;
 
@@ -78,7 +78,7 @@
   /* UI Elements */
   --color-border: #3f3f46;
   --color-input: #27272a;
-  --color-ring: #00D4AA;
+  --color-ring: #00d4aa;
   --color-muted: #27272a;
   --color-accent: #27272a;
   --color-accent-foreground: #fafafa;
@@ -96,7 +96,9 @@
 }
 
 * {
-  transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out;
+  transition:
+    background-color 0.2s ease-in-out,
+    border-color 0.2s ease-in-out;
 }
 
 body {

@@ -36,7 +36,8 @@ function Dashboard() {
             <CardContent>
               <div className="text-3xl font-bold text-foreground">24</div>
               <p className="text-sm text-muted-foreground mt-1">
-                <span className="text-primary font-medium">+12%</span> from last month
+                <span className="text-primary font-medium">+12%</span> from last
+                month
               </p>
             </CardContent>
           </Card>
@@ -123,9 +124,7 @@ function Dashboard() {
               <CardTitle className="text-foreground">Notifications</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-muted-foreground">
-                You're all caught up!
-              </p>
+              <p className="text-muted-foreground">You're all caught up!</p>
             </CardContent>
           </Card>
         </div>

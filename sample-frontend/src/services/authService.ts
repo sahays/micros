@@ -1,4 +1,4 @@
-import { apiClient, ApiResponse } from "@/lib/api";
+import { apiClient } from "@/lib/api";
 import type { LoginFormData, RegisterFormData } from "@/lib/validations/auth";
 
 export interface LoginResponse {
@@ -23,22 +23,16 @@ export interface User {
 
 export const authService = {
   async login(data: LoginFormData): Promise<LoginResponse> {
-    const response = await apiClient.post<LoginResponse>(
-      "/auth/login",
-      data,
-    );
+    const response = await apiClient.post<LoginResponse>("/auth/login", data);
     return response.data;
   },
 
   async register(data: RegisterFormData): Promise<RegisterResponse> {
-    const response = await apiClient.post<RegisterResponse>(
-      "/auth/register",
-      {
-        email: data.email,
-        password: data.password,
-        name: data.name,
-      },
-    );
+    const response = await apiClient.post<RegisterResponse>("/auth/register", {
+      email: data.email,
+      password: data.password,
+      name: data.name,
+    });
     return response.data;
   },
 
