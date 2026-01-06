@@ -20,6 +20,7 @@ use tracing::info;
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
     init_tracing();
+    secure_frontend::services::metrics::init_metrics();
 
     let configuration = get_configuration().expect("Failed to read configuration.");
 
@@ -34,6 +35,7 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/", get(index))
         .route("/health", get(health_check))
+        .route("/metrics", get(secure_frontend::handlers::metrics::metrics))
         .route("/login", get(login_page).post(login_handler))
         .route("/register", get(register_page).post(register_handler))
         .route("/logout", get(logout_handler))
@@ -67,6 +69,9 @@ async fn main() -> anyhow::Result<()> {
         )
         .nest_service("/static", ServeDir::new("secure-frontend/static"))
         .layer(session_layer)
+        .layer(axum::middleware::from_fn(
+            secure_frontend::middleware::metrics::metrics_middleware,
+        ))
         .with_state(auth_client);
 
     let address = format!(

@@ -25,7 +25,7 @@ pub async fn bot_detection_middleware(
     }
 
     // Skip Health Check
-    if request.uri().path() == "/health" {
+    if request.uri().path() == "/health" || request.uri().path() == "/metrics" {
         return Ok(next.run(request).await);
     }
 
