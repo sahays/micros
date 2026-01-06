@@ -5,6 +5,7 @@ import { useMutation } from "@tanstack/react-query";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { Button } from "@/components/ui/button";
 import { PasswordInput } from "@/components/auth/PasswordInput";
+import axios from "axios";
 import {
   Form,
   FormControl,
@@ -135,8 +136,10 @@ function ResetPasswordPage() {
           <div className="flex items-center gap-2 rounded-lg bg-error/10 p-3 text-sm text-error">
             <AlertCircle className="size-4 shrink-0" />
             <p>
-              {(mutation.error as any)?.response?.data?.message ||
-                "Failed to reset password. The link may be expired."}
+              {axios.isAxiosError(mutation.error)
+                ? mutation.error.response?.data?.message ||
+                  "Failed to reset password. The link may be expired."
+                : "Failed to reset password. The link may be expired."}
             </p>
           </div>
         )}

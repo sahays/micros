@@ -7,6 +7,7 @@ import { PasswordInput } from "@/components/auth/PasswordInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import axios from "axios";
 import {
   Form,
   FormControl,
@@ -54,13 +55,15 @@ function LoginPage() {
         }
 
         navigate({ to: "/dashboard" });
-      } catch (err) {
+      } catch {
         setError("Login successful but failed to load profile");
       }
     },
-    onError: (err: any) => {
-      const message =
-        err.response?.data?.message || "Invalid email or password";
+    onError: (err) => {
+      let message = "Invalid email or password";
+      if (axios.isAxiosError(err)) {
+        message = err.response?.data?.message || message;
+      }
       setError(message);
     },
   });
@@ -84,10 +87,12 @@ function LoginPage() {
 
       // Redirect to Google OAuth
       window.location.href = authorization_url;
-    } catch (err: any) {
+    } catch (err) {
       setIsGoogleLoading(false);
-      const message =
-        err.response?.data?.message || "Failed to initiate Google sign-in";
+      let message = "Failed to initiate Google sign-in";
+      if (axios.isAxiosError(err)) {
+        message = err.response?.data?.message || message;
+      }
       setError(message);
     }
   };

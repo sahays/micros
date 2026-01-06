@@ -24,6 +24,7 @@ import { authService } from "@/services/authService";
 import { useState } from "react";
 import { CheckCircle2, AlertCircle, User as UserIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import axios from "axios";
 
 export const Route = createFileRoute("/profile")({
   component: ProfilePage,
@@ -59,8 +60,11 @@ function ProfilePage() {
       setErrorMessage("");
       setTimeout(() => setSuccessMessage(""), 3000);
     },
-    onError: (err: any) => {
-      const message = err.response?.data?.message || "Failed to update profile";
+    onError: (err) => {
+      let message = "Failed to update profile";
+      if (axios.isAxiosError(err)) {
+        message = err.response?.data?.message || message;
+      }
       setErrorMessage(message);
       setSuccessMessage("");
     },

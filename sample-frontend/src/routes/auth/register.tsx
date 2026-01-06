@@ -7,6 +7,7 @@ import { PasswordInput } from "@/components/auth/PasswordInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import axios from "axios";
 import {
   Form,
   FormControl,
@@ -49,9 +50,11 @@ function RegisterPage() {
         navigate({ to: "/auth/login" });
       }, 3000);
     },
-    onError: (err: any) => {
-      const message =
-        err.response?.data?.message || "Registration failed. Please try again.";
+    onError: (err) => {
+      let message = "Registration failed. Please try again.";
+      if (axios.isAxiosError(err)) {
+        message = err.response?.data?.message || message;
+      }
       setError(message);
     },
   });
@@ -75,10 +78,12 @@ function RegisterPage() {
 
       // Redirect to Google OAuth
       window.location.href = authorization_url;
-    } catch (err: any) {
+    } catch (err) {
       setIsGoogleLoading(false);
-      const message =
-        err.response?.data?.message || "Failed to initiate Google sign-in";
+      let message = "Failed to initiate Google sign-in";
+      if (axios.isAxiosError(err)) {
+        message = err.response?.data?.message || message;
+      }
       setError(message);
     }
   };

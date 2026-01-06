@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { authService } from "@/services/authService";
+import axios from "axios";
 
 export const Route = createFileRoute("/auth/verify")({
   component: VerifyPage,
@@ -91,8 +92,10 @@ function VerifyPage() {
               Verification Failed
             </h2>
             <p className="text-sm text-muted-foreground">
-              {(error as any)?.response?.data?.message ||
-                "Invalid or expired verification token."}
+              {axios.isAxiosError(error)
+                ? error.response?.data?.message ||
+                  "Invalid or expired verification token."
+                : "Invalid or expired verification token."}
             </p>
             <p className="text-sm text-muted-foreground pt-4">
               Please request a new verification email.

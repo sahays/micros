@@ -75,7 +75,7 @@ function createApiClient(): AxiosInstance {
             originalRequest.headers.Authorization = `Bearer ${access_token}`;
             return client(originalRequest);
           }
-        } catch (refreshError) {
+        } catch {
           // Refresh failed, logout user
           const { logout } = useAuthStore.getState();
           logout();
@@ -100,7 +100,7 @@ function createApiClient(): AxiosInstance {
 export const apiClient = createApiClient();
 
 // Export types for API responses
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   data: T;
   message?: string;
   success: boolean;
@@ -109,5 +109,5 @@ export interface ApiResponse<T = any> {
 export interface ApiError {
   message: string;
   code?: string;
-  details?: any;
+  details?: unknown;
 }
