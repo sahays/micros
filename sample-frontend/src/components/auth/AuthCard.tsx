@@ -16,8 +16,14 @@ export function AuthCard({
   className,
 }: AuthCardProps) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 p-4">
-      <Card className={cn("w-full max-w-md material-shadow", className)}>
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      {/* Background Pattern */}
+      <div className="fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px]" />
+        <div className="absolute left-0 right-0 top-0 -z-10 m-auto h-[500px] w-[500px] rounded-full bg-primary/10 blur-[150px]" />
+      </div>
+
+      <Card className={cn("w-full max-w-md bg-card border-border material-shadow", className)}>
         {(title || description) && (
           <CardHeader className="space-y-1 text-center">
             {title && (
@@ -28,7 +34,7 @@ export function AuthCard({
               </div>
             )}
             {title && (
-              <h1 className="text-2xl font-bold text-sidebar-foreground">
+              <h1 className="text-2xl font-bold text-foreground">
                 {title}
               </h1>
             )}

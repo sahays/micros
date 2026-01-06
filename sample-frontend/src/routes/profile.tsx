@@ -73,17 +73,17 @@ function ProfilePage() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-6 max-w-2xl">
+      <div className="space-y-8 max-w-2xl">
         <div>
-          <h1 className="text-3xl font-bold text-sidebar-foreground">Profile</h1>
-          <p className="text-muted-foreground mt-2">
+          <h1 className="text-4xl font-bold text-foreground">Profile</h1>
+          <p className="text-muted-foreground mt-3 text-lg">
             Manage your account information
           </p>
         </div>
 
-        <Card>
+        <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle>Profile Information</CardTitle>
+            <CardTitle className="text-foreground">Profile Information</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Avatar Section */}
@@ -166,9 +166,9 @@ function ProfilePage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle>Account Details</CardTitle>
+            <CardTitle className="text-foreground">Account Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex justify-between items-center py-2 border-b">

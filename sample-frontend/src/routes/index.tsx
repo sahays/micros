@@ -58,17 +58,17 @@ function LandingPage() {
       <section className="container mx-auto px-4 py-20 md:py-32">
         <div className="max-w-4xl mx-auto text-center space-y-8">
           <div className="inline-block rounded-full px-4 py-1.5 bg-primary/10 border border-primary/20 text-primary text-sm font-medium mb-4">
-            ✨ Powered by React 19 & Modern Web Technologies
+            ✨ Powered by AI & Modern Web Technologies
           </div>
           <h1 className="text-5xl md:text-7xl font-bold text-foreground leading-tight">
-            Simple exchange{" "}
-            <span className="text-primary">733+</span>
+            Intelligent access to{" "}
+            <span className="text-primary">1000+</span>
             <br />
-            cryptocurrencies
+            AI-powered services
           </h1>
           <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto">
-            Fast crypto swaps with Web3 connection. Enterprise-grade security
-            with modern authentication.
+            Secure authentication for AI applications. Enterprise-grade security
+            with intelligent user management.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center pt-6">
             <Link to="/auth/register">
@@ -100,12 +100,12 @@ function LandingPage() {
               <div className="flex size-14 items-center justify-center rounded-xl bg-primary/10 mb-4 group-hover:bg-primary/20 transition-colors">
                 <Shield className="size-7 text-primary" />
               </div>
-              <CardTitle className="text-xl">Fastest 2-10 min exchanges</CardTitle>
+              <CardTitle className="text-xl">Enterprise-grade security</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">
-                MaterialM has established itself as one of the fastest providers,
-                so your swaps will be instant.
+                HMAC request signing, JWT tokens, and intelligent rate limiting
+                protect your AI services.
               </p>
             </CardContent>
           </Card>
@@ -115,12 +115,12 @@ function LandingPage() {
               <div className="flex size-14 items-center justify-center rounded-xl bg-primary/10 mb-4 group-hover:bg-primary/20 transition-colors">
                 <Zap className="size-7 text-primary" />
               </div>
-              <CardTitle className="text-xl">High exchange limits</CardTitle>
+              <CardTitle className="text-xl">Lightning-fast authentication</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">
-                The platform has secured the opportunity for extremely large
-                swaps, finding our limits is hard.
+                Built with React 19 and modern web technologies for instant,
+                seamless authentication experiences.
               </p>
             </CardContent>
           </Card>
@@ -128,14 +128,14 @@ function LandingPage() {
           <Card className="bg-card border-border hover:border-primary/30 transition-all group">
             <CardHeader>
               <div className="flex size-14 items-center justify-center rounded-xl bg-primary/10 mb-4 group-hover:bg-primary/20 transition-colors">
-                <Users className="size-7 text-primary" />
+                <Lock className="size-7 text-primary" />
               </div>
-              <CardTitle className="text-xl">Online support 24/7</CardTitle>
+              <CardTitle className="text-xl">OAuth & social auth</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground">
-                Our users have the ability to contact our experts for support
-                through any convenient means.
+                Integrated Google OAuth with PKCE, plus email verification and
+                password reset flows.
               </p>
             </CardContent>
           </Card>

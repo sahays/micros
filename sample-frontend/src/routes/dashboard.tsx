@@ -13,74 +13,82 @@ function Dashboard() {
 
   return (
     <ProtectedRoute>
-      <div className="space-y-6">
+      <div className="space-y-8">
         <div>
-          <h1 className="text-3xl font-bold text-sidebar-foreground">
+          <h1 className="text-4xl font-bold text-foreground">
             Welcome back, {user?.name || user?.email || "User"}!
           </h1>
-          <p className="text-muted-foreground mt-2">
+          <p className="text-muted-foreground mt-3 text-lg">
             Here's what's happening with your account today
           </p>
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
-          <Card>
+          <Card className="bg-card border-border hover:border-primary/30 transition-all">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
+              <CardTitle className="text-sm font-medium text-foreground">
                 Total Activity
               </CardTitle>
-              <Activity className="size-4 text-muted-foreground" />
+              <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10">
+                <Activity className="size-5 text-primary" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">24</div>
-              <p className="text-xs text-muted-foreground">
-                +12% from last month
+              <div className="text-3xl font-bold text-foreground">24</div>
+              <p className="text-sm text-muted-foreground mt-1">
+                <span className="text-primary font-medium">+12%</span> from last month
               </p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-card border-border hover:border-primary/30 transition-all">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
+              <CardTitle className="text-sm font-medium text-foreground">
                 Active Sessions
               </CardTitle>
-              <Users className="size-4 text-muted-foreground" />
+              <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10">
+                <Users className="size-5 text-primary" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">1</div>
-              <p className="text-xs text-muted-foreground">
+              <div className="text-3xl font-bold text-foreground">1</div>
+              <p className="text-sm text-muted-foreground mt-1">
                 Current device
               </p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-card border-border hover:border-primary/30 transition-all">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
+              <CardTitle className="text-sm font-medium text-foreground">
                 Account Status
               </CardTitle>
-              <TrendingUp className="size-4 text-muted-foreground" />
+              <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10">
+                <TrendingUp className="size-5 text-primary" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-3xl font-bold text-foreground">
                 {user?.verified ? "Verified" : "Pending"}
               </div>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground mt-1">
                 Email verification status
               </p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-card border-border hover:border-primary/30 transition-all">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
+              <CardTitle className="text-sm font-medium text-foreground">
                 Last Login
               </CardTitle>
-              <Clock className="size-4 text-muted-foreground" />
+              <div className="flex size-10 items-center justify-center rounded-lg bg-primary/10">
+                <Clock className="size-5 text-primary" />
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">Now</div>
-              <p className="text-xs text-muted-foreground">
+              <div className="text-3xl font-bold text-foreground">Now</div>
+              <p className="text-sm text-muted-foreground mt-1">
                 Current session
               </p>
             </CardContent>
@@ -88,34 +96,34 @@ function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <Card>
+          <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
+              <CardTitle className="text-foreground">Quick Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-muted-foreground">
                 Manage your account settings and preferences
               </p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
+              <CardTitle className="text-foreground">Recent Activity</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-muted-foreground">
                 No recent activity to display
               </p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-card border-border">
             <CardHeader>
-              <CardTitle>Notifications</CardTitle>
+              <CardTitle className="text-foreground">Notifications</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-muted-foreground">
                 You're all caught up!
               </p>
             </CardContent>
