@@ -3,53 +3,11 @@ import { createHmac, createHash, randomBytes } from "node:crypto";
 
 const AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || "http://localhost:8080";
 const CLIENT_ID = process.env.CLIENT_ID;
-const CLIENT_SECRET = process.env.CLIENT_SECRET;
 const SIGNING_SECRET = process.env.SIGNING_SECRET;
-
-let appToken: string | null = null;
-let appTokenExpiry: number = 0;
-
-async function getAppToken(): Promise<string | null> {
-  if (!CLIENT_ID || !CLIENT_SECRET) {
-    return null;
-  }
-
-  const now = Date.now() / 1000;
-  if (appToken && now < appTokenExpiry - 60) {
-    return appToken;
-  }
-
-  try {
-    const res = await fetch(`${AUTH_SERVICE_URL}/auth/app/token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        client_id: CLIENT_ID,
-        client_secret: CLIENT_SECRET,
-        grant_type: "client_credentials",
-      }),
-    });
-
-    if (!res.ok) {
-        // Log but don't crash, maybe signing is enough
-        console.warn("Failed to get app token:", await res.text());
-        return null;
-    }
-
-    const data = await res.json() as { access_token: string; expires_in?: number };
-    appToken = data.access_token;
-    appTokenExpiry = now + (data.expires_in || 3600);
-    console.log("Acquired new App Token");
-    return appToken;
-  } catch (error) {
-    console.error("Error fetching app token:", error);
-    return null;
-  }
-}
 
 const server = Bun.serve({
   port: process.env.PORT || 3000,
-  async fetch(req) {
+  async fetch(req, server) {
     const url = new URL(req.url);
     
     // API Proxy
@@ -63,15 +21,20 @@ const server = Bun.serve({
         const bodyBufferNode = Buffer.from(bodyBuffer);
 
         const headers = new Headers(req.headers);
+        const originalHost = headers.get("host");
         headers.delete("host");
 
-        // 1. App Token Injection (Optional but implemented)
-        const appToken = await getAppToken();
-        if (appToken) {
-            headers.set("X-App-Token", appToken);
+        // Forward Client Context
+        const clientIp = server.requestIP(req)?.address;
+        if (clientIp) {
+            headers.set("X-Forwarded-For", clientIp);
         }
+        if (originalHost) {
+            headers.set("X-Forwarded-Host", originalHost);
+        }
+        headers.set("X-Forwarded-Proto", url.protocol.replace(":", ""));
 
-        // 2. Request Signing
+        // Request Signing
         if (CLIENT_ID && SIGNING_SECRET) {
             const timestamp = Math.floor(Date.now() / 1000).toString(); // Seconds
             const nonce = randomBytes(16).toString("hex");
@@ -96,7 +59,7 @@ const server = Bun.serve({
             const proxyRes = await fetch(targetUrl, {
                 method: req.method,
                 headers: headers,
-                body: bodyBuffer, // Forward the buffer
+                body: bodyBufferNode, // Forward the buffer
                 redirect: "manual"
             });
             

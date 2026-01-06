@@ -109,11 +109,23 @@ pub async fn ip_rate_limit_middleware(
     request: Request,
     next: Next,
 ) -> Response {
-    // Extract IP from extensions (populated by ConnectInfo)
-    let addr = request
-        .extensions()
-        .get::<axum::extract::ConnectInfo<SocketAddr>>()
-        .map(|axum::extract::ConnectInfo(addr)| *addr);
+    // 1. Try to get IP from X-Forwarded-For
+    let forwarded_ip = request
+        .headers()
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next()) // Get first IP
+        .and_then(|s| s.trim().parse::<std::net::IpAddr>().ok());
+
+    let addr = if let Some(ip) = forwarded_ip {
+        Some(SocketAddr::new(ip, 0))
+    } else {
+        // 2. Fallback to direct connection IP
+        request
+            .extensions()
+            .get::<axum::extract::ConnectInfo<SocketAddr>>()
+            .map(|axum::extract::ConnectInfo(addr)| *addr)
+    };
 
     match addr {
         Some(addr) => match limiter.check_key(&addr) {
