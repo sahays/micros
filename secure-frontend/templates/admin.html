@@ -1,0 +1,62 @@
+{% extends "layout.html" %}
+
+{% block title %}Admin Dashboard - Secure Frontend{% endblock %}
+
+{% block content %}
+<div class="py-12">
+    <div class="flex justify-between items-end mb-12">
+        <div>
+            <h1 class="text-4xl font-bold tracking-tight">Admin Console</h1>
+            <p class="text-zinc-400">Manage platform services and user accounts.</p>
+        </div>
+        <div class="flex gap-4">
+            <a href="/dashboard" class="glass-panel px-6 py-3 rounded-xl hover:bg-white/5 transition-all font-medium">
+                Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 gap-12">
+        <!-- Service Accounts Section -->
+        <div class="glass-panel p-8 rounded-3xl">
+            <div class="flex justify-between items-center mb-8">
+                <h3 class="text-2xl font-bold flex items-center gap-3">
+                    <span class="w-2 h-2 bg-blue-500 rounded-full"></span>
+                    Service Accounts
+                </h3>
+                <button hx-get="/admin/services/new" hx-target="#admin-modal"
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-xl font-bold transition-all text-sm">
+                    + New Service
+                </button>
+            </div>
+
+            <div id="service-list" hx-get="/admin/services/list" hx-trigger="load" class="space-y-4">
+                <div class="animate-pulse flex space-x-4">
+                    <div class="flex-1 space-y-4 py-1">
+                        <div class="h-4 bg-white/5 rounded w-3/4"></div>
+                        <div class="space-y-2">
+                            <div class="h-4 bg-white/5 rounded"></div>
+                            <div class="h-4 bg-white/5 rounded w-5/6"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Users Section -->
+        <div class="glass-panel p-8 rounded-3xl">
+            <h3 class="text-2xl font-bold mb-8 flex items-center gap-3">
+                <span class="w-2 h-2 bg-purple-500 rounded-full"></span>
+                User Management
+            </h3>
+            <div id="user-list" hx-get="/admin/users/list" hx-trigger="load" class="space-y-4">
+                <!-- User list will be loaded here -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="admin-modal" class="fixed inset-0 z-[100] hidden flex items-center justify-center p-6 bg-black/80 backdrop-blur-sm">
+    <!-- Modal content will be injected here -->
+</div>
+{% endblock %}

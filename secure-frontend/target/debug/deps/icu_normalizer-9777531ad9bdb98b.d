@@ -1,0 +1,8 @@
+/home/admin_sanjeetsahay_altostrat_com/micros/secure-frontend/target/debug/deps/icu_normalizer-9777531ad9bdb98b.d: /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/lib.rs /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/properties.rs /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/provider.rs /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/uts46.rs
+
+/home/admin_sanjeetsahay_altostrat_com/micros/secure-frontend/target/debug/deps/libicu_normalizer-9777531ad9bdb98b.rmeta: /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/lib.rs /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/properties.rs /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/provider.rs /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/uts46.rs
+
+/home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/lib.rs:
+/home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/properties.rs:
+/home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/provider.rs:
+/home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/icu_normalizer-2.1.1/src/uts46.rs:

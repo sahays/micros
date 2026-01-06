@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+
+{% block title %}Login - Secure Frontend{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto mt-20">
+    <div class="glass-panel p-10 rounded-3xl shadow-2xl">
+        <h2 class="text-3xl font-bold mb-2">Welcome Back</h2>
+        <p class="text-zinc-400 mb-8">Enter your credentials to access your secure dashboard.</p>
+        
+        <form hx-post="/login" hx-target="#login-message" hx-indicator="#loading" class="space-y-6">
+            <div>
+                <label for="email" class="block text-sm font-medium text-zinc-300 mb-2">Email Address</label>
+                <input type="email" name="email" id="email" required
+                    class="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                    placeholder="name@example.com">
+            </div>
+            <div>
+                <label for="password" class="block text-sm font-medium text-zinc-300 mb-2">Password</label>
+                <input type="password" name="password" id="password" required
+                    class="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                    placeholder="••••••••">
+            </div>
+            
+            <div id="login-message"></div>
+
+            <button type="submit" 
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-all flex justify-center items-center gap-3">
+                <span>Sign In</span>
+                <div id="loading" class="htmx-indicator">
+                    <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                </div>
+            </button>
+        </form>
+
+        <p class="mt-8 text-center text-sm text-zinc-500">
+            Don't have an account? <a href="/register" class="text-blue-400 hover:underline">Create one</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

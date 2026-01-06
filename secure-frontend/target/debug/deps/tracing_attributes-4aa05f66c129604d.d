@@ -1,0 +1,7 @@
+/home/admin_sanjeetsahay_altostrat_com/micros/secure-frontend/target/debug/deps/tracing_attributes-4aa05f66c129604d.d: /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-attributes-0.1.31/src/lib.rs /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-attributes-0.1.31/src/attr.rs /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-attributes-0.1.31/src/expand.rs
+
+/home/admin_sanjeetsahay_altostrat_com/micros/secure-frontend/target/debug/deps/libtracing_attributes-4aa05f66c129604d.so: /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-attributes-0.1.31/src/lib.rs /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-attributes-0.1.31/src/attr.rs /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-attributes-0.1.31/src/expand.rs
+
+/home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-attributes-0.1.31/src/lib.rs:
+/home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-attributes-0.1.31/src/attr.rs:
+/home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tracing-attributes-0.1.31/src/expand.rs:

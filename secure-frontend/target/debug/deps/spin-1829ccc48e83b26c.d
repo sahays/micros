@@ -1,0 +1,8 @@
+/home/admin_sanjeetsahay_altostrat_com/micros/secure-frontend/target/debug/deps/spin-1829ccc48e83b26c.d: /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/spin-0.9.8/src/lib.rs /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/spin-0.9.8/src/mutex.rs /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/spin-0.9.8/src/mutex/spin.rs /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/spin-0.9.8/src/relax.rs
+
+/home/admin_sanjeetsahay_altostrat_com/micros/secure-frontend/target/debug/deps/libspin-1829ccc48e83b26c.rmeta: /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/spin-0.9.8/src/lib.rs /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/spin-0.9.8/src/mutex.rs /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/spin-0.9.8/src/mutex/spin.rs /home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/spin-0.9.8/src/relax.rs
+
+/home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/spin-0.9.8/src/lib.rs:
+/home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/spin-0.9.8/src/mutex.rs:
+/home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/spin-0.9.8/src/mutex/spin.rs:
+/home/admin_sanjeetsahay_altostrat_com/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/spin-0.9.8/src/relax.rs:

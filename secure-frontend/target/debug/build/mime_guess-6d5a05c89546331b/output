@@ -1,0 +1,1 @@
+cargo:rustc-env=MIME_TYPES_GENERATED_PATH=/home/admin_sanjeetsahay_altostrat_com/micros/secure-frontend/target/debug/build/mime_guess-6d5a05c89546331b/out/mime_types_generated.rs
