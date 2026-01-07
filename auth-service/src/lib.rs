@@ -11,6 +11,9 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use opentelemetry::KeyValue;
+use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::{runtime, trace as sdktrace, Resource};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa::{
@@ -391,8 +394,25 @@ pub fn init_tracing(config: &Config) {
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&config.log_level));
 
+    let otlp_exporter = opentelemetry_otlp::new_exporter()
+        .tonic()
+        .with_endpoint("http://tempo:4317");
+
+    let tracer =
+        opentelemetry_otlp::new_pipeline()
+            .tracing()
+            .with_exporter(otlp_exporter)
+            .with_trace_config(sdktrace::config().with_resource(Resource::new(vec![
+                KeyValue::new("service.name", config.service_name.clone()),
+            ])))
+            .install_batch(runtime::Tokio)
+            .expect("Failed to initialize OTLP tracer");
+
+    let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+
     tracing_subscriber::registry()
         .with(env_filter)
+        .with(telemetry)
         .with(
             tracing_subscriber::fmt::layer()
                 .with_file(true)

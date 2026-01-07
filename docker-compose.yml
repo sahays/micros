@@ -32,6 +32,23 @@ services:
     networks:
       - micros-net
 
+  tempo:
+    image: grafana/tempo:latest
+    container_name: tempo
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    volumes:
+      - ./config/tempo/tempo.yaml:/etc/tempo.yaml
+      - tempo_data:/tmp/tempo
+    ports:
+      - "14268:14268"  # jaeger ingest
+      - "3200:3200"    # tempo
+      - "4317:4317"    # otlp grpc
+      - "4318:4318"    # otlp http
+      - "9411:9411"    # zipkin
+    restart: unless-stopped
+    networks:
+      - micros-net
+
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -183,6 +200,7 @@ networks:
 volumes:
   prometheus_data:
   loki_data:
+  tempo_data:
   grafana_data:
   mongo_data:
   redis_data:

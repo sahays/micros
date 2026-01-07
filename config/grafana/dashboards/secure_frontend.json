@@ -101,7 +101,7 @@
             "uid": "Prometheus"
           },
           "editorMode": "code",
-          "expr": "rate(http_requests_total{job=\"secure-frontend\" + "frontend"}[5m])",
+          "expr": "rate(http_requests_total{job=\"secure-frontend\"}[5m])",
           "legendFormat": "{{method}} {{path}} {{status}}",
           "range": true,
           "refId": "A"

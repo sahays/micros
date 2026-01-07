@@ -25,5 +25,9 @@ scrape_configs:
             - json:
                 expressions:
                   level: level
+            - template:
+                source: service
+                template: '{{ .container }}'
             - labels:
                 level:
+                service:
