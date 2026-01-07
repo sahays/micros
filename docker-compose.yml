@@ -129,12 +129,19 @@ services:
       - APP_AUTH_SERVICE__CLIENT_ID=${APP_AUTH_SERVICE__CLIENT_ID:-secure-frontend}
       - APP_AUTH_SERVICE__SIGNING_SECRET=${APP_AUTH_SERVICE__SIGNING_SECRET}
       - APP_SERVER__SESSION_SECRET=${APP_SERVER__SESSION_SECRET}
+      - RUST_LOG=${LOG_LEVEL:-info}
     labels:
       - "prometheus.io/scrape=true"
       - "prometheus.io/port=8080"
       - "prometheus.io/path=/metrics"
     depends_on:
       - auth-service
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
     networks:
       - micros-net
 
