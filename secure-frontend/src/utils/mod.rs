@@ -4,7 +4,12 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, EnvFilter, Registry};
 pub mod crypto;
 pub fn init_tracing() {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
-    let formatting_layer = fmt::layer();
+    let formatting_layer = fmt::layer()
+        .with_file(true)
+        .with_line_number(true)
+        .json()
+        .flatten_event(true);
+
     let subscriber = Registry::default().with(env_filter).with(formatting_layer);
     set_global_default(subscriber).expect("Failed to set subscriber");
 }

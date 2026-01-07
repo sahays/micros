@@ -1,4 +1,4 @@
-use axum::{routing::get, Router};
+use axum::{middleware::from_fn, routing::get, Router};
 use dotenvy::dotenv;
 use secure_frontend::config::get_configuration;
 use secure_frontend::handlers::{
@@ -13,6 +13,7 @@ use secure_frontend::utils::init_tracing;
 use std::sync::Arc;
 use time::Duration;
 use tower_http::services::ServeDir;
+use tower_http::trace::TraceLayer;
 use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
 use tracing::info;
 
@@ -71,6 +72,28 @@ async fn main() -> anyhow::Result<()> {
         .layer(session_layer)
         .layer(axum::middleware::from_fn(
             secure_frontend::middleware::metrics::metrics_middleware,
+        ))
+        // Add tracing layer
+        .layer(
+            TraceLayer::new_for_http().make_span_with(|request: &axum::http::Request<_>| {
+                let request_id = request
+                    .headers()
+                    .get("x-request-id")
+                    .and_then(|value| value.to_str().ok())
+                    .unwrap_or("-");
+
+                tracing::info_span!(
+                    "http_request",
+                    request_id = %request_id,
+                    method = %request.method(),
+                    uri = %request.uri(),
+                    version = ?request.version(),
+                )
+            }),
+        )
+        // Add tracing middleware for request_id
+        .layer(from_fn(
+            secure_frontend::middleware::tracing::request_id_middleware,
         ))
         .with_state(auth_client);
 

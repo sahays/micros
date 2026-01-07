@@ -20,14 +20,10 @@ scrape_configs:
     pipeline_stages:
       - docker: {}
       - match:
-          selector: '{container="auth-service"}'
+          selector: '{container=~"auth-service|secure-frontend"}'
           stages:
             - json:
                 expressions:
                   level: level
-                  msg: msg
-                  trace_id: trace_id
             - labels:
                 level:
-            - output:
-                source: msg
