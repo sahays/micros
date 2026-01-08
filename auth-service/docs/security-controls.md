@@ -22,7 +22,8 @@ We utilize the **Token Bucket** algorithm (via the `governor` crate) to enforce 
 3.  **Client-Specific Limiter (BFF/App):**
     *   **Scope:** Requests carrying a valid `X-Client-ID`.
     *   **Limit:** Configurable per client (e.g., `1000 requests / minute`).
-    *   **Purpose:** Allows trusted clients (like the frontend BFF) higher throughput while containing compromised keys.
+    *   **Unlimited Access:** Set `rate_limit_per_min = 0` for trusted service clients (e.g., BFF) to bypass rate limiting.
+    *   **Purpose:** Allows trusted clients higher throughput while containing compromised keys. Service clients making server-to-server calls can be configured with unlimited access.
 
 ### Response Headers
 
@@ -36,7 +37,21 @@ When a limit is exceeded, the service returns `429 Too Many Requests` with:
 
 ## 2. Bot & Abuse Detection
 
-Currently, bot defense is primarily enforcement-based through strict rate limiting on sensitive endpoints.
+Bot detection middleware analyzes request patterns to identify and block automated traffic.
+
+### Detection Heuristics
+
+*   **Known Bot User-Agents:** Blocks requests from known bot signatures (using `isbot` crate).
+*   **Missing Browser Headers:** Flags requests claiming to be browsers but missing standard headers (Accept, Accept-Language, Accept-Encoding).
+*   **Empty User-Agent:** Suspicious for public endpoints.
+
+### Exemptions
+
+*   **Service-to-Service Calls:** Requests with `X-Signature` header (signed requests from registered clients) are exempt from bot detection.
+*   **Health/Metrics Endpoints:** `/health` and `/metrics` are excluded.
+*   **CORS Preflight:** `OPTIONS` requests are excluded.
+
+### Abuse Prevention
 
 *   **Credential Stuffing:** Blocked by the strict 5-attempt limit on `/auth/login`.
 *   **Account Enumeration:**
@@ -46,7 +61,7 @@ Currently, bot defense is primarily enforcement-based through strict rate limiti
 
 **Future Enhancements:**
 *   CAPTCHA integration (Turnstile/ReCAPTCHA) for flagged IPs.
-*   Heuristic analysis of request patterns (User-Agent, Fingerprinting).
+*   Enhanced fingerprinting and behavioral analysis.
 
 ## 3. Known Clients & Access Control
 

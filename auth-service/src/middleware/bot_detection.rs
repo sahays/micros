@@ -13,6 +13,9 @@ use tracing::warn;
 /// 1. Known bot User-Agents (using `isbot` crate).
 /// 2. Missing standard headers for clients claiming to be browsers.
 /// 3. Empty User-Agent strings.
+///
+/// Exemptions:
+/// - Service-to-service calls (identified by presence of X-Signature header)
 pub async fn bot_detection_middleware(
     headers: HeaderMap,
     request: Request,
@@ -24,8 +27,14 @@ pub async fn bot_detection_middleware(
         return Ok(next.run(request).await);
     }
 
-    // Skip Health Check
+    // Skip Health Check and Metrics
     if request.uri().path() == "/health" || request.uri().path() == "/metrics" {
+        return Ok(next.run(request).await);
+    }
+
+    // Skip service-to-service calls (identified by signature headers)
+    // Service clients use request signing for authentication
+    if headers.contains_key("X-Signature") || headers.contains_key("x-signature") {
         return Ok(next.run(request).await);
     }
 
