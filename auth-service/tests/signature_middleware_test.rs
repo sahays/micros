@@ -1,8 +1,7 @@
+use service_core::middleware::rate_limit::{create_client_rate_limiter, create_ip_rate_limiter};
+use service_core::middleware::signature::signature_validation_middleware;
 use auth_service::{
     config::AuthConfig,
-    middleware::{
-        create_client_rate_limiter, create_ip_rate_limiter, signature_validation_middleware,
-    },
     models::{Client, ClientType},
     services::{EmailService, JwtService, MockBlacklist, MongoDb},
     utils::{hash_password, signature::generate_signature, Password},
@@ -83,7 +82,7 @@ async fn test_signature_middleware() {
         .route("/protected", post(|| async { "ok" }))
         .layer(from_fn_with_state(
             state.clone(),
-            signature_validation_middleware,
+            signature_validation_middleware::<AppState>,
         ))
         .with_state(state);
 
@@ -137,15 +136,11 @@ async fn test_signature_middleware() {
                 .uri("/protected")
                 .header("X-Client-ID", client_id)
                 .header("X-Timestamp", now.to_string())
-                .header("X-Nonce", nonce) // Reused nonce
+                .header("X-Nonce", nonce)
                 .header(
                     "X-Signature",
                     "any_sig_valid_structurally_but_should_fail_nonce_check",
-                ) // Sig check is after nonce check?
-                // Actually nonce check is before or after? In my implementation it's before signature verify.
-                // Wait, signature verification depends on nonce.
-                // But if I check nonce first, I can fail fast.
-                // My middleware checks nonce BEFORE verify.
+                )
                 .body(Body::from(body_str))
                 .unwrap(),
         )

@@ -1,7 +1,7 @@
+use service_core::middleware::rate_limit::{create_client_rate_limiter, create_ip_rate_limiter};
 use auth_service::{
     build_router,
     config::AuthConfig,
-    middleware::{create_client_rate_limiter, create_ip_rate_limiter},
     services::{EmailService, JwtService, MockBlacklist, MongoDb, TokenBlacklist},
     AppState,
 };

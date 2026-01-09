@@ -64,6 +64,8 @@ pub struct RefreshTokenClaims {
     pub iat: i64,
 }
 
+use service_core::middleware::rate_limit::HasRateLimitInfo;
+
 /// Claims for app tokens (short-lived, for services)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppTokenClaims {
@@ -85,6 +87,16 @@ pub struct AppTokenClaims {
     pub iat: i64,
     /// JWT ID (for blacklisting/tracking)
     pub jti: String,
+}
+
+impl HasRateLimitInfo for AppTokenClaims {
+    fn client_id(&self) -> String {
+        self.client_id.clone()
+    }
+
+    fn rate_limit_per_min(&self) -> u32 {
+        self.rate_limit_per_min
+    }
 }
 
 use utoipa::ToSchema;
