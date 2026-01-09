@@ -1,12 +1,7 @@
-use service_core::axum::{
-    extract::Request,
-    http::HeaderMap,
-    middleware::Next,
-    response::Response,
-};
 use isbot::Bots;
-use tracing::warn;
+use service_core::axum::{extract::Request, http::HeaderMap, middleware::Next, response::Response};
 use service_core::error::AppError;
+use tracing::warn;
 
 /// Middleware to detect and block bots based on heuristic analysis.
 ///

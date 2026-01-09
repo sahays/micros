@@ -1,6 +1,6 @@
 use auth_service::{
     build_router,
-    config::Config,
+    config::AuthConfig,
     dtos::admin::CreateClientResponse,
     middleware::{create_client_rate_limiter, create_ip_rate_limiter},
     models::ClientType,
@@ -16,14 +16,14 @@ use std::sync::Arc;
 use tower::util::ServiceExt;
 use uuid::Uuid;
 
-async fn setup_test_config() -> (Config, String) {
+async fn setup_test_config() -> (AuthConfig, String) {
     dotenvy::dotenv().ok();
     // We might fail if ADMIN_API_KEY is not in env, so we handle that or mock it
-    // But Config::from_env() checks for it.
+    // But AuthConfig::from_env() checks for it.
     // For test, we can set the env var before calling from_env, or mock the config struct manually.
     std::env::set_var("ADMIN_API_KEY", "test_admin_key");
 
-    let mut config = Config::from_env().expect("Failed to load environment variables for test");
+    let mut config = AuthConfig::from_env().expect("Failed to load environment variables for test");
     let db_name = format!("test_auth_admin_client_{}", Uuid::new_v4());
     config.mongodb.database = db_name.clone();
     config.log_level = "error".to_string();

@@ -1,3 +1,53 @@
-.DS_Store
+# Environment variables
 .env
-.gemini/tmp
+.env.local
+.env.*.local
+.env.test
+.env.production
+.env.development
+*.env
+!.env.example
+
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+
+# Logs
+*.log
+logs/
+build_errors.log
+frontend_build.log
+workspace_build.log
+
+# Keys and Secrets
+*.pem
+*.key
+keys/
+secrets/
+
+# IDEs
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Geminio
+.gemini/tmp/
+
+# Data
+data/
+mongo_data/
+redis_data/
+prometheus_data/
+loki_data/
+tempo_data/
+grafana_data/
+
+# Docker
+docker-compose.override.yml

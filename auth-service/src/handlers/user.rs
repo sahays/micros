@@ -1,11 +1,14 @@
-use service_core::{axum::{
-    extract::{ConnectInfo, State},
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-}, error::AppError};
 use mongodb::bson::doc;
 use serde::Deserialize;
+use service_core::{
+    axum::{
+        extract::{ConnectInfo, State},
+        http::StatusCode,
+        response::IntoResponse,
+        Json,
+    },
+    error::AppError,
+};
 use std::net::SocketAddr;
 use utoipa::ToSchema;
 use validator::Validate;
@@ -61,9 +64,7 @@ pub async fn get_me(
         .users()
         .find_one(doc! { "_id": &claims.sub }, None)
         .await?
-        .ok_or_else(|| {
-            AppError::NotFound(anyhow::anyhow!("User not found"))
-        })?;
+        .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("User not found")))?;
 
     Ok(Json(user.sanitized()))
 }
@@ -101,9 +102,7 @@ pub async fn update_me(
         .users()
         .find_one(doc! { "_id": &claims.sub }, None)
         .await?
-        .ok_or_else(|| {
-            AppError::NotFound(anyhow::anyhow!("User not found"))
-        })?;
+        .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("User not found")))?;
 
     let mut update_doc = doc! {};
     let mut email_changed = false;
@@ -150,7 +149,9 @@ pub async fn update_me(
     if email_changed {
         // We know email is Some because email_changed is only true when email is Some
         let new_email = req.email.ok_or_else(|| {
-            AppError::InternalError(anyhow::anyhow!("Internal server error: email missing after change check"))
+            AppError::InternalError(anyhow::anyhow!(
+                "Internal server error: email missing after change check"
+            ))
         })?;
         // Generate verification token
         let token = {
@@ -185,9 +186,7 @@ pub async fn update_me(
         .users()
         .find_one(doc! { "_id": &user.id }, None)
         .await?
-        .ok_or_else(|| {
-            AppError::InternalError(anyhow::anyhow!("User not found after update"))
-        })?;
+        .ok_or_else(|| AppError::InternalError(anyhow::anyhow!("User not found after update")))?;
 
     Ok(Json(updated_user.sanitized()))
 }
@@ -226,18 +225,14 @@ pub async fn change_password(
         .users()
         .find_one(doc! { "_id": &claims.sub }, None)
         .await?
-        .ok_or_else(|| {
-            AppError::NotFound(anyhow::anyhow!("User not found"))
-        })?;
+        .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("User not found")))?;
 
     // 3. Verify current password
     verify_password(
         &Password::new(req.current_password),
         &PasswordHashString::new(user.password_hash.clone()),
     )
-    .map_err(|_| {
-        AppError::AuthError(anyhow::anyhow!("Incorrect current password"))
-    })?;
+    .map_err(|_| AppError::AuthError(anyhow::anyhow!("Incorrect current password")))?;
 
     // 4. Hash new password
     let new_password_hash = hash_password(&Password::new(req.new_password))?;

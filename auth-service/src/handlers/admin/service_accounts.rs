@@ -1,8 +1,11 @@
-use service_core::{axum::{
-    extract::{Path, State},
-    http::StatusCode,
-    Json,
-}, error::AppError};
+use service_core::{
+    axum::{
+        extract::{Path, State},
+        http::StatusCode,
+        Json,
+    },
+    error::AppError,
+};
 
 use crate::{
     dtos::admin::{
@@ -124,6 +127,9 @@ pub async fn get_service_audit_log(
     State(state): State<AppState>,
     Path(service_id): Path<String>,
 ) -> Result<(StatusCode, Json<Vec<AuditLog>>), AppError> {
-    let res = state.admin_service.get_service_audit_log(service_id).await?;
+    let res = state
+        .admin_service
+        .get_service_audit_log(service_id)
+        .await?;
     Ok((StatusCode::OK, Json(res)))
 }

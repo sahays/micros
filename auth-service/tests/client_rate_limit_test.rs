@@ -1,5 +1,5 @@
 use auth_service::{
-    config::Config,
+    config::AuthConfig,
     middleware::{
         app_auth_middleware, client_rate_limit_middleware, create_client_rate_limiter,
         create_ip_rate_limiter,
@@ -20,9 +20,9 @@ use std::sync::Arc;
 use tower::util::ServiceExt;
 use uuid::Uuid;
 
-async fn setup_test_config() -> (Config, String) {
+async fn setup_test_config() -> (AuthConfig, String) {
     dotenvy::dotenv().ok();
-    let mut config = Config::from_env().expect("Failed to load environment variables for test");
+    let mut config = AuthConfig::from_env().expect("Failed to load environment variables for test");
     let db_name = format!("test_client_rate_limit_{}", Uuid::new_v4());
     config.mongodb.database = db_name.clone();
     config.log_level = "error".to_string();

@@ -47,9 +47,15 @@ impl From<ServiceError> for AppError {
             ServiceError::Redis(e) => AppError::RedisError(e),
             ServiceError::Internal(e) => AppError::InternalError(e),
             ServiceError::InternalString(e) => AppError::InternalError(anyhow::anyhow!(e)),
-            ServiceError::InvalidCredentials => AppError::AuthError(anyhow::anyhow!("Invalid credentials")),
-            ServiceError::UserAlreadyExists => AppError::Conflict(anyhow::anyhow!("User already exists")),
-            ServiceError::EmailAlreadyRegistered => AppError::Conflict(anyhow::anyhow!("Email already registered")),
+            ServiceError::InvalidCredentials => {
+                AppError::AuthError(anyhow::anyhow!("Invalid credentials"))
+            }
+            ServiceError::UserAlreadyExists => {
+                AppError::Conflict(anyhow::anyhow!("User already exists"))
+            }
+            ServiceError::EmailAlreadyRegistered => {
+                AppError::Conflict(anyhow::anyhow!("Email already registered"))
+            }
             ServiceError::InvalidToken => AppError::BadRequest(anyhow::anyhow!("Invalid token")),
             ServiceError::TokenExpired => AppError::BadRequest(anyhow::anyhow!("Token expired")),
             ServiceError::UserNotFound => AppError::NotFound(anyhow::anyhow!("User not found")),

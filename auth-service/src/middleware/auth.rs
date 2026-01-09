@@ -1,10 +1,13 @@
-use service_core::{axum::{
-    extract::{FromRequestParts, Request, State},
-    http::{header, request::Parts},
-    middleware::Next,
-    response::Response,
-    async_trait,
-}, error::AppError};
+use service_core::{
+    axum::{
+        async_trait,
+        extract::{FromRequestParts, Request, State},
+        http::{header, request::Parts},
+        middleware::Next,
+        response::Response,
+    },
+    error::AppError,
+};
 
 use crate::{services::AccessTokenClaims, AppState};
 
@@ -23,14 +26,18 @@ pub async fn auth_middleware(
     let token = match token {
         Some(token) => token,
         None => {
-            return Err(AppError::AuthError(anyhow::anyhow!("Missing or invalid Authorization header")));
+            return Err(AppError::AuthError(anyhow::anyhow!(
+                "Missing or invalid Authorization header"
+            )));
         }
     };
 
     let claims = match state.jwt.validate_access_token(token) {
         Ok(claims) => claims,
         Err(_) => {
-            return Err(AppError::AuthError(anyhow::anyhow!("Invalid or expired token")));
+            return Err(AppError::AuthError(anyhow::anyhow!(
+                "Invalid or expired token"
+            )));
         }
     };
 
@@ -38,7 +45,9 @@ pub async fn auth_middleware(
     let is_blacklisted = state.redis.is_blacklisted(&claims.jti).await?;
 
     if is_blacklisted {
-        return Err(AppError::AuthError(anyhow::anyhow!("Token has been revoked")));
+        return Err(AppError::AuthError(anyhow::anyhow!(
+            "Token has been revoked"
+        )));
     }
 
     // Store claims in request extensions so handlers can access them
@@ -59,7 +68,9 @@ where
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let claims = parts.extensions.get::<AccessTokenClaims>().ok_or_else(|| {
-             AppError::InternalError(anyhow::anyhow!("Auth claims missing from request extensions"))
+            AppError::InternalError(anyhow::anyhow!(
+                "Auth claims missing from request extensions"
+            ))
         })?;
 
         Ok(AuthUser(claims.clone()))

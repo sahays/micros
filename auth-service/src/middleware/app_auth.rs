@@ -1,11 +1,14 @@
-use service_core::{axum::{
-    extract::{FromRequestParts, Request, State},
-    http::{header, request::Parts},
-    middleware::Next,
-    response::Response,
-    async_trait,
-}, error::AppError};
 use mongodb::bson::doc;
+use service_core::{
+    axum::{
+        async_trait,
+        extract::{FromRequestParts, Request, State},
+        http::{header, request::Parts},
+        middleware::Next,
+        response::Response,
+    },
+    error::AppError,
+};
 
 use crate::{services::AppTokenClaims, AppState};
 
@@ -32,7 +35,9 @@ pub async fn app_auth_middleware(
     let token = match token {
         Some(token) => token,
         None => {
-            return Err(AppError::AuthError(anyhow::anyhow!("Missing or invalid app token")));
+            return Err(AppError::AuthError(anyhow::anyhow!(
+                "Missing or invalid app token"
+            )));
         }
     };
 
@@ -40,19 +45,20 @@ pub async fn app_auth_middleware(
     let claims = match state.jwt.validate_app_token(token) {
         Ok(claims) => claims,
         Err(_) => {
-            return Err(AppError::AuthError(anyhow::anyhow!("Invalid or expired app token")));
+            return Err(AppError::AuthError(anyhow::anyhow!(
+                "Invalid or expired app token"
+            )));
         }
     };
 
     // 3. Check blacklist (for client revocation)
     let blacklist_key = format!("client:{}", claims.client_id);
-    let is_revoked = state
-        .redis
-        .is_blacklisted(&blacklist_key)
-        .await?;
+    let is_revoked = state.redis.is_blacklisted(&blacklist_key).await?;
 
     if is_revoked {
-        return Err(AppError::AuthError(anyhow::anyhow!("Client has been revoked")));
+        return Err(AppError::AuthError(anyhow::anyhow!(
+            "Client has been revoked"
+        )));
     }
 
     // 4. Check if client is still enabled in DB
@@ -62,9 +68,7 @@ pub async fn app_auth_middleware(
         .find_one(doc! { "client_id": &claims.client_id }, None)
         .await?;
 
-    let client = client.ok_or_else(|| {
-        AppError::AuthError(anyhow::anyhow!("Client not found"))
-    })?;
+    let client = client.ok_or_else(|| AppError::AuthError(anyhow::anyhow!("Client not found")))?;
 
     if !client.enabled {
         return Err(AppError::AuthError(anyhow::anyhow!("Client is disabled")));
@@ -88,7 +92,9 @@ where
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let claims = parts.extensions.get::<AppTokenClaims>().ok_or_else(|| {
-             AppError::InternalError(anyhow::anyhow!("App claims missing from request extensions"))
+            AppError::InternalError(anyhow::anyhow!(
+                "App claims missing from request extensions"
+            ))
         })?;
 
         Ok(CurrentApp(claims.clone()))

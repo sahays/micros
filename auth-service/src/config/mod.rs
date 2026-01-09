@@ -1,7 +1,7 @@
 use serde::Deserialize;
-use std::env;
 use service_core::config as core_config;
 use service_core::error::AppError;
+use std::env;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AuthConfig {
@@ -114,36 +114,42 @@ impl AuthConfig {
             service_version: get_env("SERVICE_VERSION", Some(env!("CARGO_PKG_VERSION")), is_prod)?,
             log_level: get_env("LOG_LEVEL", Some("info"), is_prod)?,
             mongodb: MongoConfig {
-                uri: get_env("MONGODB_URI", None, true)?,
-                database: get_env("MONGODB_DATABASE", None, true)?,
+                uri: get_env("MONGODB_URI", None, is_prod)?,
+                database: get_env("MONGODB_DATABASE", None, is_prod)?,
             },
             redis: RedisConfig {
-                url: get_env("REDIS_URL", None, true)?,
+                url: get_env("REDIS_URL", None, is_prod)?,
             },
             jwt: JwtConfig {
-                private_key_path: get_env("JWT_PRIVATE_KEY_PATH", None, true)?,
-                public_key_path: get_env("JWT_PUBLIC_KEY_PATH", None, true)?,
+                private_key_path: get_env("JWT_PRIVATE_KEY_PATH", None, is_prod)?,
+                public_key_path: get_env("JWT_PUBLIC_KEY_PATH", None, is_prod)?,
                 access_token_expiry_minutes: get_env(
                     "JWT_ACCESS_TOKEN_EXPIRY_MINUTES",
                     Some("15"),
                     is_prod,
                 )?
                 .parse()
-                .map_err(|e: std::num::ParseIntError| AppError::ConfigError(anyhow::anyhow!(e.to_string())))?,
+                .map_err(|e: std::num::ParseIntError| {
+                    AppError::ConfigError(anyhow::anyhow!(e.to_string()))
+                })?,
                 refresh_token_expiry_days: get_env(
                     "JWT_REFRESH_TOKEN_EXPIRY_DAYS",
                     Some("7"),
                     is_prod,
                 )?
                 .parse()
-                .map_err(|e: std::num::ParseIntError| AppError::ConfigError(anyhow::anyhow!(e.to_string())))?,
+                .map_err(|e: std::num::ParseIntError| {
+                    AppError::ConfigError(anyhow::anyhow!(e.to_string()))
+                })?,
                 app_token_expiry_minutes: get_env(
                     "JWT_APP_TOKEN_EXPIRY_MINUTES",
                     Some("60"),
                     is_prod,
                 )?
                 .parse()
-                .map_err(|e: std::num::ParseIntError| AppError::ConfigError(anyhow::anyhow!(e.to_string())))?,
+                .map_err(|e: std::num::ParseIntError| {
+                    AppError::ConfigError(anyhow::anyhow!(e.to_string()))
+                })?,
             },
             google: GoogleOAuthConfig {
                 client_id: get_env("GOOGLE_CLIENT_ID", None, is_prod)?,
@@ -243,27 +249,29 @@ impl AuthConfig {
     fn validate(&self) -> Result<(), AppError> {
         // Validate configuration
         if self.common.port == 0 {
-            return Err(AppError::ConfigError(anyhow::anyhow!("PORT must be greater than 0")));
+            return Err(AppError::ConfigError(anyhow::anyhow!(
+                "PORT must be greater than 0"
+            )));
         }
 
         if self.jwt.access_token_expiry_minutes <= 0 {
-            return Err(AppError::ConfigError(
-                anyhow::anyhow!("JWT_ACCESS_TOKEN_EXPIRY_MINUTES must be positive")
-            ));
+            return Err(AppError::ConfigError(anyhow::anyhow!(
+                "JWT_ACCESS_TOKEN_EXPIRY_MINUTES must be positive"
+            )));
         }
 
         if self.jwt.refresh_token_expiry_days <= 0 {
-            return Err(AppError::ConfigError(
-                anyhow::anyhow!("JWT_REFRESH_TOKEN_EXPIRY_DAYS must be positive")
-            ));
+            return Err(AppError::ConfigError(anyhow::anyhow!(
+                "JWT_REFRESH_TOKEN_EXPIRY_DAYS must be positive"
+            )));
         }
 
         // In production, ensure stricter validation
         if self.environment == Environment::Prod {
             if self.security.allowed_origins.iter().any(|o| o == "*") {
-                return Err(AppError::ConfigError(
-                    anyhow::anyhow!("Wildcard CORS origin not allowed in production")
-                ));
+                return Err(AppError::ConfigError(anyhow::anyhow!(
+                    "Wildcard CORS origin not allowed in production"
+                )));
             }
 
             if self.swagger.enabled == SwaggerMode::Public {
@@ -287,7 +295,10 @@ fn get_env(key: &str, default: Option<&str>, is_prod: bool) -> Result<String, Ap
             } else if let Some(def) = default {
                 Ok(def.to_string())
             } else {
-                Err(AppError::ConfigError(anyhow::anyhow!(format!("{} is required but not set", key))))
+                Err(AppError::ConfigError(anyhow::anyhow!(format!(
+                    "{} is required but not set",
+                    key
+                ))))
             }
         }
     }

@@ -1,8 +1,11 @@
-use service_core::{axum::{
-    extract::{Path, State},
-    http::StatusCode,
-    Json,
-}, error::AppError};
+use service_core::{
+    axum::{
+        extract::{Path, State},
+        http::StatusCode,
+        Json,
+    },
+    error::AppError,
+};
 
 use crate::{
     dtos::admin::{CreateClientRequest, CreateClientResponse, RotateSecretResponse},

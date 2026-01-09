@@ -1,6 +1,13 @@
-target/
-.git/
+.git
+.gitignore
 .env
-*.pem
+.env.*
+!.env.example
+target/
 node_modules/
 dist/
+*.pem
+*.key
+*.log
+Dockerfile
+README.md

@@ -1,6 +1,6 @@
 use auth_service::{
     build_router,
-    config::Config,
+    config::AuthConfig,
     middleware::{create_client_rate_limiter, create_ip_rate_limiter},
     services::{EmailService, JwtService, MockBlacklist, MongoDb},
     AppState,
@@ -14,12 +14,12 @@ use tower::util::ServiceExt;
 use uuid::Uuid;
 
 // Helper to setup test config with a unique database
-async fn setup_test_config() -> (Config, String) {
+async fn setup_test_config() -> (AuthConfig, String) {
     // Load .env if available
     dotenvy::dotenv().ok();
 
     // Load config from environment
-    let mut config = Config::from_env().expect("Failed to load environment variables for test");
+    let mut config = AuthConfig::from_env().expect("Failed to load environment variables for test");
 
     // Override database name with a random one for isolation
     let db_name = format!("test_auth_{}", Uuid::new_v4());

@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use serde::Serialize;
 use thiserror::Error;
@@ -91,48 +91,15 @@ impl IntoResponse for AppError {
                 Some(err.to_string()),
                 None,
             ),
-            AppError::BadRequest(err) => (
-                StatusCode::BAD_REQUEST,
-                err.to_string(),
-                None,
-                None,
-            ),
-            AppError::NotFound(err) => (
-                StatusCode::NOT_FOUND,
-                err.to_string(),
-                None,
-                None,
-            ),
-            AppError::Unauthorized(err) => (
-                StatusCode::UNAUTHORIZED,
-                err.to_string(),
-                None,
-                None,
-            ),
-            AppError::Forbidden(err) => (
-                StatusCode::FORBIDDEN,
-                err.to_string(),
-                None,
-                None,
-            ),
-            AppError::AuthError(err) => (
-                StatusCode::UNAUTHORIZED,
-                err.to_string(),
-                None,
-                None,
-            ),
-            AppError::Conflict(err) => (
-                StatusCode::CONFLICT,
-                err.to_string(),
-                None,
-                None,
-            ),
-            AppError::TooManyRequests(msg, retry) => (
-                StatusCode::TOO_MANY_REQUESTS,
-                msg,
-                None,
-                retry,
-            ),
+            AppError::BadRequest(err) => (StatusCode::BAD_REQUEST, err.to_string(), None, None),
+            AppError::NotFound(err) => (StatusCode::NOT_FOUND, err.to_string(), None, None),
+            AppError::Unauthorized(err) => (StatusCode::UNAUTHORIZED, err.to_string(), None, None),
+            AppError::Forbidden(err) => (StatusCode::FORBIDDEN, err.to_string(), None, None),
+            AppError::AuthError(err) => (StatusCode::UNAUTHORIZED, err.to_string(), None, None),
+            AppError::Conflict(err) => (StatusCode::CONFLICT, err.to_string(), None, None),
+            AppError::TooManyRequests(msg, retry) => {
+                (StatusCode::TOO_MANY_REQUESTS, msg, None, retry)
+            }
             AppError::InternalError(err) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Internal server error".to_string(),
@@ -183,16 +150,18 @@ impl IntoResponse for AppError {
             ),
         };
 
-        let mut res = (status, Json(ErrorResponse {
-            error: error_message,
-            details,
-        })).into_response();
+        let mut res = (
+            status,
+            Json(ErrorResponse {
+                error: error_message,
+                details,
+            }),
+        )
+            .into_response();
 
         if let Some(retry) = retry_after {
-            res.headers_mut().insert(
-                axum::http::header::RETRY_AFTER,
-                retry.into(),
-            );
+            res.headers_mut()
+                .insert(axum::http::header::RETRY_AFTER, retry.into());
         }
 
         res

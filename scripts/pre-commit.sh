@@ -40,6 +40,34 @@ if [ -n "$STAGED_RS_FILES" ]; then
         cd ..
     fi
 
+    # Service Core Checks
+    if echo "$STAGED_RS_FILES" | grep -q "service-core/"; then
+        echo "Staged Rust files detected in service-core. Running checks..."
+        cd service-core
+        
+        echo "Checking formatting..."
+        if ! cargo fmt -- --check; then
+            echo -e "${RED}Formatting check failed. Running 'cargo fmt' to fix...${NC}"
+            cargo fmt
+            echo -e "${RED}Please review and re-stage the formatted files.${NC}"
+            exit 1
+        fi
+        
+        echo "Running clippy..."
+        if ! cargo clippy -- -D warnings; then
+            echo -e "${RED}Clippy check failed.${NC}"
+            exit 1
+        fi
+        
+        echo "Running tests..."
+        if ! cargo test; then
+            echo -e "${RED}Tests failed.${NC}"
+            exit 1
+        fi
+        
+        cd ..
+    fi
+
     # Secure Frontend Checks
     if echo "$STAGED_RS_FILES" | grep -q "secure-frontend/"; then
         echo "Staged Rust files detected in secure-frontend. Running checks..."

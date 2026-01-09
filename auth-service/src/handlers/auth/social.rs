@@ -1,17 +1,17 @@
-use service_core::{axum::{
-    extract::{Query, State},
-    response::{IntoResponse, Redirect, Response},
-}, error::AppError};
 use axum_extra::extract::cookie::{Cookie, CookieJar};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use mongodb::bson::doc;
 use serde::Deserialize;
+use service_core::{
+    axum::{
+        extract::{Query, State},
+        response::{IntoResponse, Redirect, Response},
+    },
+    error::AppError,
+};
 use sha2::{Digest, Sha256};
 
-use crate::{
-    dtos::auth::GoogleCallbackQuery,
-    AppState,
-};
+use crate::{dtos::auth::GoogleCallbackQuery, AppState};
 
 #[derive(Debug, Deserialize)]
 struct GoogleTokenResponse {
@@ -28,10 +28,7 @@ struct GoogleUserInfo {
     picture: Option<String>,
 }
 
-pub async fn google_login(
-    State(state): State<AppState>,
-    jar: CookieJar,
-) -> (CookieJar, Response) {
+pub async fn google_login(State(state): State<AppState>, jar: CookieJar) -> (CookieJar, Response) {
     let state_val = uuid::Uuid::new_v4().to_string();
     let code_verifier = {
         let mut rng = rand::thread_rng();
@@ -88,9 +85,10 @@ pub async fn google_callback(
     }
 
     // 2. Get code verifier
-    let code_verifier = jar.get("code_verifier").map(|c| c.value()).ok_or_else(|| {
-        AppError::BadRequest(anyhow::anyhow!("Missing code verifier"))
-    })?;
+    let code_verifier = jar
+        .get("code_verifier")
+        .map(|c| c.value())
+        .ok_or_else(|| AppError::BadRequest(anyhow::anyhow!("Missing code verifier")))?;
 
     // 3. Exchange code for access token
     let client = reqwest::Client::new();
@@ -115,7 +113,9 @@ pub async fn google_callback(
         let status = token_res.status();
         let err_body = token_res.text().await.unwrap_or_default();
         tracing::error!(status = %status, body = %err_body, "Google token exchange error");
-        return Err(AppError::AuthError(anyhow::anyhow!("Authentication failed")));
+        return Err(AppError::AuthError(anyhow::anyhow!(
+            "Authentication failed"
+        )));
     }
 
     let token_data: GoogleTokenResponse = token_res.json().await.map_err(|e| {
@@ -140,7 +140,9 @@ pub async fn google_callback(
     })?;
 
     if !user_info.verified_email {
-        return Err(AppError::BadRequest(anyhow::anyhow!("Google account email not verified")));
+        return Err(AppError::BadRequest(anyhow::anyhow!(
+            "Google account email not verified"
+        )));
     }
 
     // 5. Find or create user in database
@@ -177,19 +179,14 @@ pub async fn google_callback(
             new_user.google_id = Some(user_info.id);
             new_user.verified = true;
 
-            state
-                .db
-                .users()
-                .insert_one(&new_user, None)
-                .await?;
+            state.db.users().insert_one(&new_user, None).await?;
             new_user
         }
     };
 
     // 6. Generate tokens
-    let (access_token, refresh_token_str, refresh_token_id) = state
-        .jwt
-        .generate_token_pair(&user.id, &user.email)?;
+    let (access_token, refresh_token_str, refresh_token_id) =
+        state.jwt.generate_token_pair(&user.id, &user.email)?;
 
     // Store refresh token
     use crate::models::RefreshToken;

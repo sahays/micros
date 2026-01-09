@@ -1,6 +1,6 @@
 use auth_service::{
     build_router,
-    config::Config,
+    config::AuthConfig,
     middleware::{create_client_rate_limiter, create_ip_rate_limiter},
     services::{EmailService, JwtService, MockBlacklist, MongoDb},
     AppState,
@@ -13,9 +13,9 @@ use std::sync::Arc;
 use tower::util::ServiceExt;
 use uuid::Uuid;
 
-async fn setup_test_config() -> (Config, String) {
+async fn setup_test_config() -> (AuthConfig, String) {
     dotenvy::dotenv().ok();
-    let mut config = Config::from_env().expect("Failed to load environment variables for test");
+    let mut config = AuthConfig::from_env().expect("Failed to load environment variables for test");
     let db_name = format!("test_auth_bot_{}", Uuid::new_v4());
     config.mongodb.database = db_name.clone();
     config.log_level = "error".to_string();
@@ -27,7 +27,7 @@ async fn teardown_test_db(uri: &str, db_name: &str) {
     client.database(db_name).drop(None).await.unwrap();
 }
 
-async fn create_app(config: Config) -> axum::Router {
+async fn create_app(config: AuthConfig) -> axum::Router {
     let db = MongoDb::connect(&config.mongodb.uri, &config.mongodb.database)
         .await
         .expect("Failed to connect to DB");

@@ -1,5 +1,8 @@
 use crate::AppState;
-use service_core::{axum::{extract::State, http::header, response::IntoResponse, Json}, error::AppError};
+use service_core::{
+    axum::{extract::State, http::header, response::IntoResponse, Json},
+    error::AppError,
+};
 
 /// Get JSON Web Key Set (JWKS)
 #[utoipa::path(

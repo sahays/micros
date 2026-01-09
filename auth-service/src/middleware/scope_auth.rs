@@ -1,9 +1,12 @@
 use crate::{middleware::ServiceContext, models::AuditLog, AppState};
-use service_core::{axum::{
-    extract::{Request, State},
-    middleware::Next,
-    response::Response,
-}, error::AppError};
+use service_core::{
+    axum::{
+        extract::{Request, State},
+        middleware::Next,
+        response::Response,
+    },
+    error::AppError,
+};
 
 /// Middleware to require specific scopes for service authentication
 pub async fn require_scopes(
@@ -22,7 +25,9 @@ pub async fn require_scopes(
         .to_string();
 
     let context = req.extensions().get::<ServiceContext>().ok_or_else(|| {
-        AppError::InternalError(anyhow::anyhow!("Service context missing from request extensions"))
+        AppError::InternalError(anyhow::anyhow!(
+            "Service context missing from request extensions"
+        ))
     })?;
 
     for required in &required_scopes {
@@ -51,7 +56,10 @@ pub async fn require_scopes(
                 let _ = db.audit_logs().insert_one(log, None).await;
             });
 
-            return Err(AppError::Forbidden(anyhow::anyhow!("Insufficient scopes. Required: {}", required)));
+            return Err(AppError::Forbidden(anyhow::anyhow!(
+                "Insufficient scopes. Required: {}",
+                required
+            )));
         }
     }
 

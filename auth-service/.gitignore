@@ -2,12 +2,13 @@
 /target/
 **/*.rs.bk
 *.pdb
-Cargo.lock
 
 # Environment
 .env
 .env.local
 .env.*.local
+*.env
+!.env.example
 
 # IDE
 .idea/
@@ -31,6 +32,3 @@ Cargo.lock
 
 # Docker
 docker-compose.override.yml
-
-# Database
-/data/

@@ -6,14 +6,14 @@ pub mod models;
 pub mod services;
 pub mod utils;
 
+use opentelemetry::KeyValue;
+use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::{runtime, trace as sdktrace, Resource};
 use service_core::axum::{
     middleware::{from_fn, from_fn_with_state},
     routing::{get, post},
     Router,
 };
-use opentelemetry::KeyValue;
-use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::{runtime, trace as sdktrace, Resource};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa::{
@@ -286,8 +286,8 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
         // Add metrics middleware
         .layer(from_fn(middleware::metrics_middleware))
         // Add tracing layer
-        .layer(
-            TraceLayer::new_for_http().make_span_with(|request: &service_core::axum::http::Request<_>| {
+        .layer(TraceLayer::new_for_http().make_span_with(
+            |request: &service_core::axum::http::Request<_>| {
                 let request_id = request
                     .headers()
                     .get("x-request-id")
@@ -301,8 +301,8 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
                     uri = %request.uri(),
                     version = ?request.version(),
                 )
-            }),
-        )
+            },
+        ))
         // Add tracing middleware for request_id
         .layer(from_fn(middleware::request_id_middleware))
         // Add security headers middleware
@@ -362,13 +362,13 @@ pub async fn health_check(
     // Check MongoDB connection
     state.db.health_check().await.map_err(|e| {
         tracing::error!(error = %e, "MongoDB health check failed");
-        AppError::InternalError(e.into())
+        e
     })?;
 
     // Check Redis connection
     state.redis.health_check().await.map_err(|e| {
         tracing::error!(error = %e, "Redis health check failed");
-        AppError::InternalError(e.into())
+        AppError::InternalError(e)
     })?;
 
     Ok(service_core::axum::Json(serde_json::json!({

@@ -1,9 +1,12 @@
-use service_core::{axum::{
-    extract::{ConnectInfo, State},
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-}, error::AppError};
+use service_core::{
+    axum::{
+        extract::{ConnectInfo, State},
+        http::StatusCode,
+        response::IntoResponse,
+        Json,
+    },
+    error::AppError,
+};
 use std::net::SocketAddr;
 
 use crate::{

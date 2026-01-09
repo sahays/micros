@@ -1,11 +1,8 @@
-use service_core::axum::async_trait;
 use lettre::{
-    message::header::ContentType,
-    transport::smtp::authentication::Credentials,
-    Message,
-    SmtpTransport,
-    Transport,
+    message::header::ContentType, transport::smtp::authentication::Credentials, Message,
+    SmtpTransport, Transport,
 };
+use service_core::axum::async_trait;
 use service_core::error::AppError;
 use std::time::Duration;
 
@@ -59,8 +56,16 @@ impl EmailService {
         html_body: &str,
     ) -> Result<(), AppError> {
         let email = Message::builder()
-            .from(self.from_email.parse().map_err(|e: lettre::address::AddressError| AppError::InternalError(e.into()))?)
-            .to(to_email.parse().map_err(|e: lettre::address::AddressError| AppError::InternalError(e.into()))?)
+            .from(
+                self.from_email
+                    .parse()
+                    .map_err(|e: lettre::address::AddressError| {
+                        AppError::InternalError(e.into())
+                    })?,
+            )
+            .to(to_email
+                .parse()
+                .map_err(|e: lettre::address::AddressError| AppError::InternalError(e.into()))?)
             .subject(subject)
             .multipart(
                 lettre::message::MultiPart::alternative()
@@ -157,8 +162,7 @@ impl EmailProvider for EmailService {
     ) -> Result<(), AppError> {
         let reset_link = format!(
             "{}/auth/password-reset/confirm?token={}",
-            base_url,
-            reset_token
+            base_url, reset_token
         );
 
         let html_body = format!(

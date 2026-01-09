@@ -1,7 +1,7 @@
-use service_core::error::AppError;
 use mongodb::{
     bson::doc, options::IndexOptions, Client as MongoClient, Collection, Database, IndexModel,
 };
+use service_core::error::AppError;
 use std::time::Duration;
 
 use crate::models::{AuditLog, Client, RefreshToken, ServiceAccount, User, VerificationToken};

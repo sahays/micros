@@ -1,10 +1,10 @@
+use mongodb::bson::doc;
 use service_core::{
     axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
     error::AppError,
     serde::Deserialize,
     validator::Validate,
 };
-use mongodb::bson::doc;
 use utoipa::ToSchema;
 
 use crate::{
@@ -43,7 +43,9 @@ pub async fn app_token(
 ) -> Result<impl IntoResponse, AppError> {
     // 0. Validate grant_type
     if req.grant_type != "client_credentials" {
-        return Err(AppError::BadRequest(anyhow::anyhow!("unsupported_grant_type")));
+        return Err(AppError::BadRequest(anyhow::anyhow!(
+            "unsupported_grant_type"
+        )));
     }
 
     // 1. Find client
@@ -56,9 +58,9 @@ pub async fn app_token(
             tracing::error!(error = %e, "Database error finding client");
             AppError::InternalError(anyhow::anyhow!("Internal server error"))
         })?
-        .ok_or_else(|| AppError::Unauthorized(
-            anyhow::anyhow!("Invalid client_id or client_secret")
-        ))?;
+        .ok_or_else(|| {
+            AppError::Unauthorized(anyhow::anyhow!("Invalid client_id or client_secret"))
+        })?;
 
     // 2. Check if enabled
     if !client.enabled {
@@ -91,9 +93,9 @@ pub async fn app_token(
     }
 
     if !verified {
-        return Err(AppError::Unauthorized(
-            anyhow::anyhow!("Invalid client_id or client_secret")
-        ));
+        return Err(AppError::Unauthorized(anyhow::anyhow!(
+            "Invalid client_id or client_secret"
+        )));
     }
 
     // 4. Generate App Token

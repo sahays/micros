@@ -1,5 +1,32 @@
-target/
+# Rust
+/target/
 **/*.rs.bk
-Cargo.lock
+*.pdb
+
+# Environment
 .env
+.env.local
+.env.*.local
+*.env
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
 .DS_Store
+
+# Keys
+/keys/
+*.pem
+*.key
+
+# Logs
+*.log
+/logs/
+
+# Assets
+node_modules/
+dist/

@@ -1,12 +1,15 @@
-use service_core::{axum::{
-    extract::{FromRequestParts, Request, State},
-    http::{header, request::Parts},
-    middleware::Next,
-    response::Response,
-    async_trait,
-}, error::AppError};
 use mongodb::bson::doc;
 use serde::{Deserialize, Serialize};
+use service_core::{
+    axum::{
+        async_trait,
+        extract::{FromRequestParts, Request, State},
+        http::{header, request::Parts},
+        middleware::Next,
+        response::Response,
+    },
+    error::AppError,
+};
 
 use crate::{
     models::{AuditLog, ServiceAccount},
@@ -58,13 +61,17 @@ pub async fn service_auth_middleware(
                 let _ = db.audit_logs().insert_one(log, None).await;
             });
 
-            return Err(AppError::AuthError(anyhow::anyhow!("Missing or invalid Authorization header")));
+            return Err(AppError::AuthError(anyhow::anyhow!(
+                "Missing or invalid Authorization header"
+            )));
         }
     };
 
     // 1. Identify key type and calculate lookup hash
     if !api_key.starts_with("svc_live_") && !api_key.starts_with("svc_test_") {
-        return Err(AppError::AuthError(anyhow::anyhow!("Invalid API key format")));
+        return Err(AppError::AuthError(anyhow::anyhow!(
+            "Invalid API key format"
+        )));
     }
 
     let lookup_hash = ServiceAccount::calculate_lookup_hash(api_key);
@@ -131,7 +138,9 @@ pub async fn service_auth_middleware(
             let _ = db.audit_logs().insert_one(log, None).await;
         });
 
-        return Err(AppError::Forbidden(anyhow::anyhow!("Service account is disabled")));
+        return Err(AppError::Forbidden(anyhow::anyhow!(
+            "Service account is disabled"
+        )));
     }
 
     // 5. Verify API Key with Argon2
@@ -235,7 +244,9 @@ where
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
         let context = parts.extensions.get::<ServiceContext>().ok_or_else(|| {
-             AppError::InternalError(anyhow::anyhow!("Service context missing from request extensions"))
+            AppError::InternalError(anyhow::anyhow!(
+                "Service context missing from request extensions"
+            ))
         })?;
 
         Ok(ServiceAuth(context.clone()))
