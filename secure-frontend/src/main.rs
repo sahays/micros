@@ -9,7 +9,11 @@ use secure_frontend::handlers::{
 };
 use secure_frontend::middleware::auth::auth_middleware;
 use secure_frontend::services::auth_client::AuthClient;
-use secure_frontend::utils::init_tracing;
+use service_core::observability::logging::init_tracing;
+use service_core::middleware::{
+    metrics::metrics_middleware,
+    tracing::request_id_middleware,
+};
 use std::sync::Arc;
 use time::Duration;
 use tower_http::services::ServeDir;
@@ -20,10 +24,17 @@ use tracing::info;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
-    init_tracing();
-    secure_frontend::services::metrics::init_metrics();
-
+    
     let configuration = get_configuration().expect("Failed to read configuration.");
+
+    // Initialize tracing using shared logic
+    init_tracing(
+        "secure-frontend",
+        "info",
+        "http://tempo:4317"
+    );
+
+    secure_frontend::services::metrics::init_metrics();
 
     let auth_client = Arc::new(AuthClient::new(configuration.auth_service.clone()));
 
@@ -70,9 +81,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .nest_service("/static", ServeDir::new("secure-frontend/static"))
         .layer(session_layer)
-        .layer(axum::middleware::from_fn(
-            secure_frontend::middleware::metrics::metrics_middleware,
-        ))
+        .layer(from_fn(metrics_middleware))
         // Add tracing layer
         .layer(
             TraceLayer::new_for_http().make_span_with(|request: &axum::http::Request<_>| {
@@ -92,9 +101,7 @@ async fn main() -> anyhow::Result<()> {
             }),
         )
         // Add tracing middleware for request_id
-        .layer(from_fn(
-            secure_frontend::middleware::tracing::request_id_middleware,
-        ))
+        .layer(from_fn(request_id_middleware))
         .with_state(auth_client);
 
     let address = format!(

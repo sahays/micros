@@ -1,4 +1,4 @@
-use service_core::axum::{
+use axum::{
     extract::Request, http::header, middleware::Next, response::IntoResponse,
 };
 

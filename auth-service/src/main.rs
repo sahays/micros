@@ -1,10 +1,13 @@
 use auth_service::{
     build_router,
     config::AuthConfig,
-    init_tracing, middleware,
     services::{EmailService, JwtService, MongoDb, RedisService},
     AppState,
 };
+use service_core::middleware::rate_limit::{
+    create_client_rate_limiter, create_ip_rate_limiter,
+};
+use service_core::observability::logging::init_tracing;
 use std::net::SocketAddr;
 use tokio::signal;
 
@@ -13,8 +16,13 @@ async fn main() -> Result<(), service_core::error::AppError> {
     // Load configuration - fail fast if invalid
     let config = AuthConfig::from_env()?;
 
-    // Initialize tracing/logging
-    init_tracing(&config);
+    // Initialize tracing/logging using shared logic
+    init_tracing(
+        &config.service_name,
+        &config.log_level,
+        "http://tempo:4317" // In production this would come from config
+    );
+
     // Initialize metrics
     auth_service::services::metrics::init_metrics();
 
@@ -46,28 +54,28 @@ async fn main() -> Result<(), service_core::error::AppError> {
     let jwt = JwtService::new(&config.jwt)?;
     tracing::info!("JWT service initialized");
 
-    // Initialize rate limiters
-    let login_rate_limiter = middleware::create_ip_rate_limiter(
+    // Initialize rate limiters using shared logic
+    let login_rate_limiter = create_ip_rate_limiter(
         config.rate_limit.login_attempts,
         config.rate_limit.login_window_seconds,
     );
-    let register_rate_limiter = middleware::create_ip_rate_limiter(
+    let register_rate_limiter = create_ip_rate_limiter(
         config.rate_limit.register_attempts,
         config.rate_limit.register_window_seconds,
     );
-    let password_reset_rate_limiter = middleware::create_ip_rate_limiter(
+    let password_reset_rate_limiter = create_ip_rate_limiter(
         config.rate_limit.password_reset_attempts,
         config.rate_limit.password_reset_window_seconds,
     );
-    let ip_rate_limiter = middleware::create_ip_rate_limiter(
+    let ip_rate_limiter = create_ip_rate_limiter(
         config.rate_limit.global_ip_limit,
         config.rate_limit.global_ip_window_seconds,
     );
-    let app_token_rate_limiter = middleware::create_ip_rate_limiter(
+    let app_token_rate_limiter = create_ip_rate_limiter(
         config.rate_limit.app_token_limit,
         config.rate_limit.app_token_window_seconds,
     );
-    let client_rate_limiter = middleware::create_client_rate_limiter();
+    let client_rate_limiter = create_client_rate_limiter();
     tracing::info!(
         "Rate limiters initialized: Login, Register, Password Reset, App Token, Client, and Global IP"
     );

@@ -6,16 +6,20 @@ pub mod models;
 pub mod services;
 pub mod utils;
 
-use opentelemetry::KeyValue;
-use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::{runtime, trace as sdktrace, Resource};
 use service_core::axum::{
     middleware::{from_fn, from_fn_with_state},
     routing::{get, post},
     Router,
 };
+use service_core::middleware::{
+    bot_detection::bot_detection_middleware,
+    metrics::metrics_middleware,
+    security_headers::security_headers_middleware,
+    tracing::request_id_middleware,
+    rate_limit::ip_rate_limit_middleware,
+    signature::signature_validation_middleware,
+};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use utoipa::{
     openapi::security::{ApiKey, ApiKeyValue, SecurityScheme},
     Modify, OpenApi,
@@ -23,7 +27,6 @@ use utoipa::{
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::config::AuthConfig;
-use crate::middleware::IpRateLimiter;
 use crate::services::{EmailProvider, JwtService, MongoDb};
 use service_core::error::AppError;
 use std::sync::Arc;
@@ -131,12 +134,41 @@ pub struct AppState {
     pub auth_service: crate::services::AuthService,
     pub admin_service: crate::services::admin::AdminService,
     pub redis: Arc<dyn crate::services::TokenBlacklist>,
-    pub login_rate_limiter: IpRateLimiter,
-    pub register_rate_limiter: IpRateLimiter,
-    pub password_reset_rate_limiter: IpRateLimiter,
-    pub app_token_rate_limiter: IpRateLimiter,
-    pub client_rate_limiter: crate::middleware::ClientRateLimiter,
-    pub ip_rate_limiter: IpRateLimiter,
+    pub login_rate_limiter: service_core::middleware::rate_limit::IpRateLimiter,
+    pub register_rate_limiter: service_core::middleware::rate_limit::IpRateLimiter,
+    pub password_reset_rate_limiter: service_core::middleware::rate_limit::IpRateLimiter,
+    pub app_token_rate_limiter: service_core::middleware::rate_limit::IpRateLimiter,
+    pub client_rate_limiter: service_core::middleware::rate_limit::ClientRateLimiter,
+    pub ip_rate_limiter: service_core::middleware::rate_limit::IpRateLimiter,
+}
+
+impl AsRef<service_core::middleware::signature::SignatureConfig> for AppState {
+    fn as_ref(&self) -> &service_core::middleware::signature::SignatureConfig {
+        // Map AuthConfig to SignatureConfig (or just store SignatureConfig in AppState)
+        // For now, we'll implement it by returning a reference to something we can store
+        // But since AppState is already defined, let's just create one on the fly for simplicity
+        // in this implementation or add it to AppState.
+        // Better: add it to AppState during construction in main.rs.
+        &self.config.security.signature_config
+    }
+}
+
+#[service_core::axum::async_trait]
+impl service_core::middleware::signature::SignatureStore for AppState {
+    async fn validate_nonce(&self, nonce: &str) -> Result<bool, AppError> {
+        let nonce_key = format!("nonce:{}", nonce);
+        let val = self.redis.get_cache(&nonce_key).await?;
+        if val.is_some() {
+            return Ok(false);
+        }
+        self.redis.set_cache(&nonce_key, "1", 120).await?;
+        Ok(true)
+    }
+
+    async fn get_signing_secret(&self, client_id: &str) -> Result<Option<String>, AppError> {
+        let client: Option<crate::models::Client> = self.db.clients().find_one(service_core::mongodb::bson::doc! { "client_id": client_id }, None).await?;
+        Ok(client.map(|c| c.signing_secret))
+    }
 }
 
 pub async fn build_router(state: AppState) -> Result<Router, AppError> {
@@ -178,7 +210,7 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
         .route("/auth/login", post(handlers::auth::login))
         .layer(from_fn_with_state(
             login_limiter,
-            middleware::ip_rate_limit_middleware,
+            ip_rate_limit_middleware,
         ));
 
     // Create register route with rate limiting
@@ -187,7 +219,7 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
         .route("/auth/register", post(handlers::auth::register))
         .layer(from_fn_with_state(
             register_limiter,
-            middleware::ip_rate_limit_middleware,
+            ip_rate_limit_middleware,
         ));
 
     // Create password reset request route with rate limiting
@@ -199,7 +231,7 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
         )
         .layer(from_fn_with_state(
             reset_request_limiter,
-            middleware::ip_rate_limit_middleware,
+            ip_rate_limit_middleware,
         ));
 
     // Create app token route with rate limiting
@@ -208,7 +240,7 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
         .route("/auth/app/token", post(handlers::app::app_token))
         .layer(from_fn_with_state(
             app_token_limiter,
-            middleware::ip_rate_limit_middleware,
+            ip_rate_limit_middleware,
         ));
 
     // Create global IP rate limiter
@@ -276,15 +308,15 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
         // Global IP rate limiting
         .layer(from_fn_with_state(
             ip_limiter,
-            middleware::ip_rate_limit_middleware,
+            ip_rate_limit_middleware,
         ))
         // Signature validation
         .layer(from_fn_with_state(
             state.clone(),
-            middleware::signature_validation_middleware,
+            signature_validation_middleware::<AppState>,
         ))
         // Add metrics middleware
-        .layer(from_fn(middleware::metrics_middleware))
+        .layer(from_fn(metrics_middleware))
         // Add tracing layer
         .layer(TraceLayer::new_for_http().make_span_with(
             |request: &service_core::axum::http::Request<_>| {
@@ -304,11 +336,11 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
             },
         ))
         // Add tracing middleware for request_id
-        .layer(from_fn(middleware::request_id_middleware))
+        .layer(from_fn(request_id_middleware))
         // Add security headers middleware
-        .layer(from_fn(middleware::security_headers_middleware))
+        .layer(from_fn(security_headers_middleware))
         // Add bot detection middleware
-        .layer(from_fn(middleware::bot_detection_middleware))
+        .layer(from_fn(bot_detection_middleware))
         // Add CORS layer
         .layer(
             CorsLayer::new()
@@ -381,37 +413,4 @@ pub async fn health_check(
             "redis": "up"
         }
     })))
-}
-
-pub fn init_tracing(config: &AuthConfig) {
-    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&config.log_level));
-
-    let otlp_exporter = opentelemetry_otlp::new_exporter()
-        .tonic()
-        .with_endpoint("http://tempo:4317");
-
-    let tracer =
-        opentelemetry_otlp::new_pipeline()
-            .tracing()
-            .with_exporter(otlp_exporter)
-            .with_trace_config(sdktrace::config().with_resource(Resource::new(vec![
-                KeyValue::new("service.name", config.service_name.clone()),
-            ])))
-            .install_batch(runtime::Tokio)
-            .expect("Failed to initialize OTLP tracer");
-
-    let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-
-    tracing_subscriber::registry()
-        .with(env_filter)
-        .with(telemetry)
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_file(true)
-                .with_line_number(true)
-                .json()
-                .flatten_event(true),
-        )
-        .init();
 }

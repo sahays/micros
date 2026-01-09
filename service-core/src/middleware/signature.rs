@@ -1,19 +1,38 @@
 use http_body_util::BodyExt;
-use mongodb::bson::doc;
-use service_core::{
-    axum::{
-        body::Body,
-        extract::{Request, State},
-        http::HeaderMap,
-        middleware::Next,
-        response::Response,
-    },
-    error::AppError,
+use axum::{
+    body::Body,
+    extract::{Request, State},
+    http::HeaderMap,
+    middleware::Next,
+    response::Response,
 };
+use crate::error::AppError;
+use crate::utils::signature::verify_signature;
+use async_trait::async_trait;
+use serde::Deserialize;
 
-use crate::{utils::signature::verify_signature, AppState};
+#[derive(Clone, Debug)]
+pub struct SignatureConfig {
+    pub require_signatures: bool,
+    pub excluded_paths: Vec<String>,
+}
 
-#[derive(serde::Deserialize)]
+impl Default for SignatureConfig {
+    fn default() -> Self {
+        Self {
+            require_signatures: false,
+            excluded_paths: Vec::new(),
+        }
+    }
+}
+
+#[async_trait]
+pub trait SignatureStore: Send + Sync {
+    async fn validate_nonce(&self, nonce: &str) -> Result<bool, AppError>;
+    async fn get_signing_secret(&self, client_id: &str) -> Result<Option<String>, AppError>;
+}
+
+#[derive(Deserialize)]
 struct SignatureQuery {
     client_id: Option<String>,
     timestamp: Option<String>,
@@ -21,74 +40,47 @@ struct SignatureQuery {
     signature: Option<String>,
 }
 
-pub async fn signature_validation_middleware(
-    State(state): State<AppState>,
+pub async fn signature_validation_middleware<S>(
+    State(state): State<S>,
     req: Request,
     next: Next,
-) -> Result<Response, AppError> {
-    // 0. Excluded paths (Health, JWKS, Email Verification, OAuth)
+) -> Result<Response, AppError>
+where
+    S: AsRef<SignatureConfig> + SignatureStore + Clone + Send + Sync + 'static,
+{
+    let config = state.as_ref();
     let path = req.uri().path();
-    if path == "/health"
-        || path == "/.well-known/jwks.json"
-        || path.starts_with("/auth/verify")
-        || path.starts_with("/auth/google")
-    {
+
+    if config.excluded_paths.iter().any(|p| path == p || path.starts_with(p)) {
         return Ok(next.run(req).await);
     }
 
-    // 1. Check if signatures are required
-    if !state.config.security.require_signatures {
-        // Check if neither header nor query param present
+    if !config.require_signatures {
         let has_header = req.headers().contains_key("X-Signature");
-        let has_query = req
-            .uri()
-            .query()
-            .map(|q| q.contains("signature="))
-            .unwrap_or(false);
-
+        let has_query = req.uri().query().map(|q| q.contains("signature=")).unwrap_or(false);
         if !has_header && !has_query {
             return Ok(next.run(req).await);
         }
     }
 
-    // 2. Extract Data (Headers or Query Params)
     let (client_id, timestamp_str, nonce, signature) = extract_auth_data(&req)?;
 
-    // 3. Validate Timestamp
     let timestamp: i64 = timestamp_str
         .parse()
         .map_err(|_| AppError::AuthError(anyhow::anyhow!("Invalid timestamp format")))?;
 
     let now = chrono::Utc::now().timestamp();
     if (now - timestamp).abs() > 60 {
-        return Err(AppError::AuthError(anyhow::anyhow!(
-            "Request timestamp expired"
-        )));
+        return Err(AppError::AuthError(anyhow::anyhow!("Request timestamp expired")));
     }
 
-    // 4. Validate Nonce (Replay Attack Prevention)
-    let nonce_key = format!("nonce:{}", nonce);
-    let val = state.redis.get_cache(&nonce_key).await?;
-
-    if val.is_some() {
-        return Err(AppError::AuthError(anyhow::anyhow!(
-            "Replay detected (nonce used)"
-        )));
+    if !state.validate_nonce(&nonce).await? {
+        return Err(AppError::AuthError(anyhow::anyhow!("Replay detected (nonce used)")));
     }
 
-    // Set nonce with TTL (120s)
-    state.redis.set_cache(&nonce_key, "1", 120).await?;
+    let secret = state.get_signing_secret(&client_id).await?;
+    let secret = secret.ok_or_else(|| AppError::AuthError(anyhow::anyhow!("Invalid Client ID")))?;
 
-    // 5. Fetch Client
-    let client = state
-        .db
-        .clients()
-        .find_one(doc! { "client_id": &client_id }, None)
-        .await?;
-
-    let client = client.ok_or_else(|| AppError::AuthError(anyhow::anyhow!("Invalid Client ID")))?;
-
-    // 6. Read Body
     let (parts, body) = req.into_parts();
     let bytes = body
         .collect()
@@ -98,12 +90,11 @@ pub async fn signature_validation_middleware(
 
     let body_str = std::str::from_utf8(&bytes).unwrap_or("");
 
-    // 7. Verify Signature
     let method = parts.method.as_str();
     let path = parts.uri.path();
 
     let is_valid = verify_signature(
-        &client.signing_secret,
+        &secret,
         method,
         path,
         timestamp,
@@ -117,16 +108,13 @@ pub async fn signature_validation_middleware(
         return Err(AppError::AuthError(anyhow::anyhow!("Invalid signature")));
     }
 
-    // 8. Reconstruct Request
     let req = Request::from_parts(parts, Body::from(bytes));
-
     Ok(next.run(req).await)
 }
 
 fn extract_auth_data(req: &Request) -> Result<(String, String, String, String), AppError> {
     let headers = req.headers();
 
-    // Try Headers first
     if headers.contains_key("X-Signature") {
         let client_id = get_header(headers, "X-Client-ID")?;
         let timestamp = get_header(headers, "X-Timestamp")?;
@@ -135,7 +123,6 @@ fn extract_auth_data(req: &Request) -> Result<(String, String, String, String), 
         return Ok((client_id, timestamp, nonce, signature));
     }
 
-    // Try Query Params
     if let Some(query) = req.uri().query() {
         let params: SignatureQuery = serde_urlencoded::from_str(query)
             .map_err(|_| AppError::AuthError(anyhow::anyhow!("Invalid query parameters")))?;

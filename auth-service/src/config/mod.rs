@@ -67,6 +67,8 @@ pub struct SecurityConfig {
     pub allowed_origins: Vec<String>,
     pub require_signatures: bool,
     pub admin_api_key: String,
+    #[serde(skip, default)]
+    pub signature_config: service_core::middleware::signature::SignatureConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -165,19 +167,31 @@ impl AuthConfig {
                 user: get_env("GMAIL_USER", None, is_prod)?,
                 app_password: get_env("GMAIL_APP_PASSWORD", None, is_prod)?,
             },
-            security: SecurityConfig {
-                allowed_origins: get_env(
-                    "ALLOWED_ORIGINS",
-                    Some("http://localhost:3000"),
-                    is_prod,
-                )?
-                .split(',')
-                .map(|s| s.trim().to_string())
-                .collect(),
-                require_signatures: get_env("REQUIRE_SIGNATURES", Some("false"), is_prod)?
+            security: {
+                let require_signatures = get_env("REQUIRE_SIGNATURES", Some("false"), is_prod)?
                     .parse()
-                    .unwrap_or(false),
-                admin_api_key: get_env("ADMIN_API_KEY", None, true)?,
+                    .unwrap_or(false);
+                SecurityConfig {
+                    allowed_origins: get_env(
+                        "ALLOWED_ORIGINS",
+                        Some("http://localhost:3000"),
+                        is_prod,
+                    )?
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .collect(),
+                    require_signatures,
+                    admin_api_key: get_env("ADMIN_API_KEY", None, true)?,
+                    signature_config: service_core::middleware::signature::SignatureConfig {
+                        require_signatures,
+                        excluded_paths: vec![
+                            "/health".to_string(),
+                            "/.well-known/jwks.json".to_string(),
+                            "/auth/verify".to_string(),
+                            "/auth/google".to_string(),
+                        ],
+                    },
+                }
             },
             swagger: SwaggerConfig {
                 enabled: get_env("ENABLE_SWAGGER", Some("public"), is_prod)?
