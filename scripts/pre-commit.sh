@@ -29,13 +29,13 @@ if [ -n "$STAGED_RS_FILES" ]; then
         fi
         
         echo "Running clippy..."
-        if ! cargo clippy -- -D warnings; then
+        if ! cargo clippy --jobs 2 -- -D warnings; then
             echo -e "${RED}Clippy check failed.${NC}"
             exit 1
         fi
         
         echo "Running tests..."
-        if ! cargo test; then
+        if ! cargo test --jobs 2; then
             echo -e "${RED}Tests failed.${NC}"
             exit 1
         fi
@@ -57,13 +57,41 @@ if [ -n "$STAGED_RS_FILES" ]; then
         fi
         
         echo "Running clippy..."
-        if ! cargo clippy -- -D warnings; then
+        if ! cargo clippy --jobs 2 -- -D warnings; then
             echo -e "${RED}Clippy check failed.${NC}"
             exit 1
         fi
         
         echo "Running tests..."
-        if ! cargo test; then
+        if ! cargo test --jobs 2; then
+            echo -e "${RED}Tests failed.${NC}"
+            exit 1
+        fi
+        
+        cd ..
+    fi
+
+    # Document Service Checks
+    if echo "$STAGED_RS_FILES" | grep -q "document-service/"; then
+        echo "Staged Rust files detected in document-service. Running checks..."
+        cd document-service
+        
+        echo "Checking formatting..."
+        if ! cargo fmt -- --check; then
+            echo -e "${RED}Formatting check failed. Running 'cargo fmt' to fix...${NC}"
+            cargo fmt
+            echo -e "${RED}Please review and re-stage the formatted files.${NC}"
+            exit 1
+        fi
+        
+        echo "Running clippy..."
+        if ! cargo clippy --jobs 2 -- -D warnings; then
+            echo -e "${RED}Clippy check failed.${NC}"
+            exit 1
+        fi
+        
+        echo "Running tests..."
+        if ! cargo test --jobs 2; then
             echo -e "${RED}Tests failed.${NC}"
             exit 1
         fi
@@ -85,13 +113,13 @@ if [ -n "$STAGED_RS_FILES" ]; then
         fi
         
         echo "Running clippy..."
-        if ! cargo clippy -- -D warnings; then
+        if ! cargo clippy --jobs 2 -- -D warnings; then
             echo -e "${RED}Clippy check failed.${NC}"
             exit 1
         fi
         
         echo "Running tests..."
-        if ! cargo test; then
+        if ! cargo test --jobs 2; then
             echo -e "${RED}Tests failed.${NC}"
             exit 1
         fi
