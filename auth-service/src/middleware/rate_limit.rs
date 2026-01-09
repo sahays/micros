@@ -1,9 +1,7 @@
-use axum::{
+use service_core::axum::{
     extract::{Request, State},
-    http::{header, HeaderName, StatusCode},
     middleware::Next,
-    response::{IntoResponse, Response},
-    Json,
+    response::Response,
 };
 use dashmap::DashMap;
 use governor::{
@@ -11,10 +9,11 @@ use governor::{
     state::{keyed::DashMapStateStore, InMemoryState, NotKeyed},
     Quota, RateLimiter,
 };
-use serde_json::json;
+use service_core::error::AppError;
 use std::{net::SocketAddr, num::NonZeroU32, sync::Arc, time::Duration};
 
 use crate::services::AppTokenClaims;
+
 
 /// Rate limiter for global/unkeyed use
 pub type UnkeyedRateLimiter = Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>;
@@ -81,24 +80,15 @@ pub async fn rate_limit_middleware(
     State(limiter): State<UnkeyedRateLimiter>,
     request: Request,
     next: Next,
-) -> Response {
+) -> Result<Response, AppError> {
     match limiter.check() {
-        Ok(_) => next.run(request).await,
+        Ok(_) => Ok(next.run(request).await),
         Err(negative) => {
             let wait_time = negative.wait_time_from(DefaultClock::default().now());
-            let x_ratelimit_limit = HeaderName::from_static("x-ratelimit-limit");
-            (
-                StatusCode::TOO_MANY_REQUESTS,
-                [
-                    (header::RETRY_AFTER, wait_time.as_secs().to_string()),
-                    (x_ratelimit_limit.clone(), "unknown".to_string()),
-                ],
-                Json(json!({
-                    "error": "Too many requests. Please try again later.",
-                    "retry_after_seconds": wait_time.as_secs()
-                })),
-            )
-                .into_response()
+            Err(AppError::TooManyRequests(
+                "Too many requests. Please try again later.".to_string(),
+                Some(wait_time.as_secs()),
+            ))
         }
     }
 }
@@ -108,7 +98,7 @@ pub async fn ip_rate_limit_middleware(
     State(limiter): State<IpRateLimiter>,
     request: Request,
     next: Next,
-) -> Response {
+) -> Result<Response, AppError> {
     // 1. Try to get IP from X-Forwarded-For
     let forwarded_ip = request
         .headers()
@@ -123,34 +113,25 @@ pub async fn ip_rate_limit_middleware(
         // 2. Fallback to direct connection IP
         request
             .extensions()
-            .get::<axum::extract::ConnectInfo<SocketAddr>>()
-            .map(|axum::extract::ConnectInfo(addr)| *addr)
+            .get::<service_core::axum::extract::ConnectInfo<SocketAddr>>()
+            .map(|service_core::axum::extract::ConnectInfo(addr)| *addr)
     };
 
     match addr {
         Some(addr) => match limiter.check_key(&addr) {
-            Ok(_) => next.run(request).await,
+            Ok(_) => Ok(next.run(request).await),
             Err(negative) => {
                 let wait_time = negative.wait_time_from(DefaultClock::default().now());
-                let x_ratelimit_limit = HeaderName::from_static("x-ratelimit-limit");
-                (
-                    StatusCode::TOO_MANY_REQUESTS,
-                    [
-                        (header::RETRY_AFTER, wait_time.as_secs().to_string()),
-                        (x_ratelimit_limit, "unknown".to_string()),
-                    ],
-                    Json(json!({
-                        "error": "Too many requests from this IP. Please try again later.",
-                        "retry_after_seconds": wait_time.as_secs()
-                    })),
-                )
-                    .into_response()
+                Err(AppError::TooManyRequests(
+                    "Too many requests from this IP. Please try again later.".to_string(),
+                    Some(wait_time.as_secs()),
+                ))
             }
         },
         None => {
             // If IP cannot be determined, proceed but log warning
             tracing::warn!("Could not determine IP for rate limiting");
-            next.run(request).await
+            Ok(next.run(request).await)
         }
     }
 }
@@ -160,7 +141,7 @@ pub async fn client_rate_limit_middleware(
     State(limiter_map): State<ClientRateLimiter>,
     request: Request,
     next: Next,
-) -> Response {
+) -> Result<Response, AppError> {
     let claims = request.extensions().get::<AppTokenClaims>();
 
     if let Some(claims) = claims {
@@ -169,7 +150,7 @@ pub async fn client_rate_limit_middleware(
 
         // Skip if limit is 0 (unlimited)
         if limit_per_min == 0 {
-            return next.run(request).await;
+            return Ok(next.run(request).await);
         }
 
         // Get or create limiter for this client
@@ -179,30 +160,18 @@ pub async fn client_rate_limit_middleware(
             .clone();
 
         match limiter.check() {
-            Ok(_) => next.run(request).await,
+            Ok(_) => Ok(next.run(request).await),
             Err(negative) => {
                 let wait_time = negative.wait_time_from(DefaultClock::default().now());
-                let x_ratelimit_limit = HeaderName::from_static("x-ratelimit-limit");
-                let x_ratelimit_remaining = HeaderName::from_static("x-ratelimit-remaining");
-                (
-                    StatusCode::TOO_MANY_REQUESTS,
-                    [
-                        (header::RETRY_AFTER, wait_time.as_secs().to_string()),
-                        (x_ratelimit_limit, limit_per_min.to_string()),
-                        (x_ratelimit_remaining, "0".to_string()),
-                    ],
-                    Json(json!({
-                        "error": "Client rate limit exceeded",
-                        "retry_after_seconds": wait_time.as_secs(),
-                        "limit": limit_per_min
-                    })),
-                )
-                    .into_response()
+                Err(AppError::TooManyRequests(
+                    "Client rate limit exceeded".to_string(),
+                    Some(wait_time.as_secs()),
+                ))
             }
         }
     } else {
         // No app claims, proceed
-        next.run(request).await
+        Ok(next.run(request).await)
     }
 }
 

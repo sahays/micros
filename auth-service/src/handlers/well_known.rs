@@ -1,5 +1,5 @@
 use crate::AppState;
-use axum::{extract::State, http::header, response::IntoResponse, Json};
+use service_core::{axum::{extract::State, http::header, response::IntoResponse, Json}, error::AppError};
 
 /// Get JSON Web Key Set (JWKS)
 #[utoipa::path(
@@ -10,23 +10,13 @@ use axum::{extract::State, http::header, response::IntoResponse, Json};
     ),
     tag = "Well-Known"
 )]
-pub async fn jwks(State(state): State<AppState>) -> impl IntoResponse {
-    match state.jwt.get_jwks() {
-        Ok(jwks) => (
-            [
-                (header::CONTENT_TYPE, "application/json"),
-                (header::CACHE_CONTROL, "public, max-age=3600"),
-            ],
-            Json(jwks),
-        )
-            .into_response(),
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to generate JWKS");
-            (
-                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal Server Error",
-            )
-                .into_response()
-        }
-    }
+pub async fn jwks(State(state): State<AppState>) -> Result<impl IntoResponse, AppError> {
+    let jwks = state.jwt.get_jwks()?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, "application/json"),
+            (header::CACHE_CONTROL, "public, max-age=3600"),
+        ],
+        Json(jwks),
+    ))
 }

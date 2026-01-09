@@ -1,5 +1,5 @@
-use axum::http::HeaderValue;
-use axum::{extract::Request, middleware::Next, response::Response};
+use service_core::axum::http::HeaderValue;
+use service_core::axum::{extract::Request, middleware::Next, response::Response};
 use uuid::Uuid;
 
 pub const REQUEST_ID_HEADER: &str = "x-request-id";

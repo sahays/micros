@@ -1,9 +1,9 @@
-use axum::{
+use service_core::{axum::{
     extract::{ConnectInfo, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
-};
+}, error::AppError};
 use mongodb::bson::doc;
 use serde::Deserialize;
 use std::net::SocketAddr;
@@ -11,7 +11,6 @@ use utoipa::ToSchema;
 use validator::Validate;
 
 use crate::{
-    dtos::ErrorResponse,
     middleware::AuthUser,
     models::{AuditLog, VerificationToken},
     utils::{hash_password, verify_password, Password, PasswordHashString},
@@ -51,34 +50,19 @@ pub struct UpdateUserRequest {
         ("bearer_auth" = [])
     )
 )]
-#[axum::debug_handler]
 pub async fn get_me(
     State(state): State<AppState>,
     user: AuthUser,
-) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<impl IntoResponse, AppError> {
     let claims = user.0;
 
     let user = state
         .db
         .users()
         .find_one(doc! { "_id": &claims.sub }, None)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Database error finding user");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Internal server error".to_string(),
-                }),
-            )
-        })?
+        .await?
         .ok_or_else(|| {
-            (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    error: "User not found".to_string(),
-                }),
-            )
+            AppError::NotFound(anyhow::anyhow!("User not found"))
         })?;
 
     Ok(Json(user.sanitized()))
@@ -101,21 +85,13 @@ pub async fn get_me(
         ("bearer_auth" = [])
     )
 )]
-#[axum::debug_handler]
 pub async fn update_me(
     State(state): State<AppState>,
     user_claims: AuthUser,
     Json(req): Json<UpdateUserRequest>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<impl IntoResponse, AppError> {
     // 1. Validate request
-    req.validate().map_err(|e| {
-        (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            Json(ErrorResponse {
-                error: format!("Validation error: {}", e),
-            }),
-        )
-    })?;
+    req.validate()?;
 
     let claims = user_claims.0;
 
@@ -124,23 +100,9 @@ pub async fn update_me(
         .db
         .users()
         .find_one(doc! { "_id": &claims.sub }, None)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Database error finding user");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Internal server error".to_string(),
-                }),
-            )
-        })?
+        .await?
         .ok_or_else(|| {
-            (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    error: "User not found".to_string(),
-                }),
-            )
+            AppError::NotFound(anyhow::anyhow!("User not found"))
         })?;
 
     let mut update_doc = doc! {};
@@ -154,24 +116,10 @@ pub async fn update_me(
                 .db
                 .users()
                 .find_one(doc! { "email": new_email }, None)
-                .await
-                .map_err(|e| {
-                    tracing::error!(error = %e, "Database error checking email uniqueness");
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(ErrorResponse {
-                            error: "Internal server error".to_string(),
-                        }),
-                    )
-                })?;
+                .await?;
 
             if existing.is_some() {
-                return Err((
-                    StatusCode::CONFLICT,
-                    Json(ErrorResponse {
-                        error: "Email already in use".to_string(),
-                    }),
-                ));
+                return Err(AppError::Conflict(anyhow::anyhow!("Email already in use")));
             }
 
             update_doc.insert("email", new_email);
@@ -196,27 +144,13 @@ pub async fn update_me(
         .db
         .users()
         .update_one(doc! { "_id": &user.id }, doc! { "$set": update_doc }, None)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Database error updating user");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Internal server error".to_string(),
-                }),
-            )
-        })?;
+        .await?;
 
     // 6. If email changed, trigger verification flow
     if email_changed {
         // We know email is Some because email_changed is only true when email is Some
         let new_email = req.email.ok_or_else(|| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Internal server error".to_string(),
-                }),
-            )
+            AppError::InternalError(anyhow::anyhow!("Internal server error: email missing after change check"))
         })?;
         // Generate verification token
         let token = {
@@ -234,21 +168,14 @@ pub async fn update_me(
             .verification_tokens()
             .insert_one(&verification_token, None)
             .await
-            .map_err(|e| {
-                tracing::error!(error = %e, "Database error creating verification token");
-                // Non-fatal for the update response, but should be logged
-            })
             .ok();
 
         // Send verification email
-        let base_url = format!("http://localhost:{}", state.config.port);
+        let base_url = format!("http://localhost:{}", state.config.common.port);
         state
             .email
             .send_verification_email(&new_email, &token, &base_url)
             .await
-            .map_err(|e| {
-                tracing::error!(error = %e, "Failed to send verification email");
-            })
             .ok();
     }
 
@@ -257,25 +184,9 @@ pub async fn update_me(
         .db
         .users()
         .find_one(doc! { "_id": &user.id }, None)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Database error fetching updated user");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Internal server error".to_string(),
-                }),
-            )
-        })?
+        .await?
         .ok_or_else(|| {
-            // This shouldn't happen after a successful update, but handle it gracefully
-            tracing::error!(user_id = %user.id, "User not found after update");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Internal server error".to_string(),
-                }),
-            )
+            AppError::InternalError(anyhow::anyhow!("User not found after update"))
         })?;
 
     Ok(Json(updated_user.sanitized()))
@@ -297,23 +208,15 @@ pub async fn update_me(
         ("bearer_auth" = [])
     )
 )]
-#[axum::debug_handler]
 pub async fn change_password(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     user_claims: AuthUser,
     Json(req): Json<ChangePasswordRequest>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<impl IntoResponse, AppError> {
     let ip_address = addr.to_string();
     // 1. Validate request
-    req.validate().map_err(|e| {
-        (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            Json(ErrorResponse {
-                error: format!("Validation error: {}", e),
-            }),
-        )
-    })?;
+    req.validate()?;
 
     let claims = user_claims.0;
 
@@ -322,23 +225,9 @@ pub async fn change_password(
         .db
         .users()
         .find_one(doc! { "_id": &claims.sub }, None)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Database error finding user");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Internal server error".to_string(),
-                }),
-            )
-        })?
+        .await?
         .ok_or_else(|| {
-            (
-                StatusCode::NOT_FOUND,
-                Json(ErrorResponse {
-                    error: "User not found".to_string(),
-                }),
-            )
+            AppError::NotFound(anyhow::anyhow!("User not found"))
         })?;
 
     // 3. Verify current password
@@ -347,24 +236,11 @@ pub async fn change_password(
         &PasswordHashString::new(user.password_hash.clone()),
     )
     .map_err(|_| {
-        (
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                error: "Incorrect current password".to_string(),
-            }),
-        )
+        AppError::AuthError(anyhow::anyhow!("Incorrect current password"))
     })?;
 
     // 4. Hash new password
-    let new_password_hash = hash_password(&Password::new(req.new_password)).map_err(|e| {
-        tracing::error!(error = %e, "Password hashing error");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "Internal server error".to_string(),
-            }),
-        )
-    })?;
+    let new_password_hash = hash_password(&Password::new(req.new_password))?;
 
     // 5. Update password and invalidate refresh tokens
     // Update password
@@ -381,16 +257,7 @@ pub async fn change_password(
             },
             None,
         )
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Database error updating password");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Internal server error".to_string(),
-                }),
-            )
-        })?;
+        .await?;
 
     // Invalidate all refresh tokens
     state
@@ -402,10 +269,6 @@ pub async fn change_password(
             None,
         )
         .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Database error revoking refresh tokens");
-            // Non-fatal for the response
-        })
         .ok();
 
     // Audit log password change

@@ -1,18 +1,18 @@
 use crate::AppState;
-use axum::{
+use service_core::axum::{
     extract::{Request, State},
-    http::{HeaderMap, StatusCode},
+    http::HeaderMap,
     middleware::Next,
-    response::{IntoResponse, Json, Response},
+    response::Response,
 };
-use serde_json::json;
+use service_core::error::AppError;
 
 pub async fn admin_auth_middleware(
     State(state): State<AppState>,
     headers: HeaderMap,
     request: Request,
     next: Next,
-) -> Response {
+) -> Result<Response, AppError> {
     // Check for X-Admin-Api-Key header
     let api_key = headers
         .get("X-Admin-Api-Key")
@@ -21,16 +21,14 @@ pub async fn admin_auth_middleware(
     match api_key {
         Some(key) if key == state.config.security.admin_api_key => {
             // Valid key, proceed
-            next.run(request).await
+            Ok(next.run(request).await)
         }
         _ => {
             // Invalid or missing key
             tracing::warn!("Failed admin authentication attempt");
-            (
-                StatusCode::UNAUTHORIZED,
-                Json(json!({ "error": "Unauthorized: Invalid or missing admin API key" })),
-            )
-                .into_response()
+            Err(AppError::Unauthorized(anyhow::anyhow!(
+                "Unauthorized: Invalid or missing admin API key"
+            )))
         }
     }
 }

@@ -1,13 +1,16 @@
 use serde::Deserialize;
 use std::env;
+use service_core::config as core_config;
+use service_core::error::AppError;
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Config {
+pub struct AuthConfig {
+    #[serde(flatten)]
+    pub common: core_config::Config,
     pub environment: Environment,
     pub service_name: String,
     pub service_version: String,
     pub log_level: String,
-    pub port: u16,
     pub mongodb: MongoConfig,
     pub redis: RedisConfig,
     pub jwt: JwtConfig,
@@ -93,26 +96,23 @@ pub struct RateLimitConfig {
     pub app_token_window_seconds: u64,
 }
 
-impl Config {
-    pub fn from_env() -> Result<Self, anyhow::Error> {
-        // Load .env file if it exists (for local development)
-        dotenvy::dotenv().ok();
+impl AuthConfig {
+    pub fn from_env() -> Result<Self, AppError> {
+        let common_config = core_config::Config::load()?;
 
         let env_str = env::var("ENVIRONMENT").unwrap_or_else(|_| "dev".to_string());
         let environment: Environment = env_str
             .parse()
-            .map_err(|_| anyhow::anyhow!("Invalid ENVIRONMENT value: {}", env_str))?;
+            .map_err(|e: String| AppError::ConfigError(anyhow::anyhow!(e)))?;
 
         let is_prod = environment == Environment::Prod;
 
-        let config = Config {
+        let config = AuthConfig {
+            common: common_config,
             environment: environment.clone(),
             service_name: get_env("SERVICE_NAME", Some("auth-service"), is_prod)?,
             service_version: get_env("SERVICE_VERSION", Some(env!("CARGO_PKG_VERSION")), is_prod)?,
             log_level: get_env("LOG_LEVEL", Some("info"), is_prod)?,
-            port: get_env("PORT", Some("3000"), is_prod)?
-                .parse()
-                .map_err(|_| anyhow::anyhow!("Invalid PORT value"))?,
             mongodb: MongoConfig {
                 uri: get_env("MONGODB_URI", None, true)?,
                 database: get_env("MONGODB_DATABASE", None, true)?,
@@ -129,21 +129,21 @@ impl Config {
                     is_prod,
                 )?
                 .parse()
-                .map_err(|_| anyhow::anyhow!("Invalid JWT_ACCESS_TOKEN_EXPIRY_MINUTES"))?,
+                .map_err(|e: std::num::ParseIntError| AppError::ConfigError(anyhow::anyhow!(e.to_string())))?,
                 refresh_token_expiry_days: get_env(
                     "JWT_REFRESH_TOKEN_EXPIRY_DAYS",
                     Some("7"),
                     is_prod,
                 )?
                 .parse()
-                .map_err(|_| anyhow::anyhow!("Invalid JWT_REFRESH_TOKEN_EXPIRY_DAYS"))?,
+                .map_err(|e: std::num::ParseIntError| AppError::ConfigError(anyhow::anyhow!(e.to_string())))?,
                 app_token_expiry_minutes: get_env(
                     "JWT_APP_TOKEN_EXPIRY_MINUTES",
                     Some("60"),
                     is_prod,
                 )?
                 .parse()
-                .map_err(|_| anyhow::anyhow!("Invalid JWT_APP_TOKEN_EXPIRY_MINUTES"))?,
+                .map_err(|e: std::num::ParseIntError| AppError::ConfigError(anyhow::anyhow!(e.to_string())))?,
             },
             google: GoogleOAuthConfig {
                 client_id: get_env("GOOGLE_CLIENT_ID", None, is_prod)?,
@@ -176,7 +176,7 @@ impl Config {
             swagger: SwaggerConfig {
                 enabled: get_env("ENABLE_SWAGGER", Some("public"), is_prod)?
                     .parse()
-                    .map_err(|_| anyhow::anyhow!("Invalid ENABLE_SWAGGER value"))?,
+                    .map_err(|e: String| AppError::ConfigError(anyhow::anyhow!(e)))?,
             },
             rate_limit: RateLimitConfig {
                 login_attempts: get_env("RATE_LIMIT_LOGIN_ATTEMPTS", Some("5"), is_prod)?
@@ -240,34 +240,34 @@ impl Config {
         Ok(config)
     }
 
-    fn validate(&self) -> Result<(), anyhow::Error> {
+    fn validate(&self) -> Result<(), AppError> {
         // Validate configuration
-        if self.port == 0 {
-            return Err(anyhow::anyhow!("PORT must be greater than 0"));
+        if self.common.port == 0 {
+            return Err(AppError::ConfigError(anyhow::anyhow!("PORT must be greater than 0")));
         }
 
         if self.jwt.access_token_expiry_minutes <= 0 {
-            return Err(anyhow::anyhow!(
-                "JWT_ACCESS_TOKEN_EXPIRY_MINUTES must be positive"
+            return Err(AppError::ConfigError(
+                anyhow::anyhow!("JWT_ACCESS_TOKEN_EXPIRY_MINUTES must be positive")
             ));
         }
 
         if self.jwt.refresh_token_expiry_days <= 0 {
-            return Err(anyhow::anyhow!(
-                "JWT_REFRESH_TOKEN_EXPIRY_DAYS must be positive"
+            return Err(AppError::ConfigError(
+                anyhow::anyhow!("JWT_REFRESH_TOKEN_EXPIRY_DAYS must be positive")
             ));
         }
 
         // In production, ensure stricter validation
         if self.environment == Environment::Prod {
             if self.security.allowed_origins.iter().any(|o| o == "*") {
-                return Err(anyhow::anyhow!(
-                    "Wildcard CORS origin not allowed in production"
+                return Err(AppError::ConfigError(
+                    anyhow::anyhow!("Wildcard CORS origin not allowed in production")
                 ));
             }
 
             if self.swagger.enabled == SwaggerMode::Public {
-                tracing::warn!("Swagger is publicly accessible in production - consider using 'authenticated' or 'disabled'");
+                tracing::error!("Swagger is publicly accessible in production - consider using 'authenticated' or 'disabled'");
             }
         }
 
@@ -275,19 +275,19 @@ impl Config {
     }
 }
 
-fn get_env(key: &str, default: Option<&str>, is_prod: bool) -> Result<String, anyhow::Error> {
+fn get_env(key: &str, default: Option<&str>, is_prod: bool) -> Result<String, AppError> {
     match env::var(key) {
         Ok(val) => Ok(val),
         Err(_) => {
             if is_prod {
-                Err(anyhow::anyhow!(
+                Err(AppError::ConfigError(anyhow::anyhow!(format!(
                     "{} is required in production but not set",
                     key
-                ))
+                ))))
             } else if let Some(def) = default {
                 Ok(def.to_string())
             } else {
-                Err(anyhow::anyhow!("{} is required but not set", key))
+                Err(AppError::ConfigError(anyhow::anyhow!(format!("{} is required but not set", key))))
             }
         }
     }

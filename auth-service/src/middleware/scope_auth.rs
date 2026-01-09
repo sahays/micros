@@ -1,17 +1,9 @@
 use crate::{middleware::ServiceContext, models::AuditLog, AppState};
-use axum::{
+use service_core::{axum::{
     extract::{Request, State},
-    http::StatusCode,
     middleware::Next,
-    response::IntoResponse,
-    Json,
-};
-use serde::Serialize;
-
-#[derive(Debug, Serialize)]
-pub struct ErrorResponse {
-    pub error: String,
-}
+    response::Response,
+}, error::AppError};
 
 /// Middleware to require specific scopes for service authentication
 pub async fn require_scopes(
@@ -19,7 +11,7 @@ pub async fn require_scopes(
     required_scopes: Vec<String>,
     req: Request,
     next: Next,
-) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, AppError> {
     let method = req.method().to_string();
     let endpoint = req.uri().path().to_string();
     let ip_address = req
@@ -30,12 +22,7 @@ pub async fn require_scopes(
         .to_string();
 
     let context = req.extensions().get::<ServiceContext>().ok_or_else(|| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "Service context missing from request extensions".to_string(),
-            }),
-        )
+        AppError::InternalError(anyhow::anyhow!("Service context missing from request extensions"))
     })?;
 
     for required in &required_scopes {
@@ -53,7 +40,7 @@ pub async fn require_scopes(
                 Some(context.service_id.clone()),
                 endpoint.clone(),
                 method.clone(),
-                StatusCode::FORBIDDEN.as_u16(),
+                service_core::axum::http::StatusCode::FORBIDDEN.as_u16(),
                 ip_address.clone(),
             );
             log.service_name = Some(context.service_name.clone());
@@ -64,12 +51,7 @@ pub async fn require_scopes(
                 let _ = db.audit_logs().insert_one(log, None).await;
             });
 
-            return Err((
-                StatusCode::FORBIDDEN,
-                Json(ErrorResponse {
-                    error: format!("Insufficient scopes. Required: {}", required),
-                }),
-            ));
+            return Err(AppError::Forbidden(anyhow::anyhow!("Insufficient scopes. Required: {}", required)));
         }
     }
 

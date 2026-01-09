@@ -1,9 +1,7 @@
-use axum::{
+use service_core::{axum::{
     extract::{Query, State},
-    http::StatusCode,
-    response::{IntoResponse, Redirect},
-    Json,
-};
+    response::{IntoResponse, Redirect, Response},
+}, error::AppError};
 use axum_extra::extract::cookie::{Cookie, CookieJar};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use mongodb::bson::doc;
@@ -11,7 +9,7 @@ use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
 use crate::{
-    dtos::{auth::GoogleCallbackQuery, ErrorResponse},
+    dtos::auth::GoogleCallbackQuery,
     AppState,
 };
 
@@ -33,7 +31,7 @@ struct GoogleUserInfo {
 pub async fn google_login(
     State(state): State<AppState>,
     jar: CookieJar,
-) -> (CookieJar, impl IntoResponse) {
+) -> (CookieJar, Response) {
     let state_val = uuid::Uuid::new_v4().to_string();
     let code_verifier = {
         let mut rng = rand::thread_rng();
@@ -75,33 +73,23 @@ pub async fn google_login(
                 .build(),
         );
 
-    (updated_jar, Redirect::to(&google_url))
+    (updated_jar, Redirect::to(&google_url).into_response())
 }
 
 pub async fn google_callback(
     State(state): State<AppState>,
     jar: CookieJar,
     Query(query): Query<GoogleCallbackQuery>,
-) -> Result<(CookieJar, impl IntoResponse), (StatusCode, Json<ErrorResponse>)> {
+) -> Result<(CookieJar, Response), AppError> {
     // 1. Validate state
     let stored_state = jar.get("oauth_state").map(|c| c.value());
     if stored_state != Some(&query.state) {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "Invalid OAuth state".to_string(),
-            }),
-        ));
+        return Err(AppError::BadRequest(anyhow::anyhow!("Invalid OAuth state")));
     }
 
     // 2. Get code verifier
     let code_verifier = jar.get("code_verifier").map(|c| c.value()).ok_or_else(|| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "Missing code verifier".to_string(),
-            }),
-        )
+        AppError::BadRequest(anyhow::anyhow!("Missing code verifier"))
     })?;
 
     // 3. Exchange code for access token
@@ -120,34 +108,19 @@ pub async fn google_callback(
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to exchange Google code");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Authentication failed".to_string(),
-                }),
-            )
+            AppError::AuthError(anyhow::anyhow!("Authentication failed"))
         })?;
 
     if !token_res.status().is_success() {
         let status = token_res.status();
         let err_body = token_res.text().await.unwrap_or_default();
         tracing::error!(status = %status, body = %err_body, "Google token exchange error");
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "Authentication failed".to_string(),
-            }),
-        ));
+        return Err(AppError::AuthError(anyhow::anyhow!("Authentication failed")));
     }
 
     let token_data: GoogleTokenResponse = token_res.json().await.map_err(|e| {
         tracing::error!(error = %e, "Failed to parse Google token response");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "Internal server error".to_string(),
-            }),
-        )
+        AppError::InternalError(anyhow::anyhow!("Internal server error"))
     })?;
 
     // 4. Get user info from Google
@@ -158,31 +131,16 @@ pub async fn google_callback(
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch Google user info");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Authentication failed".to_string(),
-                }),
-            )
+            AppError::AuthError(anyhow::anyhow!("Authentication failed"))
         })?;
 
     let user_info: GoogleUserInfo = user_info_res.json().await.map_err(|e| {
         tracing::error!(error = %e, "Failed to parse Google user info");
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "Internal server error".to_string(),
-            }),
-        )
+        AppError::InternalError(anyhow::anyhow!("Internal server error"))
     })?;
 
     if !user_info.verified_email {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "Google account email not verified".to_string(),
-            }),
-        ));
+        return Err(AppError::BadRequest(anyhow::anyhow!("Google account email not verified")));
     }
 
     // 5. Find or create user in database
@@ -190,16 +148,7 @@ pub async fn google_callback(
         .db
         .users()
         .find_one(doc! { "email": &user_info.email }, None)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Database error finding user");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Internal server error".to_string(),
-                }),
-            )
-        })?;
+        .await?;
 
     let user = match existing_user {
         Some(u) => {
@@ -232,16 +181,7 @@ pub async fn google_callback(
                 .db
                 .users()
                 .insert_one(&new_user, None)
-                .await
-                .map_err(|e| {
-                    tracing::error!(error = %e, "Database error creating social user");
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(ErrorResponse {
-                            error: "Internal server error".to_string(),
-                        }),
-                    )
-                })?;
+                .await?;
             new_user
         }
     };
@@ -249,16 +189,7 @@ pub async fn google_callback(
     // 6. Generate tokens
     let (access_token, refresh_token_str, refresh_token_id) = state
         .jwt
-        .generate_token_pair(&user.id, &user.email)
-        .map_err(|e| {
-            tracing::error!(error = %e, "Failed to generate token pair");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Internal server error".to_string(),
-                }),
-            )
-        })?;
+        .generate_token_pair(&user.id, &user.email)?;
 
     // Store refresh token
     use crate::models::RefreshToken;
@@ -273,16 +204,7 @@ pub async fn google_callback(
         .db
         .refresh_tokens()
         .insert_one(&refresh_token, None)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Database error storing refresh token");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Internal server error".to_string(),
-                }),
-            )
-        })?;
+        .await?;
 
     tracing::info!(user_id = %user.id, "User logged in via Google");
 
@@ -297,5 +219,5 @@ pub async fn google_callback(
         .remove(Cookie::from("oauth_state"))
         .remove(Cookie::from("code_verifier"));
 
-    Ok((updated_jar, Redirect::to(&redirect_url)))
+    Ok((updated_jar, Redirect::to(&redirect_url).into_response()))
 }

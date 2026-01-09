@@ -6,7 +6,7 @@ pub mod models;
 pub mod services;
 pub mod utils;
 
-use axum::{
+use service_core::axum::{
     middleware::{from_fn, from_fn_with_state},
     routing::{get, post},
     Router,
@@ -22,9 +22,10 @@ use utoipa::{
 };
 use utoipa_swagger_ui::SwaggerUi;
 
-use crate::config::Config;
+use crate::config::AuthConfig;
 use crate::middleware::IpRateLimiter;
 use crate::services::{EmailProvider, JwtService, MongoDb};
+use service_core::error::AppError;
 use std::sync::Arc;
 
 #[derive(OpenApi)]
@@ -123,7 +124,7 @@ impl Modify for SecurityAddon {
 
 #[derive(Clone)]
 pub struct AppState {
-    pub config: Config,
+    pub config: AuthConfig,
     pub db: MongoDb,
     pub email: Arc<dyn EmailProvider>,
     pub jwt: JwtService,
@@ -138,9 +139,7 @@ pub struct AppState {
     pub ip_rate_limiter: IpRateLimiter,
 }
 
-pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
-    // TODO: Add user routes
-
+pub async fn build_router(state: AppState) -> Result<Router, AppError> {
     // Admin routes
     let admin_routes = Router::new()
         .route("/auth/admin/clients", post(handlers::admin::create_client))
@@ -150,7 +149,7 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
         )
         .route(
             "/auth/admin/clients/:client_id",
-            axum::routing::delete(handlers::admin::revoke_client),
+            service_core::axum::routing::delete(handlers::admin::revoke_client),
         )
         .route(
             "/auth/admin/services",
@@ -162,7 +161,7 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
         )
         .route(
             "/auth/admin/services/:service_id",
-            axum::routing::delete(handlers::admin::revoke_service_account),
+            service_core::axum::routing::delete(handlers::admin::revoke_service_account),
         )
         .route(
             "/auth/admin/services/:service_id/audit-log",
@@ -237,7 +236,7 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
         // If Swagger UI is disabled, still provide the OpenAPI JSON for programmatic access
         app = app.route(
             "/.well-known/openapi.json",
-            get(|| async { axum::Json(ApiDoc::openapi()) }),
+            get(|| async { service_core::axum::Json(ApiDoc::openapi()) }),
         );
     }
 
@@ -288,7 +287,7 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
         .layer(from_fn(middleware::metrics_middleware))
         // Add tracing layer
         .layer(
-            TraceLayer::new_for_http().make_span_with(|request: &axum::http::Request<_>| {
+            TraceLayer::new_for_http().make_span_with(|request: &service_core::axum::http::Request<_>| {
                 let request_id = request
                     .headers()
                     .get("x-request-id")
@@ -320,27 +319,27 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
                         .allowed_origins
                         .iter()
                         .map(|o| {
-                            o.parse::<axum::http::HeaderValue>()
+                            o.parse::<service_core::axum::http::HeaderValue>()
                                 .expect("Invalid CORS origin")
                         })
-                        .collect::<Vec<axum::http::HeaderValue>>(),
+                        .collect::<Vec<service_core::axum::http::HeaderValue>>(),
                 )
                 .allow_methods([
-                    axum::http::Method::GET,
-                    axum::http::Method::POST,
-                    axum::http::Method::PATCH,
-                    axum::http::Method::DELETE,
-                    axum::http::Method::OPTIONS,
+                    service_core::axum::http::Method::GET,
+                    service_core::axum::http::Method::POST,
+                    service_core::axum::http::Method::PATCH,
+                    service_core::axum::http::Method::DELETE,
+                    service_core::axum::http::Method::OPTIONS,
                 ])
                 .allow_headers([
-                    axum::http::header::AUTHORIZATION,
-                    axum::http::header::CONTENT_TYPE,
-                    axum::http::header::HeaderName::from_static("x-admin-api-key"),
-                    axum::http::header::HeaderName::from_static("x-app-token"),
-                    axum::http::header::HeaderName::from_static("x-client-id"),
-                    axum::http::header::HeaderName::from_static("x-timestamp"),
-                    axum::http::header::HeaderName::from_static("x-nonce"),
-                    axum::http::header::HeaderName::from_static("x-signature"),
+                    service_core::axum::http::header::AUTHORIZATION,
+                    service_core::axum::http::header::CONTENT_TYPE,
+                    service_core::axum::http::header::HeaderName::from_static("x-admin-api-key"),
+                    service_core::axum::http::header::HeaderName::from_static("x-app-token"),
+                    service_core::axum::http::header::HeaderName::from_static("x-client-id"),
+                    service_core::axum::http::header::HeaderName::from_static("x-timestamp"),
+                    service_core::axum::http::header::HeaderName::from_static("x-nonce"),
+                    service_core::axum::http::header::HeaderName::from_static("x-signature"),
                 ]),
         );
 
@@ -358,27 +357,21 @@ pub async fn build_router(state: AppState) -> Result<Router, anyhow::Error> {
     tag = "Observability"
 )]
 pub async fn health_check(
-    axum::extract::State(state): axum::extract::State<AppState>,
-) -> Result<axum::Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    service_core::axum::extract::State(state): service_core::axum::extract::State<AppState>,
+) -> Result<service_core::axum::Json<serde_json::Value>, AppError> {
     // Check MongoDB connection
     state.db.health_check().await.map_err(|e| {
         tracing::error!(error = %e, "MongoDB health check failed");
-        (
-            axum::http::StatusCode::SERVICE_UNAVAILABLE,
-            format!("MongoDB unhealthy: {}", e),
-        )
+        AppError::InternalError(e.into())
     })?;
 
     // Check Redis connection
     state.redis.health_check().await.map_err(|e| {
         tracing::error!(error = %e, "Redis health check failed");
-        (
-            axum::http::StatusCode::SERVICE_UNAVAILABLE,
-            format!("Redis unhealthy: {}", e),
-        )
+        AppError::InternalError(e.into())
     })?;
 
-    Ok(axum::Json(serde_json::json!({
+    Ok(service_core::axum::Json(serde_json::json!({
         "status": "healthy",
         "service": state.config.service_name,
         "version": state.config.service_version,
@@ -390,7 +383,7 @@ pub async fn health_check(
     })))
 }
 
-pub fn init_tracing(config: &Config) {
+pub fn init_tracing(config: &AuthConfig) {
     let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&config.log_level));
 

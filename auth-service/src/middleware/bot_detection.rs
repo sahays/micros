@@ -1,11 +1,12 @@
-use axum::{
+use service_core::axum::{
     extract::Request,
-    http::{HeaderMap, StatusCode},
+    http::HeaderMap,
     middleware::Next,
     response::Response,
 };
 use isbot::Bots;
 use tracing::warn;
+use service_core::error::AppError;
 
 /// Middleware to detect and block bots based on heuristic analysis.
 ///
@@ -20,10 +21,10 @@ pub async fn bot_detection_middleware(
     headers: HeaderMap,
     request: Request,
     next: Next,
-) -> Result<Response, StatusCode> {
+) -> Result<Response, AppError> {
     let bots = Bots::default();
     // Skip OPTIONS requests (CORS preflight)
-    if request.method() == axum::http::Method::OPTIONS {
+    if request.method() == service_core::axum::http::Method::OPTIONS {
         return Ok(next.run(request).await);
     }
 
@@ -87,7 +88,7 @@ pub async fn bot_detection_middleware(
             path = %request.uri(),
             "Blocking suspected bot request"
         );
-        return Err(StatusCode::FORBIDDEN);
+        return Err(AppError::Forbidden(anyhow::anyhow!("Bot detected")));
     }
 
     Ok(next.run(request).await)

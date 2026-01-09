@@ -1,10 +1,10 @@
-use axum::{
+use service_core::{axum::{
     extract::{FromRequestParts, Request, State},
-    http::{header, request::Parts, StatusCode},
+    http::{header, request::Parts},
     middleware::Next,
-    response::IntoResponse,
-    Json,
-};
+    response::Response,
+    async_trait,
+}, error::AppError};
 use mongodb::bson::doc;
 use serde::{Deserialize, Serialize};
 
@@ -21,16 +21,11 @@ pub struct ServiceContext {
     pub scopes: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
-pub struct ErrorResponse {
-    pub error: String,
-}
-
 pub async fn service_auth_middleware(
     State(state): State<AppState>,
     mut req: Request,
     next: Next,
-) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Response, AppError> {
     let method = req.method().to_string();
     let endpoint = req.uri().path().to_string();
     let ip_address = req
@@ -54,7 +49,7 @@ pub async fn service_auth_middleware(
                 None,
                 endpoint,
                 method,
-                StatusCode::UNAUTHORIZED.as_u16(),
+                service_core::axum::http::StatusCode::UNAUTHORIZED.as_u16(),
                 ip_address,
             );
             log.details = Some("Missing Authorization header".to_string());
@@ -63,23 +58,13 @@ pub async fn service_auth_middleware(
                 let _ = db.audit_logs().insert_one(log, None).await;
             });
 
-            return Err((
-                StatusCode::UNAUTHORIZED,
-                Json(ErrorResponse {
-                    error: "Missing or invalid Authorization header".to_string(),
-                }),
-            ));
+            return Err(AppError::AuthError(anyhow::anyhow!("Missing or invalid Authorization header")));
         }
     };
 
     // 1. Identify key type and calculate lookup hash
     if !api_key.starts_with("svc_live_") && !api_key.starts_with("svc_test_") {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                error: "Invalid API key format".to_string(),
-            }),
-        ));
+        return Err(AppError::AuthError(anyhow::anyhow!("Invalid API key format")));
     }
 
     let lookup_hash = ServiceAccount::calculate_lookup_hash(api_key);
@@ -106,16 +91,7 @@ pub async fn service_auth_middleware(
             },
             None,
         )
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Database error finding service account");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Internal server error".to_string(),
-                }),
-            )
-        })?;
+        .await?;
 
     let account = match account {
         Some(acc) => acc,
@@ -125,7 +101,7 @@ pub async fn service_auth_middleware(
                 None,
                 endpoint,
                 method,
-                StatusCode::UNAUTHORIZED.as_u16(),
+                service_core::axum::http::StatusCode::UNAUTHORIZED.as_u16(),
                 ip_address,
             );
             log.details = Some("Invalid API key (no account found)".to_string());
@@ -134,12 +110,7 @@ pub async fn service_auth_middleware(
                 let _ = db.audit_logs().insert_one(log, None).await;
             });
 
-            return Err((
-                StatusCode::UNAUTHORIZED,
-                Json(ErrorResponse {
-                    error: "Invalid API key".to_string(),
-                }),
-            ));
+            return Err(AppError::AuthError(anyhow::anyhow!("Invalid API key")));
         }
     };
 
@@ -150,7 +121,7 @@ pub async fn service_auth_middleware(
             Some(account.service_id.clone()),
             endpoint,
             method,
-            StatusCode::FORBIDDEN.as_u16(),
+            service_core::axum::http::StatusCode::FORBIDDEN.as_u16(),
             ip_address,
         );
         log.service_name = Some(account.service_name.clone());
@@ -160,12 +131,7 @@ pub async fn service_auth_middleware(
             let _ = db.audit_logs().insert_one(log, None).await;
         });
 
-        return Err((
-            StatusCode::FORBIDDEN,
-            Json(ErrorResponse {
-                error: "Service account is disabled".to_string(),
-            }),
-        ));
+        return Err(AppError::Forbidden(anyhow::anyhow!("Service account is disabled")));
     }
 
     // 5. Verify API Key with Argon2
@@ -197,7 +163,7 @@ pub async fn service_auth_middleware(
                 Some(account.service_id.clone()),
                 endpoint,
                 method,
-                StatusCode::UNAUTHORIZED.as_u16(),
+                service_core::axum::http::StatusCode::UNAUTHORIZED.as_u16(),
                 ip_address,
             );
             log.service_name = Some(account.service_name.clone());
@@ -207,12 +173,7 @@ pub async fn service_auth_middleware(
                 let _ = db.audit_logs().insert_one(log, None).await;
             });
 
-            return Err((
-                StatusCode::UNAUTHORIZED,
-                Json(ErrorResponse {
-                    error: "Invalid API key".to_string(),
-                }),
-            ));
+            return Err(AppError::AuthError(anyhow::anyhow!("Invalid API key")));
         }
     }
 
@@ -229,7 +190,7 @@ pub async fn service_auth_middleware(
         Some(account.service_id.clone()),
         endpoint,
         method,
-        StatusCode::OK.as_u16(),
+        service_core::axum::http::StatusCode::OK.as_u16(),
         ip_address,
     );
     log.service_name = Some(account.service_name.clone());
@@ -265,20 +226,17 @@ pub async fn service_auth_middleware(
 /// Extractor to easily get service context in handlers
 pub struct ServiceAuth(pub ServiceContext);
 
-#[axum::async_trait]
+#[async_trait]
 impl<S> FromRequestParts<S> for ServiceAuth
 where
     S: Send + Sync,
 {
-    type Rejection = (StatusCode, Json<ErrorResponse>);
+    type Rejection = AppError;
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        let context = parts.extensions.get::<ServiceContext>().ok_or((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: "Service context missing from request extensions".to_string(),
-            }),
-        ))?;
+        let context = parts.extensions.get::<ServiceContext>().ok_or_else(|| {
+             AppError::InternalError(anyhow::anyhow!("Service context missing from request extensions"))
+        })?;
 
         Ok(ServiceAuth(context.clone()))
     }

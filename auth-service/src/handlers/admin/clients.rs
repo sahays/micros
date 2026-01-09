@@ -1,17 +1,16 @@
-use axum::{
+use service_core::{axum::{
     extract::{Path, State},
     http::StatusCode,
-    response::{IntoResponse, Response},
     Json,
-};
+}, error::AppError};
 
 use crate::{
-    dtos::{admin::CreateClientRequest, ErrorResponse},
+    dtos::admin::{CreateClientRequest, CreateClientResponse, RotateSecretResponse},
     utils::ValidatedJson,
     AppState,
 };
 
-/// Create a new OAuth client
+/// Create a new client
 #[utoipa::path(
     post,
     path = "/auth/admin/clients",
@@ -30,17 +29,8 @@ use crate::{
 pub async fn create_client(
     State(state): State<AppState>,
     ValidatedJson(req): ValidatedJson<CreateClientRequest>,
-) -> Result<impl IntoResponse, Response> {
-    let res = state.admin_service.create_client(req).await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(ErrorResponse {
-                error: e.to_string(),
-            }),
-        )
-            .into_response()
-    })?;
-
+) -> Result<(StatusCode, Json<CreateClientResponse>), AppError> {
+    let res = state.admin_service.create_client(req).await?;
     Ok((StatusCode::CREATED, Json(res)))
 }
 
@@ -65,24 +55,8 @@ pub async fn create_client(
 pub async fn rotate_client_secret(
     State(state): State<AppState>,
     Path(client_id): Path<String>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
-    let res = state
-        .admin_service
-        .rotate_client_secret(client_id)
-        .await
-        .map_err(|e| {
-            let status = match &e {
-                crate::services::ServiceError::UserNotFound => StatusCode::NOT_FOUND,
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
-            };
-            (
-                status,
-                Json(ErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-        })?;
-
+) -> Result<(StatusCode, Json<RotateSecretResponse>), AppError> {
+    let res = state.admin_service.rotate_client_secret(client_id).await?;
     Ok((StatusCode::OK, Json(res)))
 }
 
@@ -107,24 +81,8 @@ pub async fn rotate_client_secret(
 pub async fn revoke_client(
     State(state): State<AppState>,
     Path(client_id): Path<String>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
-    state
-        .admin_service
-        .revoke_client(client_id)
-        .await
-        .map_err(|e| {
-            let status = match &e {
-                crate::services::ServiceError::UserNotFound => StatusCode::NOT_FOUND,
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
-            };
-            (
-                status,
-                Json(ErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-        })?;
-
+) -> Result<(StatusCode, Json<serde_json::Value>), AppError> {
+    state.admin_service.revoke_client(client_id).await?;
     Ok((
         StatusCode::OK,
         Json(serde_json::json!({

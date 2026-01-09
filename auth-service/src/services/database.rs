@@ -1,3 +1,4 @@
+use service_core::error::AppError;
 use mongodb::{
     bson::doc, options::IndexOptions, Client as MongoClient, Collection, Database, IndexModel,
 };
@@ -12,7 +13,7 @@ pub struct MongoDb {
 }
 
 impl MongoDb {
-    pub async fn connect(uri: &str, database: &str) -> Result<Self, anyhow::Error> {
+    pub async fn connect(uri: &str, database: &str) -> Result<Self, AppError> {
         tracing::info!(uri = %uri, "Connecting to MongoDB");
         let client = MongoClient::with_uri_str(uri).await?;
         let db = client.database(database);
@@ -20,7 +21,7 @@ impl MongoDb {
         Ok(Self { client, db })
     }
 
-    pub async fn initialize_indexes(&self) -> Result<(), anyhow::Error> {
+    pub async fn initialize_indexes(&self) -> Result<(), AppError> {
         tracing::info!("Creating MongoDB indexes");
 
         // Users collection indexes
@@ -217,7 +218,7 @@ impl MongoDb {
         Ok(())
     }
 
-    pub async fn health_check(&self) -> Result<(), anyhow::Error> {
+    pub async fn health_check(&self) -> Result<(), AppError> {
         self.client
             .database("admin")
             .run_command(doc! { "ping": 1 }, None)

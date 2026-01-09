@@ -74,3 +74,4 @@ pub struct RotateServiceKeyResponse {
     #[schema(value_type = String, format = "date-time")]
     pub previous_key_expiry: chrono::DateTime<chrono::Utc>,
 }
+

@@ -1,12 +1,14 @@
-use axum::{
+use service_core::{axum::{
     extract::{Path, State},
     http::StatusCode,
-    response::{IntoResponse, Response},
     Json,
-};
+}, error::AppError};
 
 use crate::{
-    dtos::{admin::CreateServiceAccountRequest, ErrorResponse},
+    dtos::admin::{
+        CreateServiceAccountRequest, CreateServiceAccountResponse, RotateServiceKeyResponse,
+    },
+    models::AuditLog,
     utils::ValidatedJson,
     AppState,
 };
@@ -30,21 +32,11 @@ use crate::{
 pub async fn create_service_account(
     State(state): State<AppState>,
     ValidatedJson(req): ValidatedJson<CreateServiceAccountRequest>,
-) -> Result<impl IntoResponse, Response> {
+) -> Result<(StatusCode, Json<CreateServiceAccountResponse>), AppError> {
     let res = state
         .admin_service
         .create_service_account(req, &state.config.environment)
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-                .into_response()
-        })?;
-
+        .await?;
     Ok((StatusCode::CREATED, Json(res)))
 }
 
@@ -69,24 +61,11 @@ pub async fn create_service_account(
 pub async fn rotate_service_key(
     State(state): State<AppState>,
     Path(service_id): Path<String>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<(StatusCode, Json<RotateServiceKeyResponse>), AppError> {
     let res = state
         .admin_service
         .rotate_service_key(service_id, &state.config.environment)
-        .await
-        .map_err(|e| {
-            let status = match &e {
-                crate::services::ServiceError::UserNotFound => StatusCode::NOT_FOUND,
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
-            };
-            (
-                status,
-                Json(ErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-        })?;
-
+        .await?;
     Ok((StatusCode::OK, Json(res)))
 }
 
@@ -111,24 +90,11 @@ pub async fn rotate_service_key(
 pub async fn revoke_service_account(
     State(state): State<AppState>,
     Path(service_id): Path<String>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<(StatusCode, Json<serde_json::Value>), AppError> {
     state
         .admin_service
         .revoke_service_account(service_id)
-        .await
-        .map_err(|e| {
-            let status = match &e {
-                crate::services::ServiceError::UserNotFound => StatusCode::NOT_FOUND,
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
-            };
-            (
-                status,
-                Json(ErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-        })?;
-
+        .await?;
     Ok((
         StatusCode::OK,
         Json(serde_json::json!({
@@ -157,19 +123,7 @@ pub async fn revoke_service_account(
 pub async fn get_service_audit_log(
     State(state): State<AppState>,
     Path(service_id): Path<String>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
-    let res = state
-        .admin_service
-        .get_service_audit_log(service_id)
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-        })?;
-
+) -> Result<(StatusCode, Json<Vec<AuditLog>>), AppError> {
+    let res = state.admin_service.get_service_audit_log(service_id).await?;
     Ok((StatusCode::OK, Json(res)))
 }

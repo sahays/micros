@@ -1,7 +1,7 @@
 pub mod admin;
 pub mod auth;
 
-use serde::{Deserialize, Serialize};
+use service_core::serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]

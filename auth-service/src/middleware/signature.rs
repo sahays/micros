@@ -1,18 +1,14 @@
-use axum::{
+use service_core::{axum::{
     body::Body,
     extract::{Request, State},
-    http::{HeaderMap, StatusCode},
+    http::HeaderMap,
     middleware::Next,
-    response::{IntoResponse, Response},
-    Json,
-};
+    response::Response,
+}, error::AppError};
 use http_body_util::BodyExt;
 use mongodb::bson::doc;
-use serde_json::json;
 
 use crate::{utils::signature::verify_signature, AppState};
-
-type AuthError = (StatusCode, Json<serde_json::Value>);
 
 #[derive(serde::Deserialize)]
 struct SignatureQuery {
@@ -26,7 +22,7 @@ pub async fn signature_validation_middleware(
     State(state): State<AppState>,
     req: Request,
     next: Next,
-) -> Result<Response, Response> {
+) -> Result<Response, AppError> {
     // 0. Excluded paths (Health, JWKS, Email Verification, OAuth)
     let path = req.uri().path();
     if path == "/health"
@@ -53,81 +49,41 @@ pub async fn signature_validation_middleware(
     }
 
     // 2. Extract Data (Headers or Query Params)
-    let (client_id, timestamp_str, nonce, signature) =
-        extract_auth_data(&req).map_err(|e| e.into_response())?;
+    let (client_id, timestamp_str, nonce, signature) = extract_auth_data(&req)?;
 
     // 3. Validate Timestamp
     let timestamp: i64 = timestamp_str.parse().map_err(|_| {
-        (
-            StatusCode::BAD_REQUEST,
-            Json(json!({"error": "Invalid timestamp format"})),
-        )
-            .into_response()
+        AppError::AuthError(anyhow::anyhow!("Invalid timestamp format"))
     })?;
 
     let now = chrono::Utc::now().timestamp();
     if (now - timestamp).abs() > 60 {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "Request timestamp expired"})),
-        )
-            .into_response());
+        return Err(AppError::AuthError(anyhow::anyhow!("Request timestamp expired")));
     }
 
     // 4. Validate Nonce (Replay Attack Prevention)
     let nonce_key = format!("nonce:{}", nonce);
-    let val = state.redis.get_cache(&nonce_key).await.map_err(|e| {
-        tracing::error!("Redis error: {}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "Internal server error"})),
-        )
-            .into_response()
-    })?;
+    let val = state.redis.get_cache(&nonce_key).await?;
 
     if val.is_some() {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "Replay detected (nonce used)"})),
-        )
-            .into_response());
+        return Err(AppError::AuthError(anyhow::anyhow!("Replay detected (nonce used)")));
     }
 
     // Set nonce with TTL (120s)
     state
         .redis
         .set_cache(&nonce_key, "1", 120)
-        .await
-        .map_err(|e| {
-            tracing::error!("Redis error setting nonce: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Internal server error"})),
-            )
-                .into_response()
-        })?;
+        .await?;
 
     // 5. Fetch Client
     let client = state
         .db
         .clients()
         .find_one(doc! { "client_id": &client_id }, None)
-        .await
-        .map_err(|e| {
-            tracing::error!("DB error: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Internal server error"})),
-            )
-                .into_response()
-        })?;
+        .await?;
 
     let client = client.ok_or_else(|| {
-        (
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "Invalid Client ID"})),
-        )
-            .into_response()
+        AppError::AuthError(anyhow::anyhow!("Invalid Client ID"))
     })?;
 
     // 6. Read Body
@@ -136,12 +92,7 @@ pub async fn signature_validation_middleware(
         .collect()
         .await
         .map_err(|e| {
-            tracing::error!("Body read error: {}", e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": "Failed to read body"})),
-            )
-                .into_response()
+            AppError::InternalError(anyhow::anyhow!("Failed to read body: {}", e))
         })?
         .to_bytes();
 
@@ -161,20 +112,11 @@ pub async fn signature_validation_middleware(
         &signature,
     )
     .map_err(|e| {
-        tracing::error!("Signature verification error: {}", e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"error": "Signature verification failed"})),
-        )
-            .into_response()
+        AppError::InternalError(anyhow::anyhow!("Signature verification error: {}", e))
     })?;
 
     if !is_valid {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(json!({"error": "Invalid signature"})),
-        )
-            .into_response());
+        return Err(AppError::AuthError(anyhow::anyhow!("Invalid signature")));
     }
 
     // 8. Reconstruct Request
@@ -183,7 +125,7 @@ pub async fn signature_validation_middleware(
     Ok(next.run(req).await)
 }
 
-fn extract_auth_data(req: &Request) -> Result<(String, String, String, String), AuthError> {
+fn extract_auth_data(req: &Request) -> Result<(String, String, String, String), AppError> {
     let headers = req.headers();
 
     // Try Headers first
@@ -198,10 +140,7 @@ fn extract_auth_data(req: &Request) -> Result<(String, String, String, String), 
     // Try Query Params
     if let Some(query) = req.uri().query() {
         let params: SignatureQuery = serde_urlencoded::from_str(query).map_err(|_| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(json!({"error": "Invalid query parameters"})),
-            )
+            AppError::AuthError(anyhow::anyhow!("Invalid query parameters"))
         })?;
 
         if let (Some(cid), Some(ts), Some(n), Some(sig)) = (
@@ -214,27 +153,18 @@ fn extract_auth_data(req: &Request) -> Result<(String, String, String, String), 
         }
     }
 
-    Err((
-        StatusCode::UNAUTHORIZED,
-        Json(json!({"error": "Missing signature data (headers or query params)"})),
-    ))
+    Err(AppError::AuthError(anyhow::anyhow!("Missing signature data (headers or query params)")))
 }
 
-fn get_header(headers: &HeaderMap, key: &str) -> Result<String, AuthError> {
+fn get_header(headers: &HeaderMap, key: &str) -> Result<String, AppError> {
     headers
         .get(key)
         .ok_or_else(|| {
-            (
-                StatusCode::UNAUTHORIZED,
-                Json(json!({"error": format!("Missing header: {}", key)})),
-            )
+            AppError::AuthError(anyhow::anyhow!("Missing header: {}", key))
         })?
         .to_str()
         .map(|s| s.to_string())
         .map_err(|_| {
-            (
-                StatusCode::BAD_REQUEST,
-                Json(json!({"error": format!("Invalid header format: {}", key)})),
-            )
+            AppError::AuthError(anyhow::anyhow!("Invalid header format: {}", key))
         })
 }

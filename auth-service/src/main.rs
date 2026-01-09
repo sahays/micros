@@ -1,6 +1,6 @@
 use auth_service::{
     build_router,
-    config::Config,
+    config::AuthConfig,
     init_tracing, middleware,
     services::{EmailService, JwtService, MongoDb, RedisService},
     AppState,
@@ -9,9 +9,9 @@ use std::net::SocketAddr;
 use tokio::signal;
 
 #[tokio::main]
-async fn main() -> Result<(), anyhow::Error> {
+async fn main() -> Result<(), service_core::error::AppError> {
     // Load configuration - fail fast if invalid
-    let config = Config::from_env()?;
+    let config = AuthConfig::from_env()?;
 
     // Initialize tracing/logging
     init_tracing(&config);
@@ -102,7 +102,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let app = build_router(state).await?;
 
     // Start server
-    let addr = SocketAddr::from(([0, 0, 0, 0], config.port));
+    let addr = SocketAddr::from(([0, 0, 0, 0], config.common.port));
 
     let service_span = tracing::info_span!(
         "service",
@@ -116,7 +116,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
 
-    axum::serve(
+    service_core::axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )

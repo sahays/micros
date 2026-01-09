@@ -1,11 +1,13 @@
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use service_core::{
+    axum::{extract::State, http::StatusCode, response::IntoResponse, Json},
+    error::AppError,
+    serde::Deserialize,
+    validator::Validate,
+};
 use mongodb::bson::doc;
-use serde::Deserialize;
 use utoipa::ToSchema;
-use validator::Validate;
 
 use crate::{
-    dtos::ErrorResponse,
     services::TokenResponse,
     utils::{verify_password, Password, PasswordHashString},
     AppState,
@@ -38,15 +40,10 @@ pub struct AppTokenRequest {
 pub async fn app_token(
     State(state): State<AppState>,
     Json(req): Json<AppTokenRequest>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<impl IntoResponse, AppError> {
     // 0. Validate grant_type
     if req.grant_type != "client_credentials" {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "unsupported_grant_type".to_string(),
-            }),
-        ));
+        return Err(AppError::BadRequest(anyhow::anyhow!("unsupported_grant_type")));
     }
 
     // 1. Find client
@@ -57,31 +54,15 @@ pub async fn app_token(
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Database error finding client");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Internal server error".to_string(),
-                }),
-            )
-        })?;
-
-    let client = client.ok_or_else(|| {
-        (
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                error: "Invalid client_id or client_secret".to_string(),
-            }),
-        )
-    })?;
+            AppError::InternalError(anyhow::anyhow!("Internal server error"))
+        })?
+        .ok_or_else(|| AppError::Unauthorized(
+            anyhow::anyhow!("Invalid client_id or client_secret")
+        ))?;
 
     // 2. Check if enabled
     if !client.enabled {
-        return Err((
-            StatusCode::FORBIDDEN,
-            Json(ErrorResponse {
-                error: "Client is disabled".to_string(),
-            }),
-        ));
+        return Err(AppError::Forbidden(anyhow::anyhow!("Client is disabled")));
     }
 
     // 3. Verify secret
@@ -110,11 +91,8 @@ pub async fn app_token(
     }
 
     if !verified {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                error: "Invalid client_id or client_secret".to_string(),
-            }),
+        return Err(AppError::Unauthorized(
+            anyhow::anyhow!("Invalid client_id or client_secret")
         ));
     }
 
@@ -129,12 +107,7 @@ pub async fn app_token(
         )
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to generate app token");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Internal server error".to_string(),
-                }),
-            )
+            AppError::InternalError(anyhow::anyhow!("Internal server error"))
         })?;
 
     tracing::info!(

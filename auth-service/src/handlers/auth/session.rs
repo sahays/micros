@@ -1,16 +1,13 @@
-use axum::{
+use service_core::{axum::{
     extract::{ConnectInfo, State},
     http::StatusCode,
-    response::{IntoResponse, Response},
+    response::IntoResponse,
     Json,
-};
+}, error::AppError};
 use std::net::SocketAddr;
 
 use crate::{
-    dtos::{
-        auth::{IntrospectRequest, LoginRequest, LogoutRequest, RefreshRequest},
-        ErrorResponse,
-    },
+    dtos::auth::{IntrospectRequest, LoginRequest, LogoutRequest, RefreshRequest},
     middleware::AuthUser,
     utils::ValidatedJson,
     AppState,
@@ -33,26 +30,11 @@ use crate::{
 pub async fn login(
     State(state): State<AppState>,
     ValidatedJson(req): ValidatedJson<LoginRequest>,
-) -> Result<impl IntoResponse, Response> {
+) -> Result<impl IntoResponse, AppError> {
     let res = state
         .auth_service
         .login(req, state.config.jwt.refresh_token_expiry_days)
-        .await
-        .map_err(|e| {
-            let status = match &e {
-                crate::services::ServiceError::InvalidCredentials => StatusCode::UNAUTHORIZED,
-                crate::services::ServiceError::EmailError(_) => StatusCode::FORBIDDEN,
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
-            };
-            (
-                status,
-                Json(ErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-                .into_response()
-        })?;
-
+        .await?;
     Ok((StatusCode::OK, Json(res)))
 }
 
@@ -76,7 +58,7 @@ pub async fn logout(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     user: AuthUser,
     Json(req): Json<LogoutRequest>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<impl IntoResponse, AppError> {
     let access_token_claims = user.0;
     state
         .auth_service
@@ -86,20 +68,7 @@ pub async fn logout(
             access_token_claims.exp,
             addr.to_string(),
         )
-        .await
-        .map_err(|e| {
-            let status = match &e {
-                crate::services::ServiceError::InvalidToken => StatusCode::UNAUTHORIZED,
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
-            };
-            (
-                status,
-                Json(ErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-        })?;
-
+        .await?;
     Ok((
         StatusCode::OK,
         Json(serde_json::json!({
@@ -124,22 +93,8 @@ pub async fn logout(
 pub async fn refresh(
     State(state): State<AppState>,
     Json(req): Json<RefreshRequest>,
-) -> Result<impl IntoResponse, (StatusCode, Json<ErrorResponse>)> {
-    let res = state.auth_service.refresh(req).await.map_err(|e| {
-        let status = match &e {
-            crate::services::ServiceError::InvalidToken => StatusCode::UNAUTHORIZED,
-            crate::services::ServiceError::UserNotFound => StatusCode::UNAUTHORIZED,
-            crate::services::ServiceError::EmailError(_) => StatusCode::FORBIDDEN,
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-        (
-            status,
-            Json(ErrorResponse {
-                error: e.to_string(),
-            }),
-        )
-    })?;
-
+) -> Result<impl IntoResponse, AppError> {
+    let res = state.auth_service.refresh(req).await?;
     Ok((StatusCode::OK, Json(res)))
 }
 

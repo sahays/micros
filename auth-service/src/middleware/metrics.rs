@@ -1,5 +1,5 @@
 use crate::services::metrics::{HTTP_REQUESTS_TOTAL, HTTP_REQUEST_DURATION_SECONDS};
-use axum::{extract::Request, middleware::Next, response::Response};
+use service_core::axum::{extract::Request, middleware::Next, response::Response};
 use std::time::Instant;
 
 pub async fn metrics_middleware(req: Request, next: Next) -> Response {

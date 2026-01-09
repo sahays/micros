@@ -1,16 +1,13 @@
-use axum::{
+use service_core::{axum::{
     extract::{ConnectInfo, State},
     http::StatusCode,
-    response::{IntoResponse, Response},
+    response::IntoResponse,
     Json,
-};
+}, error::AppError};
 use std::net::SocketAddr;
 
 use crate::{
-    dtos::{
-        auth::{PasswordResetConfirm, PasswordResetRequest},
-        ErrorResponse,
-    },
+    dtos::auth::{PasswordResetConfirm, PasswordResetRequest},
     utils::ValidatedJson,
     AppState,
 };
@@ -31,21 +28,12 @@ pub async fn request_password_reset(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     ValidatedJson(req): ValidatedJson<PasswordResetRequest>,
-) -> Result<impl IntoResponse, Response> {
-    let base_url = format!("http://localhost:{}", state.config.port);
+) -> Result<impl IntoResponse, AppError> {
+    let base_url = format!("http://localhost:{}", state.config.common.port);
     state
         .auth_service
         .request_password_reset(req, addr.to_string(), base_url)
-        .await
-        .map_err(|e| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-                .into_response()
-        })?;
+        .await?;
 
     Ok((
         StatusCode::OK,
@@ -72,25 +60,11 @@ pub async fn confirm_password_reset(
     State(state): State<AppState>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     ValidatedJson(req): ValidatedJson<PasswordResetConfirm>,
-) -> Result<impl IntoResponse, Response> {
+) -> Result<impl IntoResponse, AppError> {
     state
         .auth_service
         .confirm_password_reset(req, addr.to_string())
-        .await
-        .map_err(|e| {
-            let status = match &e {
-                crate::services::ServiceError::InvalidToken
-                | crate::services::ServiceError::TokenExpired => StatusCode::BAD_REQUEST,
-                _ => StatusCode::INTERNAL_SERVER_ERROR,
-            };
-            (
-                status,
-                Json(ErrorResponse {
-                    error: e.to_string(),
-                }),
-            )
-                .into_response()
-        })?;
+        .await?;
 
     Ok((
         StatusCode::OK,
