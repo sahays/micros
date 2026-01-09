@@ -1,6 +1,6 @@
-use isbot::Bots;
-use axum::{extract::Request, http::HeaderMap, middleware::Next, response::Response, http::Method};
 use crate::error::AppError;
+use axum::{extract::Request, http::HeaderMap, http::Method, middleware::Next, response::Response};
+use isbot::Bots;
 use tracing::warn;
 
 pub async fn bot_detection_middleware(

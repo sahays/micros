@@ -1,4 +1,6 @@
-use http_body_util::BodyExt;
+use crate::error::AppError;
+use crate::utils::signature::verify_signature;
+use async_trait::async_trait;
 use axum::{
     body::Body,
     extract::{Request, State},
@@ -6,24 +8,13 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use crate::error::AppError;
-use crate::utils::signature::verify_signature;
-use async_trait::async_trait;
+use http_body_util::BodyExt;
 use serde::Deserialize;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SignatureConfig {
     pub require_signatures: bool,
     pub excluded_paths: Vec<String>,
-}
-
-impl Default for SignatureConfig {
-    fn default() -> Self {
-        Self {
-            require_signatures: false,
-            excluded_paths: Vec::new(),
-        }
-    }
 }
 
 #[async_trait]
@@ -51,13 +42,21 @@ where
     let config = state.as_ref();
     let path = req.uri().path();
 
-    if config.excluded_paths.iter().any(|p| path == p || path.starts_with(p)) {
+    if config
+        .excluded_paths
+        .iter()
+        .any(|p| path == p || path.starts_with(p))
+    {
         return Ok(next.run(req).await);
     }
 
     if !config.require_signatures {
         let has_header = req.headers().contains_key("X-Signature");
-        let has_query = req.uri().query().map(|q| q.contains("signature=")).unwrap_or(false);
+        let has_query = req
+            .uri()
+            .query()
+            .map(|q| q.contains("signature="))
+            .unwrap_or(false);
         if !has_header && !has_query {
             return Ok(next.run(req).await);
         }
@@ -71,11 +70,15 @@ where
 
     let now = chrono::Utc::now().timestamp();
     if (now - timestamp).abs() > 60 {
-        return Err(AppError::AuthError(anyhow::anyhow!("Request timestamp expired")));
+        return Err(AppError::AuthError(anyhow::anyhow!(
+            "Request timestamp expired"
+        )));
     }
 
     if !state.validate_nonce(&nonce).await? {
-        return Err(AppError::AuthError(anyhow::anyhow!("Replay detected (nonce used)")));
+        return Err(AppError::AuthError(anyhow::anyhow!(
+            "Replay detected (nonce used)"
+        )));
     }
 
     let secret = state.get_signing_secret(&client_id).await?;
@@ -94,13 +97,7 @@ where
     let path = parts.uri.path();
 
     let is_valid = verify_signature(
-        &secret,
-        method,
-        path,
-        timestamp,
-        &nonce,
-        body_str,
-        &signature,
+        &secret, method, path, timestamp, &nonce, body_str, &signature,
     )
     .map_err(|e| AppError::InternalError(anyhow::anyhow!("Signature verification error: {}", e)))?;
 

@@ -1,6 +1,6 @@
 use opentelemetry::KeyValue;
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::{runtime, trace as sdktrace, Resource};
+use opentelemetry_sdk::{Resource, runtime, trace as sdktrace};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 pub fn init_tracing(service_name: &str, log_level: &str, otlp_endpoint: &str) {
@@ -11,14 +11,15 @@ pub fn init_tracing(service_name: &str, log_level: &str, otlp_endpoint: &str) {
         .tonic()
         .with_endpoint(otlp_endpoint);
 
-    let tracer = opentelemetry_otlp::new_pipeline()
-        .tracing()
-        .with_exporter(otlp_exporter)
-        .with_trace_config(sdktrace::config().with_resource(Resource::new(vec![
-            KeyValue::new("service.name", service_name.to_string()),
-        ])))
-        .install_batch(runtime::Tokio)
-        .expect("Failed to initialize OTLP tracer");
+    let tracer =
+        opentelemetry_otlp::new_pipeline()
+            .tracing()
+            .with_exporter(otlp_exporter)
+            .with_trace_config(sdktrace::config().with_resource(Resource::new(vec![
+                KeyValue::new("service.name", service_name.to_string()),
+            ])))
+            .install_batch(runtime::Tokio)
+            .expect("Failed to initialize OTLP tracer");
 
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 

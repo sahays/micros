@@ -1,6 +1,4 @@
-use axum::{
-    extract::Request, http::header, middleware::Next, response::IntoResponse,
-};
+use axum::{extract::Request, http::header, middleware::Next, response::IntoResponse};
 
 pub async fn security_headers_middleware(req: Request, next: Next) -> impl IntoResponse {
     let mut response = next.run(req).await;

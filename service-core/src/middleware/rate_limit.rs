@@ -1,15 +1,15 @@
-use dashmap::DashMap;
-use governor::{
-    clock::{Clock, DefaultClock},
-    state::{keyed::DashMapStateStore, InMemoryState, NotKeyed},
-    Quota, RateLimiter,
-};
+use crate::error::AppError;
 use axum::{
     extract::{Request, State},
     middleware::Next,
     response::Response,
 };
-use crate::error::AppError;
+use dashmap::DashMap;
+use governor::{
+    Quota, RateLimiter,
+    clock::{Clock, DefaultClock},
+    state::{InMemoryState, NotKeyed, keyed::DashMapStateStore},
+};
 use std::{net::SocketAddr, num::NonZeroU32, sync::Arc, time::Duration};
 
 /// Rate limiter for global/unkeyed use
@@ -117,8 +117,10 @@ pub async fn client_rate_limit_middleware<T>(
     State(limiter_map): State<ClientRateLimiter>,
     request: Request,
     next: Next,
-) -> Result<Response, AppError> 
-where T: HasRateLimitInfo + Clone {
+) -> Result<Response, AppError>
+where
+    T: HasRateLimitInfo + Clone,
+{
     let info = request.extensions().get::<T>();
 
     if let Some(info) = info {

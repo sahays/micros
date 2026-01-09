@@ -1,6 +1,6 @@
 use axum::{extract::Request, middleware::Next, response::Response};
-use std::time::Instant;
 use metrics::{counter, histogram};
+use std::time::Instant;
 
 pub async fn metrics_middleware(req: Request, next: Next) -> Response {
     let start = Instant::now();
@@ -12,11 +12,7 @@ pub async fn metrics_middleware(req: Request, next: Next) -> Response {
     let duration = start.elapsed();
     let status = response.status().as_u16().to_string();
 
-    let labels = [
-        ("method", method),
-        ("path", path),
-        ("status", status),
-    ];
+    let labels = [("method", method), ("path", path), ("status", status)];
 
     counter!("http_requests_total", &labels).increment(1);
     histogram!("http_request_duration_seconds", &labels).record(duration.as_secs_f64());
