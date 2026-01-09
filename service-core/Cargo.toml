@@ -44,7 +44,7 @@ validator = { workspace = true, features = ["derive"] }
 uuid = { workspace = true }
 isbot = { workspace = true }
 dashmap = { workspace = true }
-governor = { workspace = true }
+governor = "0.6.3"
 metrics = { workspace = true }
 http-body-util = { workspace = true }
 serde_urlencoded = { workspace = true }

@@ -14,12 +14,10 @@ async fn main() -> Result<(), service_core::error::AppError> {
     // Load configuration - fail fast if invalid
     let config = AuthConfig::from_env()?;
 
-    // Initialize tracing/logging using shared logic
-    init_tracing(
-        &config.service_name,
-        &config.log_level,
-        "http://tempo:4317", // In production this would come from config
-    );
+    // Initialize tracing
+    let otlp_endpoint =
+        std::env::var("OTLP_ENDPOINT").unwrap_or_else(|_| "http://tempo:4317".to_string());
+    init_tracing(&config.service_name, &config.log_level, &otlp_endpoint);
 
     // Initialize metrics
     auth_service::services::metrics::init_metrics();

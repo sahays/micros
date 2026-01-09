@@ -2,7 +2,7 @@
 members = [
     "auth-service", "document-service",
     "secure-frontend",
-    "service-core", # This will be created in a later step
+    "service-core",
 ]
 
 [workspace.dependencies]
@@ -51,3 +51,7 @@ metrics = "0.23"
 http-body-util = "0.1"
 serde_urlencoded = "0.7"
 subtle = "2.6"
+
+# Optimize for faster builds and lower memory usage in dev
+[profile.dev]
+debug = 1
