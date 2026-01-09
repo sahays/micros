@@ -5,6 +5,7 @@ use axum::http::StatusCode;
 #[tokio::test]
 async fn health_check_works() {
     // 1. Setup
+    std::env::set_var("MONGODB_URI", "mongodb://localhost:27017");
     // Load config (uses defaults for test if .env is missing or sets standard values)
     let mut config = DocumentConfig::load().expect("Failed to load configuration");
     config.common.port = 0; // Use random port for test
