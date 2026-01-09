@@ -20,12 +20,13 @@ RUN cargo build --release --bin document-service
 FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 
-# Install runtime dependencies including FFmpeg
+# Install runtime dependencies including FFmpeg and Poppler
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     libssl3 \
     curl \
     ffmpeg \
+    poppler-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary from the builder stage
