@@ -1,5 +1,3 @@
-use service_core::middleware::rate_limit::{create_client_rate_limiter, create_ip_rate_limiter};
-use service_core::middleware::signature::signature_validation_middleware;
 use auth_service::{
     config::AuthConfig,
     models::{Client, ClientType},
@@ -14,6 +12,8 @@ use axum::{
     routing::post,
     Router,
 };
+use service_core::middleware::rate_limit::{create_client_rate_limiter, create_ip_rate_limiter};
+use service_core::middleware::signature::signature_validation_middleware;
 use std::sync::Arc;
 use tower::util::ServiceExt;
 use uuid::Uuid;

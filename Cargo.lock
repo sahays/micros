@@ -1000,6 +1000,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "document-service"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum 0.7.9",
+ "config",
+ "dotenvy",
+ "mongodb",
+ "serde",
+ "serde_json",
+ "service-core",
+ "tokio",
+ "tower-http 0.5.2",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "dotenvy"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"

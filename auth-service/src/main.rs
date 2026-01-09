@@ -4,9 +4,7 @@ use auth_service::{
     services::{EmailService, JwtService, MongoDb, RedisService},
     AppState,
 };
-use service_core::middleware::rate_limit::{
-    create_client_rate_limiter, create_ip_rate_limiter,
-};
+use service_core::middleware::rate_limit::{create_client_rate_limiter, create_ip_rate_limiter};
 use service_core::observability::logging::init_tracing;
 use std::net::SocketAddr;
 use tokio::signal;
@@ -20,7 +18,7 @@ async fn main() -> Result<(), service_core::error::AppError> {
     init_tracing(
         &config.service_name,
         &config.log_level,
-        "http://tempo:4317" // In production this would come from config
+        "http://tempo:4317", // In production this would come from config
     );
 
     // Initialize metrics

@@ -1,11 +1,11 @@
-use secure_frontend::services::auth_client::AuthClient;
-use secure_frontend::startup::build_router;
-use std::sync::Arc;
-use tower::util::ServiceExt;
 use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
+use secure_frontend::services::auth_client::AuthClient;
+use secure_frontend::startup::build_router;
+use std::sync::Arc;
+use tower::util::ServiceExt;
 
 use secrecy::Secret;
 

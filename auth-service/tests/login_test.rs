@@ -1,4 +1,3 @@
-use service_core::middleware::rate_limit::{create_client_rate_limiter, create_ip_rate_limiter};
 use auth_service::{
     build_router,
     config::AuthConfig,
@@ -12,6 +11,7 @@ use axum::{
     http::{Request, StatusCode},
 };
 use mongodb::bson::doc;
+use service_core::middleware::rate_limit::{create_client_rate_limiter, create_ip_rate_limiter};
 use std::sync::Arc;
 use tower::util::ServiceExt;
 use uuid::Uuid;

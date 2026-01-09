@@ -9,15 +9,11 @@ use tracing::info;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
-    
+
     let configuration = get_configuration().expect("Failed to read configuration.");
 
     // Initialize tracing using shared logic
-    init_tracing(
-        "secure-frontend",
-        "info",
-        "http://tempo:4317"
-    );
+    init_tracing("secure-frontend", "info", "http://tempo:4317");
 
     secure_frontend::services::metrics::init_metrics();
 

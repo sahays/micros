@@ -12,12 +12,9 @@ use service_core::axum::{
     Router,
 };
 use service_core::middleware::{
-    bot_detection::bot_detection_middleware,
-    metrics::metrics_middleware,
-    security_headers::security_headers_middleware,
-    tracing::request_id_middleware,
-    rate_limit::ip_rate_limit_middleware,
-    signature::signature_validation_middleware,
+    bot_detection::bot_detection_middleware, metrics::metrics_middleware,
+    rate_limit::ip_rate_limit_middleware, security_headers::security_headers_middleware,
+    signature::signature_validation_middleware, tracing::request_id_middleware,
 };
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use utoipa::{
@@ -166,7 +163,14 @@ impl service_core::middleware::signature::SignatureStore for AppState {
     }
 
     async fn get_signing_secret(&self, client_id: &str) -> Result<Option<String>, AppError> {
-        let client: Option<crate::models::Client> = self.db.clients().find_one(service_core::mongodb::bson::doc! { "client_id": client_id }, None).await?;
+        let client: Option<crate::models::Client> = self
+            .db
+            .clients()
+            .find_one(
+                service_core::mongodb::bson::doc! { "client_id": client_id },
+                None,
+            )
+            .await?;
         Ok(client.map(|c| c.signing_secret))
     }
 }
@@ -208,10 +212,7 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
     let login_limiter = state.login_rate_limiter.clone();
     let login_route = Router::new()
         .route("/auth/login", post(handlers::auth::login))
-        .layer(from_fn_with_state(
-            login_limiter,
-            ip_rate_limit_middleware,
-        ));
+        .layer(from_fn_with_state(login_limiter, ip_rate_limit_middleware));
 
     // Create register route with rate limiting
     let register_limiter = state.register_rate_limiter.clone();
@@ -306,10 +307,7 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
         )
         .with_state(state.clone())
         // Global IP rate limiting
-        .layer(from_fn_with_state(
-            ip_limiter,
-            ip_rate_limit_middleware,
-        ))
+        .layer(from_fn_with_state(ip_limiter, ip_rate_limit_middleware))
         // Signature validation
         .layer(from_fn_with_state(
             state.clone(),

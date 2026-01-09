@@ -1,0 +1,28 @@
+[package]
+name = "document-service"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+service-core = { path = "../service-core" }
+
+# Workspace dependencies
+anyhow = { workspace = true }
+axum = { workspace = true }
+dotenvy = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+config = { workspace = true }
+mongodb = { workspace = true }
+tower-http = { workspace = true, features = ["trace", "cors"] }
+
+[lib]
+name = "document_service"
+path = "src/lib.rs"
+
+[[bin]]
+name = "document-service"
+path = "src/main.rs"

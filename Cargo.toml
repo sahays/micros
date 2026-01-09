@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "auth-service",
+    "auth-service", "document-service",
     "secure-frontend",
     "service-core", # This will be created in a later step
 ]

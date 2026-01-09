@@ -1,4 +1,3 @@
-use service_core::middleware::rate_limit::{create_client_rate_limiter, create_ip_rate_limiter};
 use auth_service::{
     config::AuthConfig,
     middleware::app_auth_middleware,
@@ -14,6 +13,7 @@ use axum::{
     routing::get,
     Router,
 };
+use service_core::middleware::rate_limit::{create_client_rate_limiter, create_ip_rate_limiter};
 use std::sync::Arc;
 use tower::util::ServiceExt;
 use uuid::Uuid;
