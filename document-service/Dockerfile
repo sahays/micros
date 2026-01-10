@@ -5,7 +5,9 @@ WORKDIR /app
 # Stage 2: Planner (Compute recipe)
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
+COPY auth-service ./auth-service
 COPY document-service ./document-service
+COPY secure-frontend ./secure-frontend
 COPY service-core ./service-core
 RUN cargo chef prepare --recipe-path recipe.json --bin document-service
 
@@ -16,7 +18,9 @@ COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 # Build application
 COPY Cargo.toml Cargo.lock ./
+COPY auth-service ./auth-service
 COPY document-service ./document-service
+COPY secure-frontend ./secure-frontend
 COPY service-core ./service-core
 RUN cargo build --release --bin document-service
 
