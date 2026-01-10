@@ -9,6 +9,12 @@ pub struct DocumentConfig {
     pub common: core_config::Config,
     pub mongodb: MongoConfig,
     pub storage: StorageConfig,
+    pub signature: SignatureConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SignatureConfig {
+    pub require_signatures: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -38,6 +44,12 @@ impl DocumentConfig {
             },
             storage: StorageConfig {
                 local_path: get_env("STORAGE_LOCAL_PATH", Some("storage"), is_prod)?,
+            },
+            signature: SignatureConfig {
+                require_signatures: env::var("REQUIRE_SIGNATURES")
+                    .unwrap_or_else(|_| "false".to_string())
+                    .parse()
+                    .unwrap_or(false),
             },
         })
     }

@@ -5,6 +5,7 @@ use serde::Deserialize;
 pub struct Settings {
     pub server: ServerSettings,
     pub auth_service: AuthServiceSettings,
+    pub document_service: DocumentServiceSettings,
 }
 
 #[derive(Deserialize, Clone)]
@@ -16,6 +17,13 @@ pub struct ServerSettings {
 
 #[derive(Deserialize, Clone)]
 pub struct AuthServiceSettings {
+    pub url: String,
+    pub client_id: String,
+    pub signing_secret: Secret<String>,
+}
+
+#[derive(Deserialize, Clone)]
+pub struct DocumentServiceSettings {
     pub url: String,
     pub client_id: String,
     pub signing_secret: Secret<String>,

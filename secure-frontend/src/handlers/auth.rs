@@ -1,4 +1,5 @@
 use crate::services::auth_client::AuthClient;
+use crate::utils::jwt::decode_jwt_claims;
 use askama::Template;
 use axum::{
     extract::State,
@@ -57,26 +58,46 @@ pub async fn login_handler(
         Ok(res) if res.status().is_success() => {
             let tokens: serde_json::Value = res.json().await.unwrap_or_default();
 
-            // Store tokens in session
-            session
-                .insert(
-                    "access_token",
-                    tokens["access_token"].as_str().unwrap_or_default(),
-                )
-                .await
-                .unwrap();
-            session
-                .insert(
-                    "refresh_token",
-                    tokens["refresh_token"].as_str().unwrap_or_default(),
-                )
-                .await
-                .unwrap();
+            let access_token = tokens["access_token"].as_str().unwrap_or_default();
 
-            // HTMX Redirect to dashboard
-            let mut headers = HeaderMap::new();
-            headers.insert("HX-Redirect", "/dashboard".parse().unwrap());
-            (StatusCode::OK, headers, "").into_response()
+            // Extract user_id and email from JWT for session storage and service propagation
+            // We trust the token since it came from auth-service via HMAC-signed request
+            match decode_jwt_claims(access_token) {
+                Ok(claims) => {
+                    // Store tokens and user context in session
+                    session.insert("access_token", access_token).await.unwrap();
+                    session
+                        .insert(
+                            "refresh_token",
+                            tokens["refresh_token"].as_str().unwrap_or_default(),
+                        )
+                        .await
+                        .unwrap();
+
+                    // Store user_id and email for context propagation to other services
+                    session.insert("user_id", &claims.sub).await.unwrap();
+                    session.insert("email", &claims.email).await.unwrap();
+
+                    tracing::info!(
+                        user_id = %claims.sub,
+                        email = %claims.email,
+                        "User logged in successfully"
+                    );
+
+                    // HTMX Redirect to dashboard
+                    let mut headers = HeaderMap::new();
+                    headers.insert("HX-Redirect", "/dashboard".parse().unwrap());
+                    (StatusCode::OK, headers, "").into_response()
+                }
+                Err(e) => {
+                    tracing::error!("Failed to decode JWT claims: {}", e);
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Html("<p class='text-red-500 text-sm'>Authentication error</p>"),
+                    )
+                        .into_response()
+                }
+            }
         }
         _ => {
             // Return error fragment for HTMX

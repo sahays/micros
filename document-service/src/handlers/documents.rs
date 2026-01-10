@@ -1,4 +1,5 @@
 use crate::dtos::DocumentResponse;
+use crate::middleware::user_id::UserId;
 use crate::models::{Document, DocumentStatus};
 use crate::startup::AppState;
 use axum::{
@@ -12,6 +13,7 @@ use uuid::Uuid;
 
 pub async fn upload_document(
     State(state): State<AppState>,
+    user_id: UserId,
     mut multipart: Multipart,
 ) -> Result<impl IntoResponse, AppError> {
     let field = multipart
@@ -53,10 +55,16 @@ pub async fn upload_document(
 
     let s3_key = format!("{}/{}.{}", Uuid::new_v4(), Uuid::new_v4(), extension);
 
-    // Create document metadata
-    // owner_id is hardcoded for now until we have auth middleware
-    let owner_id = "test_owner".to_string();
-    let mut document = Document::new(owner_id, original_name, mime_type, size, s3_key.clone());
+    // Create document metadata with actual user_id from BFF (secure-frontend)
+    // user_id propagated via X-User-ID header in HMAC-signed request
+    let mut document = Document::new(user_id.0, original_name, mime_type, size, s3_key.clone());
+
+    tracing::info!(
+        document_id = %document.id,
+        filename = %document.original_name,
+        size = %size,
+        "Document upload started"
+    );
 
     // 1. Upload to storage
     state.storage.upload(&s3_key, data).await.map_err(|e| {

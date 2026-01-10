@@ -37,6 +37,7 @@ async fn upload_document_works() {
 
     let response = client
         .post(format!("http://127.0.0.1:{}/documents", port))
+        .header("X-User-ID", "test_user_123") // User context from BFF
         .multipart(form)
         .send()
         .await
@@ -61,6 +62,7 @@ async fn upload_document_works() {
         .unwrap()
         .expect("Document not found in DB");
 
+    assert_eq!(stored_doc.owner_id, "test_user_123");
     assert_eq!(stored_doc.original_name, "test.txt");
     assert_eq!(stored_doc.size, 100);
 

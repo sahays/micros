@@ -160,6 +160,9 @@ services:
       - APP_AUTH_SERVICE__URL=${APP_AUTH_SERVICE__URL:-http://auth-service:3000}
       - APP_AUTH_SERVICE__CLIENT_ID=${APP_AUTH_SERVICE__CLIENT_ID:-secure-frontend}
       - APP_AUTH_SERVICE__SIGNING_SECRET=${APP_AUTH_SERVICE__SIGNING_SECRET}
+      - APP_DOCUMENT_SERVICE__URL=${APP_DOCUMENT_SERVICE__URL:-http://document-service:8080}
+      - APP_DOCUMENT_SERVICE__CLIENT_ID=${APP_DOCUMENT_SERVICE__CLIENT_ID:-secure-frontend}
+      - APP_DOCUMENT_SERVICE__SIGNING_SECRET=${APP_DOCUMENT_SERVICE__SIGNING_SECRET}
       - APP_SERVER__SESSION_SECRET=${APP_SERVER__SESSION_SECRET}
       - RUST_LOG=${LOG_LEVEL:-info}
     labels:
@@ -168,6 +171,7 @@ services:
       - "prometheus.io/path=/metrics"
     depends_on:
       - auth-service
+      - document-service
     logging:
       driver: "json-file"
       options:
@@ -192,6 +196,7 @@ services:
       - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
       - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
       - STORAGE_LOCAL_PATH=${STORAGE_LOCAL_PATH:-./storage}
+      - REQUIRE_SIGNATURES=${REQUIRE_SIGNATURES:-false}
     labels:
       - "prometheus.io/scrape=true"
       - "prometheus.io/port=8080"
