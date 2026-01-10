@@ -7,12 +7,21 @@ datasources:
     url: http://prometheus:9090
     isDefault: true
     editable: false
+    uid: prometheus
 
   - name: Loki
     type: loki
     access: proxy
     url: http://loki:3100
     editable: false
+    uid: loki
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - datasourceUid: tempo
+          matcherRegex: "trace_id=(\\w+)"
+          name: TraceID
+          url: '$${__value.raw}'
 
   - name: Tempo
     type: tempo
