@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Stack:**
 - Backend Services: Rust/Axum microservices
   - `auth-service`: Authentication and authorization
-  - `document-service`: Document storage and retrieval with S3/local storage
+  - `document-service`: Document storage and retrieval with local filesystem storage
   - `service-core`: Shared middleware, observability, and utilities
 - Web Frontend: Rust/Axum/Htmx (secure-frontend) - BFF pattern
 - Mobile Apps: Direct API access to microservices
@@ -47,7 +47,7 @@ Middleware Layer (Security, Rate Limiting, Observability)
     ↓
 Service Layer (Business Logic)
     ↓
-Data Access Layer (MongoDB, Redis, S3)
+Data Access Layer (MongoDB, Redis, Local Storage)
 ```
 
 **Key Concepts:**
@@ -350,9 +350,9 @@ The `service-core` library provides shared infrastructure used across all micros
 
 **Storage Abstraction (`document-service/src/services/`):**
 - `Storage` trait defines interface for file operations (upload, download, delete)
-- `LocalStorage`: Filesystem-based storage for development
-- `S3Storage`: AWS S3 storage for production
-- Configured via `STORAGE_BACKEND` environment variable (local/s3)
+- `LocalStorage`: Filesystem-based storage implementation
+- Configured via `STORAGE_BACKEND` environment variable (set to `local`)
+- Files stored in `./storage` directory by default
 
 **Database Layer:**
 - MongoDB for document metadata (owner_id, filename, content_type, size, timestamps)
@@ -361,7 +361,7 @@ The `service-core` library provides shared infrastructure used across all micros
 
 **File Upload Flow:**
 1. Multipart form data received at `POST /documents`
-2. File saved to storage backend (local/S3)
+2. File saved to local filesystem storage
 3. Metadata persisted to MongoDB with storage path
 4. Returns document ID and metadata
 
@@ -607,7 +607,32 @@ Do **not** use high-cardinality fields (request_id, user_id, trace_id) as Loki l
 
 ### Storage Backend Configuration (document-service)
 
-When using S3 storage backend, ensure AWS credentials are configured via environment variables or IAM roles. Local storage creates a `storage/` directory in the service root - ensure it's in `.gitignore`.
+Local storage creates a `storage/` directory in the service root. This directory is already in `.gitignore` and should not be committed to version control.
+
+### Grafana Dashboard Logs Not Showing
+
+If logs don't appear in Grafana dashboards:
+
+1. **Container name mismatch**: Dashboards use regex patterns `{container=~".*auth-service"}` to match both dev (`micros-dev-auth-service`) and prod (`micros-prod-auth-service`) container names.
+
+2. **Time range**: Ensure the dashboard time range (top right) is set to "Last 5 minutes" or "Last 15 minutes".
+
+3. **Generate logs**: Make requests to services to generate log entries:
+   ```bash
+   curl http://localhost:9005/health
+   ```
+
+4. **Verify Loki is receiving logs**:
+   ```bash
+   curl -s "http://localhost:9001/loki/api/v1/label/container/values" | jq
+   ```
+
+5. **Fresh Grafana volume**: If datasource errors persist, remove and recreate the Grafana volume:
+   ```bash
+   ./scripts/dev-down.sh
+   docker volume rm micros-dev_grafana_data
+   ./scripts/dev-up.sh
+   ```
 
 ## Configuration Files
 

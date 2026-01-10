@@ -192,11 +192,6 @@ services:
       - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
       - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
       - STORAGE_LOCAL_PATH=${STORAGE_LOCAL_PATH:-./storage}
-      - STORAGE_S3_BUCKET=${STORAGE_S3_BUCKET}
-      - STORAGE_S3_REGION=${STORAGE_S3_REGION:-us-east-1}
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-      - AWS_REGION=${AWS_REGION:-us-east-1}
     labels:
       - "prometheus.io/scrape=true"
       - "prometheus.io/port=8080"

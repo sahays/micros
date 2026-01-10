@@ -6,25 +6,16 @@ datasources:
     access: proxy
     url: http://prometheus:9090
     isDefault: true
-    editable: false
-    uid: prometheus
+    uid: Prometheus
 
   - name: Loki
     type: loki
     access: proxy
     url: http://loki:3100
-    editable: false
-    uid: loki
-    jsonData:
-      maxLines: 1000
+    uid: Loki
 
   - name: Tempo
     type: tempo
     access: proxy
     url: http://tempo:3200
-    editable: false
-    uid: tempo
-    jsonData:
-      httpMethod: GET
-      nodeGraph:
-        enabled: true
+    uid: Tempo

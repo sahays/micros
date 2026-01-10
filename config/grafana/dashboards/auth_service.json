@@ -128,8 +128,8 @@
             "type": "loki",
             "uid": "Loki"
           },
-          "editorMode": "builder",
-          "expr": "{container=\"auth-service\"} | json",
+          "editorMode": "code",
+          "expr": "{container=~\".*auth-service\"} | json",
           "queryType": "range",
           "refId": "A"
         }

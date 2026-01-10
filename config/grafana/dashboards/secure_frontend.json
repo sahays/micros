@@ -128,8 +128,8 @@
             "type": "loki",
             "uid": "Loki"
           },
-          "editorMode": "builder",
-          "expr": "{container=\"secure-frontend\"} | json",
+          "editorMode": "code",
+          "expr": "{container=~\".*secure-frontend\"} | json",
           "queryType": "range",
           "refId": "A"
         }
