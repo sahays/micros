@@ -4,8 +4,10 @@ WORKDIR /app
 
 # Stage 2: Planner (Compute recipe)
 FROM chef AS planner
-COPY . .
-RUN cargo chef prepare --recipe-path recipe.json
+COPY Cargo.toml Cargo.lock ./
+COPY secure-frontend ./secure-frontend
+COPY service-core ./service-core
+RUN cargo chef prepare --recipe-path recipe.json --bin secure-frontend
 
 # Stage 3: Builder (Build dependencies and binary)
 FROM chef AS builder
@@ -13,7 +15,9 @@ COPY --from=planner /app/recipe.json recipe.json
 # Build dependencies - this is the caching layer
 RUN cargo chef cook --release --recipe-path recipe.json
 # Build application
-COPY . .
+COPY Cargo.toml Cargo.lock ./
+COPY secure-frontend ./secure-frontend
+COPY service-core ./service-core
 RUN cargo build --release --bin secure-frontend
 
 # Stage 4: Runtime (The final image)
@@ -33,8 +37,8 @@ COPY --from=builder /app/target/release/secure-frontend /usr/local/bin/secure-fr
 # Copy static assets and templates if they are not embedded
 # Askama embeds templates, but static files might be needed
 RUN mkdir -p /app/secure-frontend
-COPY --from=builder /app/static /app/secure-frontend/static
-COPY --from=builder /app/config /app/secure-frontend/config
+COPY --from=builder /app/secure-frontend/static /app/secure-frontend/static
+COPY --from=builder /app/secure-frontend/config /app/secure-frontend/config
 
 # Expose the service port
 EXPOSE 8080

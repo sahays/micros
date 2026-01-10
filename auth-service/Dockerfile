@@ -4,8 +4,10 @@ WORKDIR /app
 
 # Stage 2: Planner (Compute recipe)
 FROM chef AS planner
-COPY . .
-RUN cargo chef prepare --recipe-path recipe.json
+COPY Cargo.toml Cargo.lock ./
+COPY auth-service ./auth-service
+COPY service-core ./service-core
+RUN cargo chef prepare --recipe-path recipe.json --bin auth-service
 
 # Stage 3: Builder (Build dependencies and binary)
 FROM chef AS builder
@@ -13,7 +15,9 @@ COPY --from=planner /app/recipe.json recipe.json
 # Build dependencies - this is the caching layer
 RUN cargo chef cook --release --recipe-path recipe.json
 # Build application
-COPY . .
+COPY Cargo.toml Cargo.lock ./
+COPY auth-service ./auth-service
+COPY service-core ./service-core
 RUN cargo build --release --bin auth-service
 
 # Stage 4: Runtime (The final image)
