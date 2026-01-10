@@ -33,7 +33,10 @@ pub async fn create_client(
     State(state): State<AppState>,
     ValidatedJson(req): ValidatedJson<CreateClientRequest>,
 ) -> Result<(StatusCode, Json<CreateClientResponse>), AppError> {
-    let res = state.admin_service.create_client(req).await?;
+    let res = state.admin_service.create_client(req).await.map_err(|e| {
+        tracing::error!(error = %e, "Failed to create client");
+        e
+    })?;
     Ok((StatusCode::CREATED, Json(res)))
 }
 
@@ -59,7 +62,14 @@ pub async fn rotate_client_secret(
     State(state): State<AppState>,
     Path(client_id): Path<String>,
 ) -> Result<(StatusCode, Json<RotateSecretResponse>), AppError> {
-    let res = state.admin_service.rotate_client_secret(client_id).await?;
+    let res = state
+        .admin_service
+        .rotate_client_secret(client_id.clone())
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, client_id = %client_id, "Failed to rotate client secret");
+            e
+        })?;
     Ok((StatusCode::OK, Json(res)))
 }
 
@@ -85,7 +95,14 @@ pub async fn revoke_client(
     State(state): State<AppState>,
     Path(client_id): Path<String>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), AppError> {
-    state.admin_service.revoke_client(client_id).await?;
+    state
+        .admin_service
+        .revoke_client(client_id.clone())
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, client_id = %client_id, "Failed to revoke client");
+            e
+        })?;
     Ok((
         StatusCode::OK,
         Json(serde_json::json!({

@@ -150,7 +150,11 @@ pub async fn google_callback(
         .db
         .users()
         .find_one(doc! { "email": &user_info.email }, None)
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, email = %user_info.email, "Failed to lookup user by email for Google login");
+            e
+        })?;
 
     let user = match existing_user {
         Some(u) => {
@@ -179,7 +183,15 @@ pub async fn google_callback(
             new_user.google_id = Some(user_info.id);
             new_user.verified = true;
 
-            state.db.users().insert_one(&new_user, None).await?;
+            state
+                .db
+                .users()
+                .insert_one(&new_user, None)
+                .await
+                .map_err(|e| {
+                    tracing::error!(error = %e, email = %user_info.email, "Failed to create new user from Google login");
+                    e
+                })?;
             new_user
         }
     };
@@ -201,7 +213,11 @@ pub async fn google_callback(
         .db
         .refresh_tokens()
         .insert_one(&refresh_token, None)
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, user_id = %user.id, "Failed to store refresh token for Google login");
+            e
+        })?;
 
     tracing::info!(user_id = %user.id, "User logged in via Google");
 

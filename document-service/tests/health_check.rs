@@ -1,6 +1,6 @@
+use axum::http::StatusCode;
 use document_service::config::DocumentConfig;
 use document_service::startup::Application;
-use axum::http::StatusCode;
 
 #[tokio::test]
 async fn health_check_works() {
@@ -10,7 +10,9 @@ async fn health_check_works() {
     let mut config = DocumentConfig::load().expect("Failed to load configuration");
     config.common.port = 0; // Use random port for test
 
-    let app = Application::build(config).await.expect("Failed to build application");
+    let app = Application::build(config)
+        .await
+        .expect("Failed to build application");
     let port = app.port();
 
     // Run the server in a background task

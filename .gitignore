@@ -1,11 +1,10 @@
 # Environment variables
 .env
+.env.dev
+.env.prod
 .env.local
 .env.*.local
 .env.test
-.env.production
-.env.development
-*.env
 !.env.example
 
 # Rust
@@ -42,6 +41,7 @@ Thumbs.db
 
 # Data
 data/
+storage/
 mongo_data/
 redis_data/
 prometheus_data/

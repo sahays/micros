@@ -75,13 +75,25 @@ where
         )));
     }
 
-    if !state.validate_nonce(&nonce).await? {
+    let nonce_valid = state.validate_nonce(&nonce).await.map_err(|e| {
+        tracing::error!("Failed to validate nonce {}: {}", nonce, e);
+        e
+    })?;
+
+    if !nonce_valid {
         return Err(AppError::AuthError(anyhow::anyhow!(
             "Replay detected (nonce used)"
         )));
     }
 
-    let secret = state.get_signing_secret(&client_id).await?;
+    let secret = state.get_signing_secret(&client_id).await.map_err(|e| {
+        tracing::error!(
+            "Failed to retrieve signing secret for client {}: {}",
+            client_id,
+            e
+        );
+        e
+    })?;
     let secret = secret.ok_or_else(|| AppError::AuthError(anyhow::anyhow!("Invalid Client ID")))?;
 
     let (parts, body) = req.into_parts();

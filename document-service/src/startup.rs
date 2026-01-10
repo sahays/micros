@@ -1,13 +1,16 @@
-use crate::config::{DocumentConfig, StorageBackend};
+use crate::config::DocumentConfig;
 use crate::handlers;
-use crate::services::{MongoDb, Storage, LocalStorage, S3Storage};
-use axum::{Router, routing::{get, post}};
+use crate::services::{LocalStorage, MongoDb, Storage};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use service_core::error::AppError;
+use std::future::IntoFuture;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::net::TcpListener;
 use tower_http::trace::TraceLayer;
-use std::future::IntoFuture;
-use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -24,23 +27,29 @@ pub struct Application {
 
 impl Application {
     pub async fn build(config: DocumentConfig) -> Result<Self, AppError> {
-        let db = MongoDb::connect(&config.mongodb.uri, &config.mongodb.database).await?;
-        db.initialize_indexes().await?;
+        let db = MongoDb::connect(&config.mongodb.uri, &config.mongodb.database)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to connect to MongoDB: {}", e);
+                e
+            })?;
+        db.initialize_indexes().await.map_err(|e| {
+            tracing::error!("Failed to initialize database indexes: {}", e);
+            e
+        })?;
 
-        let storage: Arc<dyn Storage> = match config.storage.backend {
-            StorageBackend::Local => {
-                let path = config.storage.local_path.as_deref().unwrap_or("storage");
-                Arc::new(LocalStorage::new(path).await?)
-            }
-            StorageBackend::S3 => {
-                let s3_config = aws_config::load_from_env().await;
-                let client = aws_sdk_s3::Client::new(&s3_config);
-                let bucket = config.storage.s3_bucket.clone().ok_or_else(|| {
-                    AppError::ConfigError(anyhow::anyhow!("STORAGE_S3_BUCKET is required for S3 backend"))
-                })?;
-                Arc::new(S3Storage::new(client, bucket))
-            }
-        };
+        let storage: Arc<dyn Storage> = Arc::new(
+            LocalStorage::new(&config.storage.local_path)
+                .await
+                .map_err(|e| {
+                    tracing::error!(
+                        "Failed to initialize local storage at {}: {}",
+                        config.storage.local_path,
+                        e
+                    );
+                    e
+                })?,
+        );
 
         let state = AppState {
             config: config.clone(),
@@ -55,7 +64,10 @@ impl Application {
             .with_state(state.clone());
 
         let addr = SocketAddr::from(([0, 0, 0, 0], config.common.port));
-        let listener = TcpListener::bind(addr).await?;
+        let listener = TcpListener::bind(addr).await.map_err(|e| {
+            tracing::error!("Failed to bind TCP listener to {}: {}", addr, e);
+            AppError::from(e)
+        })?;
         let port = listener.local_addr()?.port();
 
         tracing::info!("Listening on {}", port);
@@ -81,4 +93,3 @@ impl Application {
         self.server.await
     }
 }
-

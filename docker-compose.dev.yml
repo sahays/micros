@@ -1,0 +1,226 @@
+services:
+  # ==============================================================================
+  # Development Configuration
+  # ==============================================================================
+  # MongoDB and Redis run on HOST machine (not included here)
+  # Services connect to host.docker.internal:27017 and host.docker.internal:6379
+  # ==============================================================================
+
+  # Observability Stack
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-prometheus
+    volumes:
+      - ./config/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    restart: unless-stopped
+    networks:
+      - micros-net
+
+  loki:
+    image: grafana/loki:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-loki
+    volumes:
+      - ./config/loki:/etc/loki
+      - loki_data:/loki
+    command: -config.file=/etc/loki/loki.yaml
+    ports:
+      - "${LOKI_PORT:-9091}:3100"
+    restart: unless-stopped
+    networks:
+      - micros-net
+
+  tempo:
+    image: grafana/tempo:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-tempo
+    command: [ "-config.file=/etc/tempo.yaml" ]
+    user: "10001:10001"
+    volumes:
+      - ./config/tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "14268:14268"
+      - "${TEMPO_PORT:-9099}:3200"
+      - "4317:4317"
+      - "4318:4318"
+      - "9411:9411"
+    restart: unless-stopped
+    networks:
+      - micros-net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+    ports:
+      - "${GRAFANA_PORT:-9092}:3000"
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - micros-net
+
+  promtail:
+    image: grafana/promtail:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-promtail
+    volumes:
+      - ./config/promtail:/etc/promtail
+      - /var/log:/var/log
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/promtail.yaml
+    ports:
+      - "${PROMTAIL_PORT:-9080}:9080"
+    restart: unless-stopped
+    depends_on:
+      - loki
+    networks:
+      - micros-net
+
+  # Application Stack
+  auth-service:
+    build:
+      context: .
+      dockerfile: auth-service/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-auth-service
+    ports:
+      - "${AUTH_SERVICE_PORT:-9096}:3000"
+    environment:
+      - MONGODB_URI=${MONGODB_URI:-mongodb://host.docker.internal:27017}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-auth_db}
+      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
+      - RUST_LOG=${LOG_LEVEL:-info}
+      - PORT=3000
+      - ENVIRONMENT=${ENVIRONMENT:-dev}
+      - SERVICE_NAME=auth-service
+      - SERVICE_VERSION=${SERVICE_VERSION:-0.1.0}
+      - JWT_PRIVATE_KEY_PATH=${JWT_PRIVATE_KEY_PATH:-keys/private.pem}
+      - JWT_PUBLIC_KEY_PATH=${JWT_PUBLIC_KEY_PATH:-keys/public.pem}
+      - JWT_ACCESS_TOKEN_EXPIRY_MINUTES=${JWT_ACCESS_TOKEN_EXPIRY_MINUTES:-15}
+      - JWT_REFRESH_TOKEN_EXPIRY_DAYS=${JWT_REFRESH_TOKEN_EXPIRY_DAYS:-7}
+      - JWT_APP_TOKEN_EXPIRY_MINUTES=${JWT_APP_TOKEN_EXPIRY_MINUTES:-60}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - GMAIL_USER=${GMAIL_USER}
+      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-dev-admin-key}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:9097}
+      - REQUIRE_SIGNATURES=${REQUIRE_SIGNATURES:-false}
+      - ENABLE_SWAGGER=${ENABLE_SWAGGER:-public}
+      - RATE_LIMIT_LOGIN_ATTEMPTS=${RATE_LIMIT_LOGIN_ATTEMPTS:-5}
+      - RATE_LIMIT_LOGIN_WINDOW_SECONDS=${RATE_LIMIT_LOGIN_WINDOW_SECONDS:-900}
+      - RATE_LIMIT_REGISTER_ATTEMPTS=${RATE_LIMIT_REGISTER_ATTEMPTS:-3}
+      - RATE_LIMIT_REGISTER_WINDOW_SECONDS=${RATE_LIMIT_REGISTER_WINDOW_SECONDS:-3600}
+      - RATE_LIMIT_PASSWORD_RESET_ATTEMPTS=${RATE_LIMIT_PASSWORD_RESET_ATTEMPTS:-3}
+      - RATE_LIMIT_PASSWORD_RESET_WINDOW_SECONDS=${RATE_LIMIT_PASSWORD_RESET_WINDOW_SECONDS:-3600}
+      - RATE_LIMIT_GLOBAL_IP_LIMIT=${RATE_LIMIT_GLOBAL_IP_LIMIT:-100}
+      - RATE_LIMIT_GLOBAL_IP_WINDOW_SECONDS=${RATE_LIMIT_GLOBAL_IP_WINDOW_SECONDS:-60}
+      - RATE_LIMIT_APP_TOKEN_LIMIT=${RATE_LIMIT_APP_TOKEN_LIMIT:-10}
+      - RATE_LIMIT_APP_TOKEN_WINDOW_SECONDS=${RATE_LIMIT_APP_TOKEN_WINDOW_SECONDS:-60}
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=3000"
+      - "prometheus.io/path=/metrics"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    volumes:
+      - ./auth-service/keys:/app/keys
+    networks:
+      - micros-net
+
+  secure-frontend:
+    build:
+      context: .
+      dockerfile: secure-frontend/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-secure-frontend
+    ports:
+      - "${SECURE_FRONTEND_PORT:-9097}:8080"
+    environment:
+      - APP_SERVER__HOST=${APP_SERVER__HOST:-0.0.0.0}
+      - APP_SERVER__PORT=${APP_SERVER__PORT:-8080}
+      - APP_AUTH_SERVICE__URL=${APP_AUTH_SERVICE__URL:-http://auth-service:3000}
+      - APP_AUTH_SERVICE__CLIENT_ID=${APP_AUTH_SERVICE__CLIENT_ID:-secure-frontend}
+      - APP_AUTH_SERVICE__SIGNING_SECRET=${APP_AUTH_SERVICE__SIGNING_SECRET}
+      - APP_SERVER__SESSION_SECRET=${APP_SERVER__SESSION_SECRET}
+      - RUST_LOG=${LOG_LEVEL:-info}
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=8080"
+      - "prometheus.io/path=/metrics"
+    depends_on:
+      - auth-service
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    networks:
+      - micros-net
+
+  document-service:
+    build:
+      context: .
+      dockerfile: document-service/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-document-service
+    ports:
+      - "${DOCUMENT_SERVICE_PORT:-9098}:8080"
+    environment:
+      - APP__PORT=8080
+      - MONGODB_URI=${MONGODB_URI:-mongodb://host.docker.internal:27017}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-auth_db}
+      - RUST_LOG=${DOCUMENT_SERVICE_LOG_LEVEL:-info}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
+      - STORAGE_LOCAL_PATH=${STORAGE_LOCAL_PATH:-./storage}
+      - STORAGE_S3_BUCKET=${STORAGE_S3_BUCKET}
+      - STORAGE_S3_REGION=${STORAGE_S3_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=8080"
+      - "prometheus.io/path=/metrics"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    networks:
+      - micros-net
+
+networks:
+  micros-net:
+    driver: bridge
+    name: ${COMPOSE_PROJECT_NAME:-micros-dev}_network
+
+volumes:
+  prometheus_data:
+    name: ${COMPOSE_PROJECT_NAME:-micros-dev}_prometheus_data
+  loki_data:
+    name: ${COMPOSE_PROJECT_NAME:-micros-dev}_loki_data
+  tempo_data:
+    name: ${COMPOSE_PROJECT_NAME:-micros-dev}_tempo_data
+  grafana_data:
+    name: ${COMPOSE_PROJECT_NAME:-micros-dev}_grafana_data

@@ -39,7 +39,11 @@ pub async fn register(
     let res = state
         .auth_service
         .register(req, ip_address, base_url)
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, ip = %addr.to_string(), "Failed to register user");
+            e
+        })?;
 
     Ok((StatusCode::CREATED, Json(res)))
 }
@@ -61,6 +65,13 @@ pub async fn verify_email(
     State(state): State<AppState>,
     service_core::axum::extract::Query(req): service_core::axum::extract::Query<VerifyRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let res = state.auth_service.verify_email(req.token).await?;
+    let res = state
+        .auth_service
+        .verify_email(req.token.clone())
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, token = %req.token, "Failed to verify email");
+            e
+        })?;
     Ok((StatusCode::OK, Json(res)))
 }

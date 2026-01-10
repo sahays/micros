@@ -10,7 +10,10 @@ use tracing::info;
 async fn main() -> anyhow::Result<()> {
     dotenv().ok();
 
-    let configuration = get_configuration().expect("Failed to read configuration.");
+    let configuration = get_configuration().map_err(|e| {
+        eprintln!("Failed to read configuration: {}", e);
+        anyhow::anyhow!("Configuration error: {}", e)
+    })?;
 
     // Initialize tracing using shared logic
     init_tracing("secure-frontend", "info", "http://tempo:4317");
@@ -25,10 +28,16 @@ async fn main() -> anyhow::Result<()> {
         "{}:{}",
         configuration.server.host, configuration.server.port
     );
-    let listener = tokio::net::TcpListener::bind(&address).await?;
+    let listener = tokio::net::TcpListener::bind(&address).await.map_err(|e| {
+        tracing::error!("Failed to bind TCP listener to {}: {}", address, e);
+        anyhow::anyhow!("Failed to bind to address {}: {}", address, e)
+    })?;
 
     info!("Starting secure-frontend on {}", address);
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app).await.map_err(|e| {
+        tracing::error!("Server error: {}", e);
+        anyhow::anyhow!("Server error: {}", e)
+    })?;
 
     Ok(())
 }

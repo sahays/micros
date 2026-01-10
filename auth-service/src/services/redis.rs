@@ -31,7 +31,10 @@ impl RedisService {
         let client = Client::open(config.url.clone())?;
 
         // Use ConnectionManager for automatic reconnection
-        let manager = client.get_connection_manager().await?;
+        let manager = client.get_connection_manager().await.map_err(|e| {
+            tracing::error!("Failed to get Redis connection manager: {}", e);
+            anyhow::anyhow!("Failed to connect to Redis: {}", e)
+        })?;
 
         tracing::info!("Successfully connected to Redis");
 

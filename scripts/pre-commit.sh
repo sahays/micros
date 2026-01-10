@@ -4,6 +4,12 @@ set -e
 # Ensure cargo is in PATH (common locations)
 export PATH="$HOME/.cargo/bin:$PATH"
 
+# Load environment variables from .env.test for local tests
+if [ -f ".env.test" ]; then
+    echo "Loading environment variables from .env.test..."
+    export $(grep -v '^#' .env.test | xargs)
+fi
+
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'

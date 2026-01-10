@@ -98,7 +98,11 @@ pub async fn service_auth_middleware(
             },
             None,
         )
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to lookup service account from database: {}", e);
+            AppError::from(e)
+        })?;
 
     let account = match account {
         Some(acc) => acc,

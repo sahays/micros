@@ -1,8 +1,8 @@
+use crate::models::Document;
 use mongodb::{
     bson::doc, options::IndexOptions, Client as MongoClient, Collection, Database, IndexModel,
 };
 use service_core::error::AppError;
-use crate::models::Document;
 
 #[derive(Clone)]
 pub struct MongoDb {
@@ -13,7 +13,10 @@ pub struct MongoDb {
 impl MongoDb {
     pub async fn connect(uri: &str, database: &str) -> Result<Self, AppError> {
         tracing::info!(uri = %uri, "Connecting to MongoDB");
-        let client = MongoClient::with_uri_str(uri).await?;
+        let client = MongoClient::with_uri_str(uri).await.map_err(|e| {
+            tracing::error!("Failed to connect to MongoDB at {}: {}", uri, e);
+            AppError::from(e)
+        })?;
         let db = client.database(database);
         tracing::info!(database = %database, "Successfully connected to MongoDB database");
         Ok(Self { client, db })
@@ -34,7 +37,16 @@ impl MongoDb {
             )
             .build();
 
-        documents.create_index(owner_id_index, None).await?;
+        documents
+            .create_index(owner_id_index, None)
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to create owner_id index on documents collection: {}",
+                    e
+                );
+                AppError::from(e)
+            })?;
         tracing::info!("Created index on documents.owner_id");
 
         Ok(())
@@ -44,7 +56,11 @@ impl MongoDb {
         self.client
             .database("admin")
             .run_command(doc! { "ping": 1 }, None)
-            .await?;
+            .await
+            .map_err(|e| {
+                tracing::error!("MongoDB health check failed: {}", e);
+                AppError::from(e)
+            })?;
         Ok(())
     }
 

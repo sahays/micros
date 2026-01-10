@@ -31,9 +31,23 @@ pub trait HasRateLimitInfo: Send + Sync + 'static {
 pub fn create_unkeyed_rate_limiter(attempts: u32, window_seconds: u64) -> UnkeyedRateLimiter {
     let attempts = attempts.max(1);
     let period = Duration::from_millis((window_seconds * 1000) / attempts as u64);
-    let quota = Quota::with_period(period)
-        .expect("Failed to create quota with valid period")
-        .allow_burst(NonZeroU32::new(attempts).expect("attempts is guaranteed to be non-zero"));
+    let quota = match Quota::with_period(period) {
+        Some(q) => q,
+        None => {
+            tracing::error!(
+                "Failed to create quota with period {:?}. This should never happen.",
+                period
+            );
+            panic!("Failed to create rate limit quota with period {:?}", period);
+        }
+    }
+    .allow_burst(NonZeroU32::new(attempts).unwrap_or_else(|| {
+        tracing::error!(
+            "Failed to create NonZeroU32 from attempts {}. This should never happen.",
+            attempts
+        );
+        panic!("Failed to create NonZeroU32 from attempts: {}", attempts);
+    }));
 
     Arc::new(RateLimiter::direct(quota))
 }
@@ -42,9 +56,23 @@ pub fn create_unkeyed_rate_limiter(attempts: u32, window_seconds: u64) -> Unkeye
 pub fn create_ip_rate_limiter(attempts: u32, window_seconds: u64) -> IpRateLimiter {
     let attempts = attempts.max(1);
     let period = Duration::from_millis((window_seconds * 1000) / attempts as u64);
-    let quota = Quota::with_period(period)
-        .expect("Failed to create quota with valid period")
-        .allow_burst(NonZeroU32::new(attempts).expect("attempts is guaranteed to be non-zero"));
+    let quota = match Quota::with_period(period) {
+        Some(q) => q,
+        None => {
+            tracing::error!(
+                "Failed to create quota with period {:?}. This should never happen.",
+                period
+            );
+            panic!("Failed to create rate limit quota with period {:?}", period);
+        }
+    }
+    .allow_burst(NonZeroU32::new(attempts).unwrap_or_else(|| {
+        tracing::error!(
+            "Failed to create NonZeroU32 from attempts {}. This should never happen.",
+            attempts
+        );
+        panic!("Failed to create NonZeroU32 from attempts: {}", attempts);
+    }));
 
     Arc::new(RateLimiter::dashmap(quota))
 }

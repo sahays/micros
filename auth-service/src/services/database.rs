@@ -15,7 +15,10 @@ pub struct MongoDb {
 impl MongoDb {
     pub async fn connect(uri: &str, database: &str) -> Result<Self, AppError> {
         tracing::info!(uri = %uri, "Connecting to MongoDB");
-        let client = MongoClient::with_uri_str(uri).await?;
+        let client = MongoClient::with_uri_str(uri).await.map_err(|e| {
+            tracing::error!("Failed to connect to MongoDB at {}: {}", uri, e);
+            AppError::from(e)
+        })?;
         let db = client.database(database);
         tracing::info!(database = %database, "Successfully connected to MongoDB database");
         Ok(Self { client, db })
@@ -38,7 +41,10 @@ impl MongoDb {
             )
             .build();
 
-        users.create_index(email_index, None).await?;
+        users.create_index(email_index, None).await.map_err(|e| {
+            tracing::error!("Failed to create email index on users collection: {}", e);
+            AppError::from(e)
+        })?;
         tracing::info!("Created unique index on users.email");
 
         // Verification tokens collection indexes
@@ -54,7 +60,13 @@ impl MongoDb {
             )
             .build();
 
-        tokens.create_index(token_index, None).await?;
+        tokens.create_index(token_index, None).await.map_err(|e| {
+            tracing::error!(
+                "Failed to create token index on verification_tokens collection: {}",
+                e
+            );
+            AppError::from(e)
+        })?;
 
         // TTL index on expires_at for automatic cleanup
         let expiry_index = IndexModel::builder()
@@ -67,7 +79,13 @@ impl MongoDb {
             )
             .build();
 
-        tokens.create_index(expiry_index, None).await?;
+        tokens.create_index(expiry_index, None).await.map_err(|e| {
+            tracing::error!(
+                "Failed to create TTL index on verification_tokens collection: {}",
+                e
+            );
+            AppError::from(e)
+        })?;
         tracing::info!("Created indexes on verification_tokens collection");
 
         // Refresh tokens collection indexes
@@ -83,7 +101,16 @@ impl MongoDb {
             )
             .build();
 
-        refresh_tokens.create_index(user_id_index, None).await?;
+        refresh_tokens
+            .create_index(user_id_index, None)
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to create user_id index on refresh_tokens collection: {}",
+                    e
+                );
+                AppError::from(e)
+            })?;
 
         // Index on token_hash for fast lookup
         let refresh_token_index = IndexModel::builder()
@@ -97,7 +124,14 @@ impl MongoDb {
 
         refresh_tokens
             .create_index(refresh_token_index, None)
-            .await?;
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to create token_hash index on refresh_tokens collection: {}",
+                    e
+                );
+                AppError::from(e)
+            })?;
 
         // TTL index on expires_at for automatic cleanup
         let refresh_expiry_index = IndexModel::builder()
@@ -112,7 +146,14 @@ impl MongoDb {
 
         refresh_tokens
             .create_index(refresh_expiry_index, None)
-            .await?;
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to create TTL index on refresh_tokens collection: {}",
+                    e
+                );
+                AppError::from(e)
+            })?;
         tracing::info!("Created indexes on refresh_tokens collection");
 
         // Clients collection indexes
@@ -129,7 +170,16 @@ impl MongoDb {
             )
             .build();
 
-        clients.create_index(client_id_index, None).await?;
+        clients
+            .create_index(client_id_index, None)
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to create client_id index on clients collection: {}",
+                    e
+                );
+                AppError::from(e)
+            })?;
         tracing::info!("Created unique index on clients.client_id");
 
         // Service accounts collection indexes
@@ -148,7 +198,14 @@ impl MongoDb {
 
         service_accounts
             .create_index(service_id_index, None)
-            .await?;
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to create service_id index on service_accounts collection: {}",
+                    e
+                );
+                AppError::from(e)
+            })?;
         tracing::info!("Created unique index on service_accounts.service_id");
 
         // Unique index on api_key_lookup_hash
@@ -164,7 +221,14 @@ impl MongoDb {
 
         service_accounts
             .create_index(api_key_lookup_index, None)
-            .await?;
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to create api_key_lookup_hash index on service_accounts collection: {}",
+                    e
+                );
+                AppError::from(e)
+            })?;
         tracing::info!("Created unique index on service_accounts.api_key_lookup_hash");
 
         // Sparse unique index on previous_api_key_lookup_hash
@@ -181,7 +245,11 @@ impl MongoDb {
 
         service_accounts
             .create_index(prev_api_key_lookup_index, None)
-            .await?;
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to create previous_api_key_lookup_hash index on service_accounts collection: {}", e);
+                AppError::from(e)
+            })?;
         tracing::info!(
             "Created sparse unique index on service_accounts.previous_api_key_lookup_hash"
         );
@@ -199,7 +267,16 @@ impl MongoDb {
             )
             .build();
 
-        audit_logs.create_index(service_id_index, None).await?;
+        audit_logs
+            .create_index(service_id_index, None)
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to create service_id index on audit_logs collection: {}",
+                    e
+                );
+                AppError::from(e)
+            })?;
 
         // TTL index on timestamp for 30 days retention
         let ttl_index = IndexModel::builder()
@@ -212,7 +289,13 @@ impl MongoDb {
             )
             .build();
 
-        audit_logs.create_index(ttl_index, None).await?;
+        audit_logs
+            .create_index(ttl_index, None)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to create TTL index on audit_logs collection: {}", e);
+                AppError::from(e)
+            })?;
         tracing::info!("Created indexes on audit_logs collection");
 
         Ok(())
@@ -222,7 +305,11 @@ impl MongoDb {
         self.client
             .database("admin")
             .run_command(doc! { "ping": 1 }, None)
-            .await?;
+            .await
+            .map_err(|e| {
+                tracing::error!("MongoDB health check failed: {}", e);
+                AppError::from(e)
+            })?;
         Ok(())
     }
 

@@ -1,6 +1,5 @@
-pub mod health;
 pub mod documents;
+pub mod health;
 
-pub use health::health_check;
 pub use documents::upload_document;
-
+pub use health::health_check;

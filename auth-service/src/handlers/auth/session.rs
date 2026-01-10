@@ -37,7 +37,11 @@ pub async fn login(
     let res = state
         .auth_service
         .login(req, state.config.jwt.refresh_token_expiry_days)
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to process login request");
+            e
+        })?;
     Ok((StatusCode::OK, Json(res)))
 }
 
@@ -71,7 +75,11 @@ pub async fn logout(
             access_token_claims.exp,
             addr.to_string(),
         )
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, user_id = %access_token_claims.sub, "Failed to process logout request");
+            e
+        })?;
     Ok((
         StatusCode::OK,
         Json(serde_json::json!({
@@ -97,7 +105,10 @@ pub async fn refresh(
     State(state): State<AppState>,
     Json(req): Json<RefreshRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let res = state.auth_service.refresh(req).await?;
+    let res = state.auth_service.refresh(req).await.map_err(|e| {
+        tracing::error!(error = %e, "Failed to refresh token");
+        e
+    })?;
     Ok((StatusCode::OK, Json(res)))
 }
 

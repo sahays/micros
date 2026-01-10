@@ -26,7 +26,7 @@ pub async fn app_auth_middleware(
         .and_then(|value| value.to_str().ok())
         .map(|value| {
             if value.starts_with("Bearer ") {
-                value.strip_prefix("Bearer ").unwrap()
+                value.strip_prefix("Bearer ").unwrap_or(value)
             } else {
                 value
             }
@@ -53,7 +53,18 @@ pub async fn app_auth_middleware(
 
     // 3. Check blacklist (for client revocation)
     let blacklist_key = format!("client:{}", claims.client_id);
-    let is_revoked = state.redis.is_blacklisted(&blacklist_key).await?;
+    let is_revoked = state
+        .redis
+        .is_blacklisted(&blacklist_key)
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                "Failed to check client blacklist for {}: {}",
+                claims.client_id,
+                e
+            );
+            AppError::InternalError(anyhow::anyhow!("Failed to verify client status: {}", e))
+        })?;
 
     if is_revoked {
         return Err(AppError::AuthError(anyhow::anyhow!(
@@ -66,7 +77,15 @@ pub async fn app_auth_middleware(
         .db
         .clients()
         .find_one(doc! { "client_id": &claims.client_id }, None)
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                "Failed to query client {} from database: {}",
+                claims.client_id,
+                e
+            );
+            AppError::from(e)
+        })?;
 
     let client = client.ok_or_else(|| AppError::AuthError(anyhow::anyhow!("Client not found")))?;
 

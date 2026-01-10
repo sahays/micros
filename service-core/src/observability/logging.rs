@@ -12,14 +12,23 @@ pub fn init_tracing(service_name: &str, log_level: &str, otlp_endpoint: &str) {
         .with_endpoint(otlp_endpoint);
 
     let tracer =
-        opentelemetry_otlp::new_pipeline()
+        match opentelemetry_otlp::new_pipeline()
             .tracing()
             .with_exporter(otlp_exporter)
             .with_trace_config(sdktrace::config().with_resource(Resource::new(vec![
                 KeyValue::new("service.name", service_name.to_string()),
             ])))
             .install_batch(runtime::Tokio)
-            .expect("Failed to initialize OTLP tracer");
+        {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!(
+                    "Failed to initialize OTLP tracer for service '{}' at endpoint '{}': {}",
+                    service_name, otlp_endpoint, e
+                );
+                panic!("Failed to initialize OTLP tracer: {}", e);
+            }
+        };
 
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 

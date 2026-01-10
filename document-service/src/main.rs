@@ -9,11 +9,15 @@ async fn main() -> std::io::Result<()> {
         std::env::var("OTLP_ENDPOINT").unwrap_or_else(|_| "http://tempo:4317".to_string());
     init_tracing("document-service", "info", &otlp_endpoint);
 
-    let config = DocumentConfig::load().expect("Failed to load configuration");
+    let config = DocumentConfig::load().map_err(|e| {
+        tracing::error!("Failed to load configuration: {}", e);
+        std::io::Error::other(format!("Configuration error: {}", e))
+    })?;
 
-    let app = Application::build(config)
-        .await
-        .expect("Failed to build application");
+    let app = Application::build(config).await.map_err(|e| {
+        tracing::error!("Failed to build application: {}", e);
+        std::io::Error::other(format!("Application build error: {}", e))
+    })?;
 
     app.run_until_stopped().await
 }

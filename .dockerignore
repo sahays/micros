@@ -1,0 +1,45 @@
+# Rust build artifacts (CRITICAL - this is huge!)
+target/
+**/target/
+
+# Environment files
+.env
+.env.dev
+.env.prod
+.env.local
+
+# Keys and secrets (generated separately)
+*.pem
+*.key
+auth-service/keys/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Data directories
+data/
+storage/
+mongo_data/
+redis_data/
+prometheus_data/
+loki_data/
+tempo_data/
+grafana_data/
+
+# Development tools
+.gemini/

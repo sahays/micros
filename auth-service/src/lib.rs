@@ -154,11 +154,20 @@ impl AsRef<service_core::middleware::signature::SignatureConfig> for AppState {
 impl service_core::middleware::signature::SignatureStore for AppState {
     async fn validate_nonce(&self, nonce: &str) -> Result<bool, AppError> {
         let nonce_key = format!("nonce:{}", nonce);
-        let val = self.redis.get_cache(&nonce_key).await?;
+        let val = self.redis.get_cache(&nonce_key).await.map_err(|e| {
+            tracing::error!("Failed to check nonce {} in Redis: {}", nonce, e);
+            AppError::InternalError(anyhow::anyhow!("Failed to validate nonce: {}", e))
+        })?;
         if val.is_some() {
             return Ok(false);
         }
-        self.redis.set_cache(&nonce_key, "1", 120).await?;
+        self.redis
+            .set_cache(&nonce_key, "1", 120)
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to store nonce {} in Redis: {}", nonce, e);
+                AppError::InternalError(anyhow::anyhow!("Failed to store nonce: {}", e))
+            })?;
         Ok(true)
     }
 
@@ -170,7 +179,15 @@ impl service_core::middleware::signature::SignatureStore for AppState {
                 service_core::mongodb::bson::doc! { "client_id": client_id },
                 None,
             )
-            .await?;
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to lookup client {} signing secret: {}",
+                    client_id,
+                    e
+                );
+                AppError::from(e)
+            })?;
         Ok(client.map(|c| c.signing_secret))
     }
 }
@@ -350,7 +367,14 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
                         .iter()
                         .map(|o| {
                             o.parse::<service_core::axum::http::HeaderValue>()
-                                .expect("Invalid CORS origin")
+                                .unwrap_or_else(|e| {
+                                    tracing::error!(
+                                        "Invalid CORS origin '{}': {}. Using fallback.",
+                                        o,
+                                        e
+                                    );
+                                    service_core::axum::http::HeaderValue::from_static("*")
+                                })
                         })
                         .collect::<Vec<service_core::axum::http::HeaderValue>>(),
                 )

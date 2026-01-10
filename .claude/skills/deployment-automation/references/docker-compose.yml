@@ -1,0 +1,18 @@
+# Example docker-compose.yml
+services:
+  app:
+    image: myapp:${VERSION}
+    env_file:
+      - .env # Copied from /app/config/prod.env during deployment
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+networks:
+  app-network:
+    external: true

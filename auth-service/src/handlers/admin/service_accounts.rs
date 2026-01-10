@@ -39,7 +39,11 @@ pub async fn create_service_account(
     let res = state
         .admin_service
         .create_service_account(req, &state.config.environment)
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to create service account");
+            e
+        })?;
     Ok((StatusCode::CREATED, Json(res)))
 }
 
@@ -67,8 +71,12 @@ pub async fn rotate_service_key(
 ) -> Result<(StatusCode, Json<RotateServiceKeyResponse>), AppError> {
     let res = state
         .admin_service
-        .rotate_service_key(service_id, &state.config.environment)
-        .await?;
+        .rotate_service_key(service_id.clone(), &state.config.environment)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, service_id = %service_id, "Failed to rotate service key");
+            e
+        })?;
     Ok((StatusCode::OK, Json(res)))
 }
 
@@ -96,8 +104,12 @@ pub async fn revoke_service_account(
 ) -> Result<(StatusCode, Json<serde_json::Value>), AppError> {
     state
         .admin_service
-        .revoke_service_account(service_id)
-        .await?;
+        .revoke_service_account(service_id.clone())
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, service_id = %service_id, "Failed to revoke service account");
+            e
+        })?;
     Ok((
         StatusCode::OK,
         Json(serde_json::json!({
@@ -129,7 +141,11 @@ pub async fn get_service_audit_log(
 ) -> Result<(StatusCode, Json<Vec<AuditLog>>), AppError> {
     let res = state
         .admin_service
-        .get_service_audit_log(service_id)
-        .await?;
+        .get_service_audit_log(service_id.clone())
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, service_id = %service_id, "Failed to fetch service audit log");
+            e
+        })?;
     Ok((StatusCode::OK, Json(res)))
 }

@@ -63,7 +63,11 @@ pub async fn get_me(
         .db
         .users()
         .find_one(doc! { "_id": &claims.sub }, None)
-        .await?
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, user_id = %claims.sub, "Failed to fetch user from database");
+            e
+        })?
         .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("User not found")))?;
 
     Ok(Json(user.sanitized()))
@@ -101,7 +105,11 @@ pub async fn update_me(
         .db
         .users()
         .find_one(doc! { "_id": &claims.sub }, None)
-        .await?
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, user_id = %claims.sub, "Failed to fetch user for update");
+            e
+        })?
         .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("User not found")))?;
 
     let mut update_doc = doc! {};
@@ -115,7 +123,11 @@ pub async fn update_me(
                 .db
                 .users()
                 .find_one(doc! { "email": new_email }, None)
-                .await?;
+                .await
+                .map_err(|e| {
+                    tracing::error!(error = %e, email = %new_email, "Failed to check email uniqueness");
+                    e
+                })?;
 
             if existing.is_some() {
                 return Err(AppError::Conflict(anyhow::anyhow!("Email already in use")));
@@ -143,7 +155,11 @@ pub async fn update_me(
         .db
         .users()
         .update_one(doc! { "_id": &user.id }, doc! { "$set": update_doc }, None)
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, user_id = %user.id, "Failed to update user profile");
+            e
+        })?;
 
     // 6. If email changed, trigger verification flow
     if email_changed {
@@ -185,7 +201,11 @@ pub async fn update_me(
         .db
         .users()
         .find_one(doc! { "_id": &user.id }, None)
-        .await?
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, user_id = %user.id, "Failed to fetch updated user");
+            e
+        })?
         .ok_or_else(|| AppError::InternalError(anyhow::anyhow!("User not found after update")))?;
 
     Ok(Json(updated_user.sanitized()))
@@ -224,7 +244,11 @@ pub async fn change_password(
         .db
         .users()
         .find_one(doc! { "_id": &claims.sub }, None)
-        .await?
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, user_id = %claims.sub, "Failed to fetch user for password change");
+            e
+        })?
         .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("User not found")))?;
 
     // 3. Verify current password
@@ -252,7 +276,11 @@ pub async fn change_password(
             },
             None,
         )
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, user_id = %user.id, "Failed to update user password");
+            e
+        })?;
 
     // Invalidate all refresh tokens
     state

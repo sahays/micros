@@ -36,7 +36,11 @@ pub async fn request_password_reset(
     state
         .auth_service
         .request_password_reset(req, addr.to_string(), base_url)
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, ip = %addr.to_string(), "Failed to process password reset request");
+            e
+        })?;
 
     Ok((
         StatusCode::OK,
@@ -67,7 +71,11 @@ pub async fn confirm_password_reset(
     state
         .auth_service
         .confirm_password_reset(req, addr.to_string())
-        .await?;
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, ip = %addr.to_string(), "Failed to confirm password reset");
+            e
+        })?;
 
     Ok((
         StatusCode::OK,

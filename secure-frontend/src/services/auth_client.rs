@@ -44,7 +44,11 @@ impl AuthClient {
             .header("X-Signature", signature)
             .json(&body)
             .send()
-            .await?;
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to send POST request to {}: {}", url, e);
+                anyhow::anyhow!("HTTP request failed: {}", e)
+            })?;
 
         Ok(response)
     }
@@ -74,7 +78,11 @@ impl AuthClient {
             .header("X-Signature", signature)
             .bearer_auth(access_token)
             .send()
-            .await?;
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to send GET request to {}: {}", url, e);
+                anyhow::anyhow!("HTTP request failed: {}", e)
+            })?;
 
         Ok(response)
     }

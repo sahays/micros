@@ -19,17 +19,7 @@ pub struct MongoConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct StorageConfig {
-    pub backend: StorageBackend,
-    pub local_path: Option<String>,
-    pub s3_bucket: Option<String>,
-    pub s3_region: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum StorageBackend {
-    Local,
-    S3,
+    pub local_path: String,
 }
 
 impl DocumentConfig {
@@ -47,26 +37,9 @@ impl DocumentConfig {
                 database: get_env("MONGODB_DATABASE", Some("document_db"), is_prod)?,
             },
             storage: StorageConfig {
-                backend: get_env("STORAGE_BACKEND", Some("local"), is_prod)?
-                    .parse()
-                    .map_err(|e: String| AppError::ConfigError(anyhow::anyhow!(e)))?,
-                local_path: Some(get_env("STORAGE_LOCAL_PATH", Some("storage"), is_prod)?),
-                s3_bucket: env::var("STORAGE_S3_BUCKET").ok(),
-                s3_region: env::var("STORAGE_S3_REGION").ok(),
+                local_path: get_env("STORAGE_LOCAL_PATH", Some("storage"), is_prod)?,
             },
         })
-    }
-}
-
-impl std::str::FromStr for StorageBackend {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "local" => Ok(StorageBackend::Local),
-            "s3" => Ok(StorageBackend::S3),
-            _ => Err(format!("Invalid storage backend: {}", s)),
-        }
     }
 }
 

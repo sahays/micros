@@ -42,7 +42,14 @@ pub async fn auth_middleware(
     };
 
     // Check blacklist
-    let is_blacklisted = state.redis.is_blacklisted(&claims.jti).await?;
+    let is_blacklisted = state.redis.is_blacklisted(&claims.jti).await.map_err(|e| {
+        tracing::error!(
+            "Failed to check token blacklist for jti {}: {}",
+            claims.jti,
+            e
+        );
+        AppError::InternalError(anyhow::anyhow!("Failed to verify token status: {}", e))
+    })?;
 
     if is_blacklisted {
         return Err(AppError::AuthError(anyhow::anyhow!(

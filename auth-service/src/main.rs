@@ -31,14 +31,25 @@ async fn main() -> Result<(), service_core::error::AppError> {
 
     // Initialize database connections
     tracing::info!("Initializing database connections");
-    let db = MongoDb::connect(&config.mongodb.uri, &config.mongodb.database).await?;
+    let db = MongoDb::connect(&config.mongodb.uri, &config.mongodb.database)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to connect to MongoDB: {}", e);
+            e
+        })?;
 
     // Create indexes
-    db.initialize_indexes().await?;
+    db.initialize_indexes().await.map_err(|e| {
+        tracing::error!("Failed to initialize database indexes: {}", e);
+        e
+    })?;
     tracing::info!("Database initialized successfully");
 
     // Initialize Redis service
-    let redis = RedisService::new(&config.redis).await?;
+    let redis = RedisService::new(&config.redis).await.map_err(|e| {
+        tracing::error!("Failed to connect to Redis: {}", e);
+        e
+    })?;
     tracing::info!("Redis service initialized");
 
     // Initialize email service
@@ -103,7 +114,10 @@ async fn main() -> Result<(), service_core::error::AppError> {
         ip_rate_limiter,
     };
     // Build application router
-    let app = build_router(state).await?;
+    let app = build_router(state).await.map_err(|e| {
+        tracing::error!("Failed to build application router: {}", e);
+        e
+    })?;
 
     // Start server
     let addr = SocketAddr::from(([0, 0, 0, 0], config.common.port));
@@ -118,14 +132,21 @@ async fn main() -> Result<(), service_core::error::AppError> {
 
     tracing::info!(address = %addr, "Listening");
 
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| {
+        tracing::error!("Failed to bind TCP listener to {}: {}", addr, e);
+        service_core::error::AppError::from(e)
+    })?;
 
     service_core::axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
     .with_graceful_shutdown(shutdown_signal())
-    .await?;
+    .await
+    .map_err(|e| {
+        tracing::error!("Server error: {}", e);
+        service_core::error::AppError::from(e)
+    })?;
 
     tracing::info!("Service shutdown complete");
     Ok(())
@@ -133,17 +154,21 @@ async fn main() -> Result<(), service_core::error::AppError> {
 
 async fn shutdown_signal() {
     let ctrl_c = async {
-        signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
+        if let Err(e) = signal::ctrl_c().await {
+            tracing::error!("Failed to install Ctrl+C handler: {}", e);
+        }
     };
 
     #[cfg(unix)]
     let terminate = async {
-        signal::unix::signal(signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
+        match signal::unix::signal(signal::unix::SignalKind::terminate()) {
+            Ok(mut sig) => {
+                sig.recv().await;
+            }
+            Err(e) => {
+                tracing::error!("Failed to install SIGTERM handler: {}", e);
+            }
+        }
     };
 
     #[cfg(not(unix))]

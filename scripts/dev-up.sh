@@ -1,0 +1,78 @@
+#!/bin/bash
+# Start development stack (MongoDB/Redis on host)
+
+set -e
+
+# Colors
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+echo -e "${GREEN}Starting Micros Development Stack${NC}"
+echo "MongoDB and Redis should be running on your host machine"
+echo ""
+
+# Check if .env.dev exists
+if [ ! -f .env.dev ]; then
+    echo -e "${YELLOW}Warning: .env.dev not found${NC}"
+    echo "Creating from template..."
+    cp .env.example .env.dev
+    echo -e "${YELLOW}Please edit .env.dev and set your secrets before continuing${NC}"
+    exit 1
+fi
+
+# Check if JWT keys exist
+if [ ! -f auth-service/keys/private.pem ]; then
+    echo -e "${YELLOW}JWT keys not found. Generating...${NC}"
+    mkdir -p auth-service/keys
+    openssl genrsa -out auth-service/keys/private.pem 2048
+    openssl rsa -in auth-service/keys/private.pem -pubout -out auth-service/keys/public.pem
+    echo -e "${GREEN}JWT keys generated${NC}"
+fi
+
+# Check if MongoDB is accessible
+echo "Checking host MongoDB connection..."
+if nc -z localhost 27017 2>/dev/null; then
+    echo -e "${GREEN}✓ MongoDB is accessible on port 27017${NC}"
+else
+    echo -e "${RED}✗ MongoDB is not accessible on port 27017${NC}"
+    echo "Please start MongoDB on your host machine first"
+    exit 1
+fi
+
+# Check if Redis is accessible
+echo "Checking host Redis connection..."
+if nc -z localhost 6379 2>/dev/null; then
+    echo -e "${GREEN}✓ Redis is accessible on port 6379${NC}"
+else
+    echo -e "${RED}✗ Redis is not accessible on port 6379${NC}"
+    echo "Please start Redis on your host machine first"
+    exit 1
+fi
+
+echo ""
+echo -e "${GREEN}Starting services with Docker Compose...${NC}"
+docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d
+
+echo ""
+echo -e "${GREEN}Services started!${NC}"
+echo ""
+echo "Access points (Dev: ports 9000-9009):"
+echo "  - Auth Service:      http://localhost:9005"
+echo "  - Secure Frontend:   http://localhost:9006"
+echo "  - Document Service:  http://localhost:9007"
+echo "  - Prometheus:        http://localhost:9000"
+echo "  - Loki:              http://localhost:9001"
+echo "  - Grafana:           http://localhost:9002 (admin/admin)"
+echo "  - Tempo:             http://localhost:9003"
+echo ""
+echo "Databases (on host machine):"
+echo "  - MongoDB:           localhost:27017"
+echo "  - Redis:             localhost:6379"
+echo ""
+echo "View logs:"
+echo "  docker-compose -f docker-compose.dev.yml logs -f"
+echo ""
+echo "Stop services:"
+echo "  ./scripts/dev-down.sh"
