@@ -67,7 +67,8 @@ async fn upload_document_works() {
     assert_eq!(stored_doc.size, 100);
 
     // 5. Verify Storage
-    let storage_path = std::path::Path::new(&config.storage.local_path).join(&stored_doc.s3_key);
+    let storage_path =
+        std::path::Path::new(&config.storage.local_path).join(&stored_doc.storage_key);
     assert!(storage_path.exists());
 
     // Cleanup

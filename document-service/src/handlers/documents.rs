@@ -31,7 +31,7 @@ pub async fn upload_document(
         .to_string();
 
     // Read the entire file into memory for now (simpler for prototype)
-    // For large files, we should stream it to S3
+    // For large files, implement streaming/chunked uploads
     let data = field
         .bytes()
         .await
@@ -53,11 +53,17 @@ pub async fn upload_document(
         .and_then(|ext| ext.to_str())
         .unwrap_or("bin");
 
-    let s3_key = format!("{}/{}.{}", Uuid::new_v4(), Uuid::new_v4(), extension);
+    let storage_key = format!("{}/{}.{}", Uuid::new_v4(), Uuid::new_v4(), extension);
 
     // Create document metadata with actual user_id from BFF (secure-frontend)
     // user_id propagated via X-User-ID header in HMAC-signed request
-    let mut document = Document::new(user_id.0, original_name, mime_type, size, s3_key.clone());
+    let mut document = Document::new(
+        user_id.0,
+        original_name,
+        mime_type,
+        size,
+        storage_key.clone(),
+    );
 
     tracing::info!(
         document_id = %document.id,
@@ -67,10 +73,14 @@ pub async fn upload_document(
     );
 
     // 1. Upload to storage
-    state.storage.upload(&s3_key, data).await.map_err(|e| {
-        tracing::error!("Failed to upload file {} to storage: {}", s3_key, e);
-        e
-    })?;
+    state
+        .storage
+        .upload(&storage_key, data)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to upload file {} to storage: {}", storage_key, e);
+            e
+        })?;
 
     // 2. Update status and save to DB
     document.status = DocumentStatus::Ready;

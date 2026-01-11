@@ -51,9 +51,6 @@ metrics = "0.23"
 http-body-util = "0.1"
 serde_urlencoded = "0.7"
 subtle = "2.6"
-aws-config = "1.1.7"
-aws-sdk-s3 = "1.17.0"
-aws-smithy-types = "1.1.7"
 
 # Optimize for faster builds and lower memory usage in dev
 [profile.dev]

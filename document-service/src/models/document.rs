@@ -19,7 +19,7 @@ pub struct Document {
     pub original_name: String,
     pub mime_type: String,
     pub size: i64,
-    pub s3_key: String,
+    pub storage_key: String,
     pub status: DocumentStatus,
     pub error_message: Option<String>,
     #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
@@ -34,7 +34,7 @@ impl Document {
         original_name: String,
         mime_type: String,
         size: i64,
-        s3_key: String,
+        storage_key: String,
     ) -> Self {
         let now = Utc::now();
         Self {
@@ -43,7 +43,7 @@ impl Document {
             original_name,
             mime_type,
             size,
-            s3_key,
+            storage_key,
             status: DocumentStatus::Uploading,
             error_message: None,
             created_at: now,
