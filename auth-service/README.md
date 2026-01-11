@@ -147,10 +147,30 @@ curl -X POST http://localhost:9005/auth/admin/clients \
     "allowed_origins": ["http://localhost:9006"]
   }'
 
-# Save client_id and signing_secret to .env.dev:
-# APP_AUTH_SERVICE__CLIENT_ID=<client_id>
-# APP_AUTH_SERVICE__SIGNING_SECRET=<signing_secret>
+# Returns:
+# {
+#   "client_id": "619d53e2-...",
+#   "client_secret": "A7PguDQJ...",      # NOT used by BFF
+#   "signing_secret": "aqFN9XiO...",     # Used for HMAC signing
+#   "app_name": "secure-frontend",
+#   "app_type": "service"
+# }
+
+# Save to .env.dev (BFF uses HMAC signing, NOT client_secret):
+# APP_AUTH_SERVICE__CLIENT_ID=619d53e2-...
+# APP_AUTH_SERVICE__SIGNING_SECRET=aqFN9XiO...
+#
+# Store client_secret securely for future use, but BFF doesn't need it
 ```
+
+**Authentication Patterns:**
+
+- **BFF Pattern** (secure-frontend): Uses `signing_secret` for HMAC request signing
+  - Each request signed with X-Signature header
+  - No long-lived tokens, request-level authentication
+- **OAuth Client Credentials** (backend services): Uses `client_secret` for app tokens
+  - Exchange `client_id` + `client_secret` for JWT at `/auth/app-token`
+  - Used by services that need bearer tokens
 
 ### 3. Service-to-Service Authentication
 

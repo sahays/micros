@@ -12,8 +12,8 @@ pub struct CreateClientRequest {
 
     pub app_type: ClientType,
 
-    #[validate(range(min = 1, message = "Rate limit must be at least 1"))]
-    #[schema(example = 100)]
+    /// Rate limit per minute (0 = unlimited for service clients)
+    #[schema(example = 0)]
     pub rate_limit_per_min: u32,
 
     #[schema(example = "[\"http://localhost:3000\"]")]

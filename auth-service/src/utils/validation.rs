@@ -21,16 +21,16 @@ where
 
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let Json(value) = Json::<T>::from_request(req, state).await.map_err(|e| {
-            let err_resp = ErrorResponse {
-                error: format!("Json parse error: {}", e),
-            };
+            let err_msg = format!("Json parse error: {}", e);
+            tracing::warn!(error = %e, "Request JSON parse failed");
+            let err_resp = ErrorResponse { error: err_msg };
             (StatusCode::BAD_REQUEST, Json(err_resp)).into_response()
         })?;
 
         value.validate().map_err(|e| {
-            let err_resp = ErrorResponse {
-                error: format!("Validation error: {}", e),
-            };
+            let err_msg = format!("Validation error: {}", e);
+            tracing::warn!(error = %e, "Request validation failed");
+            let err_resp = ErrorResponse { error: err_msg };
             (StatusCode::UNPROCESSABLE_ENTITY, Json(err_resp)).into_response()
         })?;
 
