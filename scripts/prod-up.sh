@@ -9,9 +9,47 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+# Parse flags
+REBUILD_FLAG=""
+NO_CACHE_FLAG=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --rebuild)
+            REBUILD_FLAG="--build"
+            shift
+            ;;
+        --no-cache)
+            NO_CACHE_FLAG="--no-cache"
+            shift
+            ;;
+        *)
+            echo -e "${RED}Unknown option: $1${NC}"
+            echo "Usage: $0 [--rebuild] [--no-cache]"
+            echo "  --rebuild    Rebuild Docker images before starting"
+            echo "  --no-cache   Rebuild without using cache (implies --rebuild)"
+            exit 1
+            ;;
+    esac
+done
+
+# If --no-cache is set, also set --rebuild
+if [ -n "$NO_CACHE_FLAG" ]; then
+    REBUILD_FLAG="--build"
+fi
+
 echo -e "${GREEN}Starting Micros Production Stack${NC}"
 echo "All services including MongoDB and Redis will run in Docker"
 echo ""
+
+if [ -n "$REBUILD_FLAG" ]; then
+    if [ -n "$NO_CACHE_FLAG" ]; then
+        echo -e "${YELLOW}Rebuilding all images without cache...${NC}"
+    else
+        echo -e "${YELLOW}Rebuilding images with cache...${NC}"
+    fi
+    echo ""
+fi
 
 # Check if .env.prod exists
 if [ ! -f .env.prod ]; then
@@ -34,7 +72,7 @@ fi
 
 echo ""
 echo -e "${GREEN}Starting services with Docker Compose...${NC}"
-docker-compose -f docker-compose.prod.yml --env-file .env.prod up -d
+docker-compose -f docker-compose.prod.yml --env-file .env.prod up -d $REBUILD_FLAG $NO_CACHE_FLAG
 
 echo ""
 echo -e "${GREEN}Services started!${NC}"
@@ -57,3 +95,7 @@ echo "  docker-compose -f docker-compose.prod.yml logs -f"
 echo ""
 echo "Stop services:"
 echo "  ./scripts/prod-down.sh"
+echo ""
+echo "Rebuild images:"
+echo "  ./scripts/prod-up.sh --rebuild         (use cache)"
+echo "  ./scripts/prod-up.sh --rebuild --no-cache  (full rebuild)"
