@@ -20,9 +20,9 @@ A high-performance, secure authentication microservice built with Axum and Mongo
 - **Database:** [MongoDB](https://www.mongodb.com/) - Primary data store for users and logs.
 - **Caching/State:** [Redis](https://redis.io/) - Used for token blacklisting and rate limiting state.
 - **Authentication:**
-    - `jsonwebtoken` for RS256 JWT handling.
-    - `argon2` for secure password hashing.
-    - `oauth2` / `reqwest` for Social Login flows.
+  - `jsonwebtoken` for RS256 JWT handling.
+  - `argon2` for secure password hashing.
+  - `oauth2` / `reqwest` for Social Login flows.
 - **Documentation:** `utoipa` - Code-first OpenAPI/Swagger generation.
 - **Infrastructure:** Docker (Multistage builds based on `debian:bookworm-slim`).
 
@@ -31,121 +31,213 @@ A high-performance, secure authentication microservice built with Axum and Mongo
 The service follows a **Layered Architecture** to ensure separation of concerns and testability:
 
 1.  **Transport Layer (Handlers):**
-    -   Defines HTTP endpoints using Axum.
-    -   Handles request deserialization and response serialization.
-    -   Performs initial input validation.
+    - Defines HTTP endpoints using Axum.
+    - Handles request deserialization and response serialization.
+    - Performs initial input validation.
 2.  **Middleware Layer:**
-    -   **Security:** Request signing verification, Headers (CORS, HSTS).
-    -   **Traffic Control:** Distributed rate limiting via Redis (Governor).
-    -   **Observability:** Request tracing and ID propagation.
+    - **Security:** Request signing verification, Headers (CORS, HSTS).
+    - **Traffic Control:** Distributed rate limiting via Redis (Governor).
+    - **Observability:** Request tracing and ID propagation.
 3.  **Service Layer:**
-    -   Contains business logic (e.g., `JwtService`, `EmailService`).
-    -   Orchestrates operations between data access and external providers.
+    - Contains business logic (e.g., `JwtService`, `EmailService`).
+    - Orchestrates operations between data access and external providers.
 4.  **Data Access Layer (Models/DB):**
-    -   Type-safe interactions with MongoDB.
-    -   Defines data models (Users, Clients, Tokens).
-    -   Handles Redis interactions for ephemeral state.
+    - Type-safe interactions with MongoDB.
+    - Defines data models (Users, Clients, Tokens).
+    - Handles Redis interactions for ephemeral state.
 
-**State Management:**
-Configuration and database connections are encapsulated in a thread-safe `AppState` struct, injected into handlers via Axum's `State` extractor.
+**State Management:** Configuration and database connections are encapsulated in a thread-safe `AppState` struct,
+injected into handlers via Axum's `State` extractor.
 
 ## Security-First Architecture
 
 The service is built on a "Zero Trust" and "Defense in Depth" philosophy.
 
 ### 1. The BFF Pattern (Backend-for-Frontend)
+
 Instead of exposing the Auth Service directly to browsers, we encourage using a **BFF**.
-*   **Isolation:** The BFF acts as a trusted proxy.
-*   **Request Signing:** The BFF signs requests using a shared secret (`signing_secret`), ensuring that no malicious actor can bypass the frontend logic or replay requests.
-*   **Client Registry:** Only registered BFFs (Known Clients) can interact with the system, enforced via `client_id` checks.
+
+- **Isolation:** The BFF acts as a trusted proxy.
+- **Request Signing:** The BFF signs requests using a shared secret (`signing_secret`), ensuring that no malicious actor
+  can bypass the frontend logic or replay requests.
+- **Client Registry:** Only registered BFFs (Known Clients) can interact with the system, enforced via `client_id`
+  checks.
 
 ### 2. Service Accounts & Scopes
+
 Internal communication follows **Least Privilege**:
-*   **No Implicit Trust:** Being on the internal network is not enough.
-*   **Scoped Access:** A "Billing Service" can be restricted to `user:read` but denied `user:write`.
-*   **Audit Trails:** Every service-to-service call is cryptographically tied to a Service ID and logged for compliance.
+
+- **No Implicit Trust:** Being on the internal network is not enough.
+- **Scoped Access:** A "Billing Service" can be restricted to `user:read` but denied `user:write`.
+- **Audit Trails:** Every service-to-service call is cryptographically tied to a Service ID and logged for compliance.
 
 ## Quick Start
 
-### 1. Setup Environment
-```bash
-cp .env.example .env
-mkdir -p keys
-openssl genrsa -out keys/private.pem 2048
-openssl rsa -in keys/private.pem -pubout -out keys/public.pem
-```
-
-### 2. Run with Docker
-```bash
-docker build -t auth-service .
-docker run -p 3000:3000 --env-file .env auth-service
-```
-
-### 3. Run with Docker Compose (Full Stack)
-
-To run the Auth Service alongside MongoDB, Redis, and the PLG Observability stack:
+**Prerequisites:** MongoDB and Redis running on host machine (port 27017 and 6379).
 
 ```bash
-docker-compose up -d
+# From repository root:
+./scripts/dev-up.sh              # Start dev stack
+./scripts/dev-down.sh            # Stop dev stack
+./scripts/dev-up.sh --rebuild    # Rebuild and start
 ```
 
-**Port Configuration:**
-To avoid port conflicts on your host machine, you can customize the exposed ports using environment variables in a `.env` file (in the root directory) or by exporting them:
+**Access Points (Dev):**
+
+- Auth Service: http://localhost:9005
+- Swagger UI: http://localhost:9005/docs
+- Grafana: http://localhost:9002 (admin/admin)
+- Prometheus: http://localhost:9000
+
+**Production Stack:**
 
 ```bash
-export AUTH_SERVICE_PORT=8081
-export REDIS_PORT=6380
-export MONGO_PORT=27018
-docker-compose up -d
+./scripts/prod-up.sh             # Everything containerized (ports 10000-10009)
+./scripts/prod-down.sh
 ```
 
-Default ports:
-- Auth Service: 8080
-- MongoDB: 27017
-- Redis: 6379
-- Grafana: 3000
-- Prometheus: 9090
-- Loki: 3100
-- Promtail: 9080
+## Usage Workflows
 
-## Usage Guide
+### 1. User Registration & Login
 
-### Authentication
-- **Register**: `POST /auth/register` (Email/Password)
-- **Login**: `POST /auth/login` returns `access_token` and `refresh_token`.
-- **Refresh**: `POST /auth/refresh` rotates both tokens.
-- **Logout**: `POST /auth/logout` blacklists the current session.
+```bash
+# Register new user
+curl -X POST http://localhost:9005/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecurePass123!",
+    "name": "John Doe"
+  }'
 
-### User Management
-- **Profile**: `GET /users/me` (Requires Bearer Token)
-- **Update**: `PATCH /users/me` (Name/Email)
-- **Security**: `POST /users/me/password` to change password.
+# Login (returns access_token and refresh_token)
+curl -X POST http://localhost:9005/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "SecurePass123!"
+  }'
 
-### Service-to-Service
-- **App Token**: `POST /auth/app/token` using `client_id` and `client_secret`.
-- **Introspection**: `POST /auth/introspect` to verify token validity.
+# Access protected endpoint
+curl -X GET http://localhost:9005/users/me \
+  -H "Authorization: Bearer <access_token>"
 
-### Administration
-- **Client Management**: `POST /auth/admin/clients` to register new apps (BFF/Mobile).
-- **Service Accounts**: `POST /auth/admin/services` for backend integrations.
-- **Audit Logs**: `GET /auth/admin/services/{id}/audit-log`.
+# Refresh tokens before expiry
+curl -X POST http://localhost:9005/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token": "<refresh_token>"}'
+
+# Logout (blacklist tokens)
+curl -X POST http://localhost:9005/auth/logout \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token": "<refresh_token>"}'
+```
+
+### 2. Register BFF/Frontend Client
+
+```bash
+# Register secure-frontend as a service client (unlimited rate limits)
+curl -X POST http://localhost:9005/auth/admin/clients \
+  -H "X-Admin-Api-Key: <ADMIN_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "app_name": "secure-frontend",
+    "app_type": "service",
+    "rate_limit_per_min": 0,
+    "allowed_origins": ["http://localhost:9006"]
+  }'
+
+# Save client_id and signing_secret to .env.dev:
+# APP_AUTH_SERVICE__CLIENT_ID=<client_id>
+# APP_AUTH_SERVICE__SIGNING_SECRET=<signing_secret>
+```
+
+### 3. Service-to-Service Authentication
+
+```bash
+# Get app token using client credentials
+curl -X POST http://localhost:9005/auth/app-token \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_id": "<client_id>",
+    "client_secret": "<client_secret>"
+  }'
+
+# Verify token validity
+curl -X POST http://localhost:9005/auth/introspect \
+  -H "Content-Type: application/json" \
+  -d '{"token": "<access_token>"}'
+```
+
+### 4. Password Reset Flow
+
+```bash
+# Request password reset (sends email)
+curl -X POST http://localhost:9005/auth/password-reset/request \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com"}'
+
+# Confirm reset with token from email
+curl -X POST http://localhost:9005/auth/password-reset/confirm \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "<reset_token>",
+    "new_password": "NewSecurePass123!"
+  }'
+```
 
 ## API Documentation
 
-Access the interactive documentation at:
-- **Swagger UI**: `http://localhost:3000/docs`
-- **Spec**: `http://localhost:3000/.well-known/openapi.json`
+Interactive Swagger UI (auto-generated from code):
+
+- **Dev**: http://localhost:9005/docs
+- **Prod**: http://localhost:10005/docs (disabled by default)
+- **OpenAPI Spec**: http://localhost:9005/.well-known/openapi.json
+
+**Adding New Endpoints:**
+
+1. Add `#[utoipa::path]` annotation to handler
+2. Register in `ApiDoc` struct (src/lib.rs:31-96)
+3. Rebuild - spec updates automatically
 
 ## Detailed Documentation
 
 - [Email/Password Auth Guide](docs/email-password-auth.md): Registration, login, and password management flows.
 - [Security Controls & Defenses](docs/security-controls.md): Rate limiting, bot protection, and client registries.
-- [BFF Request Signing Guide](docs/bff-request-signing.md): Implementation details for securing Frontend-to-Backend communication.
+- [BFF Request Signing Guide](docs/bff-request-signing.md): Implementation details for securing Frontend-to-Backend
+  communication.
 - [Service Integration Guide](docs/service-integration.md): How to authenticate other microservices with Auth Service.
 - [Social Login Guide](docs/social-login.md): Google OAuth 2.0 integration details.
 - [Audit Logging](docs/audit-logging.md): Events, schema, and admin access.
 - [Observability & PLG Stack](docs/observability.md): Structured logging, tracing, and PLG integration.
 
+## Development Workflow
+
+```bash
+# Make code changes
+vim src/handlers/auth/session.rs
+
+# Run tests
+cargo test -p auth-service
+
+# Rebuild and restart
+./scripts/dev-up.sh --rebuild
+
+# View logs
+docker-compose -f docker-compose.dev.yml logs -f auth-service
+
+# Test endpoint
+curl http://localhost:9005/health
+```
+
+**Pre-commit Hooks:**
+
+- Runs `cargo fmt`, `cargo clippy`, and tests automatically
+- Install: `ln -s ../../scripts/pre-commit.sh .git/hooks/pre-commit`
+
 ## Deployment
 
-Production deployments are handled via `scripts/deploy.sh`, which implements atomic release switching and health-check driven rollbacks.
+**Development:** `./scripts/dev-up.sh` (MongoDB/Redis on host, services in Docker) **Production:**
+`./scripts/prod-up.sh` (everything containerized)
+
+Deployment scripts include health checks and graceful shutdown handling.
