@@ -1,14 +1,15 @@
-use crate::dtos::DocumentResponse;
+use crate::dtos::{DocumentResponse, ProcessingOptions, ProcessingStatusResponse};
 use crate::middleware::user_id::UserId;
 use crate::models::{Document, DocumentStatus};
 use crate::startup::AppState;
 use crate::workers::ProcessingJob;
 use axum::{
-    extract::{Multipart, State},
+    extract::{Multipart, Path, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
 };
+use mongodb::bson::doc;
 use service_core::error::AppError;
 use uuid::Uuid;
 
@@ -83,8 +84,8 @@ pub async fn upload_document(
             e
         })?;
 
-    // 2. Set status to Processing and save to DB
-    document.status = DocumentStatus::Processing;
+    // 2. Set status to Ready and save to DB (processing must be triggered manually)
+    document.status = DocumentStatus::Ready;
 
     state
         .db
@@ -100,24 +101,91 @@ pub async fn upload_document(
             AppError::from(e)
         })?;
 
-    // 3. Enqueue processing job
+    tracing::info!(
+        document_id = %document.id,
+        "Document upload completed successfully"
+    );
+
+    Ok((StatusCode::CREATED, Json(DocumentResponse::from(document))))
+}
+
+pub async fn process_document(
+    State(state): State<AppState>,
+    _user_id: UserId, // Available for logging/auditing, but authorization is BFF's responsibility
+    Path(document_id): Path<String>,
+    Json(options): Json<ProcessingOptions>,
+) -> Result<impl IntoResponse, AppError> {
+    // 1. Fetch document from database
+    let document = state
+        .db
+        .documents()
+        .find_one(doc! { "_id": &document_id }, None)
+        .await
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Document not found")))?;
+
+    // 2. Check if document is in a processable state
+    // Note: Ownership validation is the BFF's responsibility (secure-frontend)
+    if matches!(document.status, DocumentStatus::Processing) {
+        return Err(AppError::BadRequest(anyhow::anyhow!(
+            "Document is already being processed"
+        )));
+    }
+
+    // 3. Update status to Processing
+    state
+        .db
+        .documents()
+        .update_one(
+            doc! { "_id": &document_id },
+            doc! { "$set": { "status": "processing" } },
+            None,
+        )
+        .await
+        .map_err(AppError::from)?;
+
+    // 4. Enqueue processing job
     if let Some(job_tx) = &state.job_tx {
         let job = ProcessingJob {
             document_id: document.id.clone(),
             owner_id: document.owner_id.clone(),
             mime_type: document.mime_type.clone(),
             storage_key: document.storage_key.clone(),
+            options,
         };
 
         job_tx.send(job).await.map_err(|_| {
             tracing::error!(document_id = %document.id, "Failed to enqueue processing job");
-            AppError::InternalError(anyhow::anyhow!("Failed to enqueue processing job"))
+            AppError::InternalError(anyhow::anyhow!("Worker queue is full"))
         })?;
 
         tracing::info!(document_id = %document.id, "Processing job enqueued");
     } else {
-        tracing::warn!(document_id = %document.id, "Worker pool not available, document will remain in Processing state");
+        return Err(AppError::InternalError(anyhow::anyhow!(
+            "Worker pool not available"
+        )));
     }
 
-    Ok((StatusCode::CREATED, Json(DocumentResponse::from(document))))
+    Ok(StatusCode::ACCEPTED)
+}
+
+pub async fn get_document_status(
+    State(state): State<AppState>,
+    _user_id: UserId, // Available for logging/auditing, but authorization is BFF's responsibility
+    Path(document_id): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    // 1. Fetch document from database
+    // Note: Ownership validation is the BFF's responsibility (secure-frontend)
+    let document = state
+        .db
+        .documents()
+        .find_one(doc! { "_id": &document_id }, None)
+        .await
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Document not found")))?;
+
+    // 2. Convert to status response
+    let status_response = ProcessingStatusResponse::from(document);
+
+    Ok(Json(status_response))
 }

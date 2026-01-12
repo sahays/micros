@@ -8,7 +8,7 @@
 !.env.example
 
 # Rust
-/target/
+target
 **/*.rs.bk
 *.pdb
 
@@ -50,4 +50,5 @@ tempo_data/
 grafana_data/
 
 # Docker
-docker-compose.override.ymltests/api/reports/
+docker-compose.override.yml
+tests/api/reports/

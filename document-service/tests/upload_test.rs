@@ -50,7 +50,7 @@ async fn upload_document_works() {
     assert_eq!(body["original_name"], "test.txt");
     assert_eq!(body["mime_type"], "text/plain");
     assert_eq!(body["size"], 100);
-    assert_eq!(body["status"], "processing"); // Changed: now enqueued for background processing
+    assert_eq!(body["status"], "ready"); // No automatic processing - must be triggered manually
 
     let doc_id = body["id"].as_str().unwrap();
 

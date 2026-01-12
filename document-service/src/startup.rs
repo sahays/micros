@@ -73,6 +73,8 @@ impl Application {
         let app = Router::new()
             .route("/health", get(handlers::health_check))
             .route("/documents", post(handlers::upload_document))
+            .route("/documents/:id/process", post(handlers::process_document))
+            .route("/documents/:id/status", get(handlers::get_document_status))
             .layer(TraceLayer::new_for_http())
             .with_state(state.clone());
 

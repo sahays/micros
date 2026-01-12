@@ -1,3 +1,4 @@
+use crate::dtos::ProcessingOptions;
 use crate::models::{Document, ProcessingMetadata};
 use crate::workers::executor::CommandExecutor;
 use async_trait::async_trait;
@@ -13,6 +14,7 @@ pub trait Processor: Send + Sync {
         document: &Document,
         file_path: &Path,
         executor: &CommandExecutor,
+        options: &ProcessingOptions,
     ) -> Result<ProcessingMetadata, AppError>;
 }
 

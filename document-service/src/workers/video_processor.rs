@@ -1,3 +1,4 @@
+use crate::dtos::ProcessingOptions;
 use crate::models::{Document, ProcessingMetadata};
 use crate::workers::executor::CommandExecutor;
 use crate::workers::processor::Processor;
@@ -25,43 +26,57 @@ impl Processor for VideoProcessor {
         _document: &Document,
         file_path: &Path,
         executor: &CommandExecutor,
+        options: &ProcessingOptions,
     ) -> Result<ProcessingMetadata, AppError> {
         tracing::info!(file_path = ?file_path, "Processing video document");
+
+        // Get video-specific options or use defaults
+        let video_opts = options.video_options.as_ref();
+        let format = video_opts.map_or("hls", |opts| opts.format.as_str());
 
         let output_dir = file_path
             .parent()
             .unwrap()
             .join(file_path.file_stem().unwrap())
-            .join("hls");
+            .join(format);
 
         tokio::fs::create_dir_all(&output_dir).await.map_err(|e| {
-            AppError::InternalError(anyhow::anyhow!("Failed to create HLS directory: {}", e))
+            AppError::InternalError(anyhow::anyhow!("Failed to create output directory: {}", e))
         })?;
 
         let playlist_path = output_dir.join("playlist.m3u8");
+        let mp4_output_path = output_dir.join("output.mp4");
 
-        // Transcode to HLS using ffmpeg
-        executor
-            .execute(
-                "ffmpeg",
-                &[
-                    "-i",
-                    file_path.to_str().unwrap(),
-                    "-codec:",
-                    "copy",
-                    "-start_number",
-                    "0",
-                    "-hls_time",
-                    "10",
-                    "-hls_list_size",
-                    "0",
-                    "-f",
-                    "hls",
-                    playlist_path.to_str().unwrap(),
-                ],
-                None,
-            )
-            .await?;
+        // Build ffmpeg arguments based on format
+        let mut args = vec!["-i", file_path.to_str().unwrap()];
+
+        // Add resolution if specified
+        if let Some(resolution) = video_opts.and_then(|opts| opts.resolution.as_ref()) {
+            args.extend_from_slice(&["-s", resolution.as_str()]);
+        }
+
+        // Add format-specific arguments
+        if format == "hls" {
+            args.extend_from_slice(&[
+                "-codec:",
+                "copy",
+                "-start_number",
+                "0",
+                "-hls_time",
+                "10",
+                "-hls_list_size",
+                "0",
+                "-f",
+                "hls",
+                playlist_path.to_str().unwrap(),
+            ]);
+        } else {
+            // Default MP4 output
+            args.extend_from_slice(&["-codec:", "copy", mp4_output_path.to_str().unwrap()]);
+        }
+
+        // Transcode video using ffmpeg
+        executor.execute("ffmpeg", &args, None).await?;
 
         // Get duration using ffprobe
         let probe_output = executor
@@ -90,6 +105,8 @@ impl Processor for VideoProcessor {
         tracing::info!(
             duration_seconds = duration,
             playlist_path = ?playlist_path,
+            format = format,
+            resolution = ?video_opts.and_then(|opts| opts.resolution.as_ref()),
             "Video processing completed"
         );
 

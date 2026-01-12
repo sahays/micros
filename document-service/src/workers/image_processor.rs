@@ -1,3 +1,4 @@
+use crate::dtos::ProcessingOptions;
 use crate::models::{Document, ProcessingMetadata};
 use crate::workers::executor::CommandExecutor;
 use crate::workers::processor::Processor;
@@ -25,21 +26,28 @@ impl Processor for ImageProcessor {
         _document: &Document,
         file_path: &Path,
         executor: &CommandExecutor,
+        options: &ProcessingOptions,
     ) -> Result<ProcessingMetadata, AppError> {
         tracing::info!(file_path = ?file_path, "Processing image document");
 
-        let output_path = file_path.with_extension("webp");
+        // Get image-specific options or use defaults
+        let img_opts = options.image_options.as_ref();
+        let format = img_opts.map_or("webp", |opts| opts.format.as_str());
+        let quality = img_opts.map_or(85, |opts| opts.quality);
 
-        // Convert to WebP using ImageMagick
+        let output_path = file_path.with_extension(format);
+
+        // Convert image using ImageMagick
+        let quality_str = quality.to_string();
         executor
             .execute(
                 "convert",
                 &[
                     file_path.to_str().unwrap(),
                     "-quality",
-                    "85",
+                    &quality_str,
                     "-define",
-                    "webp:method=6",
+                    &format!("{}:method=6", format),
                     output_path.to_str().unwrap(),
                 ],
                 None,
@@ -59,6 +67,8 @@ impl Processor for ImageProcessor {
         tracing::info!(
             optimized_size = optimized_size,
             output_path = ?output_path,
+            format = format,
+            quality = quality,
             "Image processing completed"
         );
 
