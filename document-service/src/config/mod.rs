@@ -2,6 +2,8 @@ use serde::Deserialize;
 use service_core::config as core_config;
 use service_core::error::AppError;
 use std::env;
+use std::path::PathBuf;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DocumentConfig {
@@ -10,6 +12,7 @@ pub struct DocumentConfig {
     pub mongodb: MongoConfig,
     pub storage: StorageConfig,
     pub signature: SignatureConfig,
+    pub worker: WorkerConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -26,6 +29,21 @@ pub struct MongoConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct StorageConfig {
     pub local_path: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct WorkerConfig {
+    pub enabled: bool,
+    pub worker_count: usize,
+    pub queue_size: usize,
+    pub command_timeout_seconds: u64,
+    pub temp_dir: PathBuf,
+}
+
+impl WorkerConfig {
+    pub fn command_timeout(&self) -> Duration {
+        Duration::from_secs(self.command_timeout_seconds)
+    }
 }
 
 impl DocumentConfig {
@@ -50,6 +68,29 @@ impl DocumentConfig {
                     .unwrap_or_else(|_| "false".to_string())
                     .parse()
                     .unwrap_or(false),
+            },
+            worker: WorkerConfig {
+                enabled: env::var("WORKER_ENABLED")
+                    .unwrap_or_else(|_| "true".to_string())
+                    .parse()
+                    .unwrap_or(true),
+                worker_count: env::var("WORKER_COUNT")
+                    .unwrap_or_else(|_| "4".to_string())
+                    .parse()
+                    .unwrap_or(4),
+                queue_size: env::var("QUEUE_SIZE")
+                    .unwrap_or_else(|_| "100".to_string())
+                    .parse()
+                    .unwrap_or(100),
+                command_timeout_seconds: env::var("COMMAND_TIMEOUT_SECONDS")
+                    .unwrap_or_else(|_| "300".to_string())
+                    .parse()
+                    .unwrap_or(300),
+                temp_dir: PathBuf::from(get_env(
+                    "TEMP_DIR",
+                    Some("/tmp/document-processing"),
+                    is_prod,
+                )?),
             },
         })
     }

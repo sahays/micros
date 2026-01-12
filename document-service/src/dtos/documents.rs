@@ -1,4 +1,4 @@
-use crate::models::DocumentStatus;
+use crate::models::{DocumentStatus, ProcessingMetadata};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -10,6 +10,7 @@ pub struct DocumentResponse {
     pub size: i64,
     pub storage_key: String,
     pub status: DocumentStatus,
+    pub processing_metadata: Option<ProcessingMetadata>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -24,6 +25,7 @@ impl From<crate::models::Document> for DocumentResponse {
             size: doc.size,
             storage_key: doc.storage_key,
             status: doc.status,
+            processing_metadata: doc.processing_metadata,
             created_at: doc.created_at.to_rfc3339(),
             updated_at: doc.updated_at.to_rfc3339(),
         }

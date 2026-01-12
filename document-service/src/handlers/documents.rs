@@ -2,6 +2,7 @@ use crate::dtos::DocumentResponse;
 use crate::middleware::user_id::UserId;
 use crate::models::{Document, DocumentStatus};
 use crate::startup::AppState;
+use crate::workers::ProcessingJob;
 use axum::{
     extract::{Multipart, State},
     http::StatusCode,
@@ -82,8 +83,8 @@ pub async fn upload_document(
             e
         })?;
 
-    // 2. Update status and save to DB
-    document.status = DocumentStatus::Ready;
+    // 2. Set status to Processing and save to DB
+    document.status = DocumentStatus::Processing;
 
     state
         .db
@@ -98,6 +99,25 @@ pub async fn upload_document(
             );
             AppError::from(e)
         })?;
+
+    // 3. Enqueue processing job
+    if let Some(job_tx) = &state.job_tx {
+        let job = ProcessingJob {
+            document_id: document.id.clone(),
+            owner_id: document.owner_id.clone(),
+            mime_type: document.mime_type.clone(),
+            storage_key: document.storage_key.clone(),
+        };
+
+        job_tx.send(job).await.map_err(|_| {
+            tracing::error!(document_id = %document.id, "Failed to enqueue processing job");
+            AppError::InternalError(anyhow::anyhow!("Failed to enqueue processing job"))
+        })?;
+
+        tracing::info!(document_id = %document.id, "Processing job enqueued");
+    } else {
+        tracing::warn!(document_id = %document.id, "Worker pool not available, document will remain in Processing state");
+    }
 
     Ok((StatusCode::CREATED, Json(DocumentResponse::from(document))))
 }

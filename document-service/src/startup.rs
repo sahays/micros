@@ -1,6 +1,7 @@
 use crate::config::DocumentConfig;
 use crate::handlers;
 use crate::services::{LocalStorage, MongoDb, Storage};
+use crate::workers::{ProcessingJob, WorkerOrchestrator};
 use axum::{
     routing::{get, post},
     Router,
@@ -10,6 +11,7 @@ use std::future::IntoFuture;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::mpsc;
 use tower_http::trace::TraceLayer;
 
 #[derive(Clone)]
@@ -17,6 +19,7 @@ pub struct AppState {
     pub config: DocumentConfig,
     pub db: MongoDb,
     pub storage: Arc<dyn Storage>,
+    pub job_tx: Option<mpsc::Sender<ProcessingJob>>,
 }
 
 pub struct Application {
@@ -51,10 +54,20 @@ impl Application {
                 })?,
         );
 
+        // Initialize worker orchestrator
+        let (orchestrator, job_tx) =
+            WorkerOrchestrator::new(config.worker.clone(), db.clone(), storage.clone());
+
+        // Start worker pool
+        tokio::spawn(async move {
+            orchestrator.start().await;
+        });
+
         let state = AppState {
             config: config.clone(),
             db: db.clone(),
             storage,
+            job_tx: Some(job_tx),
         };
 
         let app = Router::new()
