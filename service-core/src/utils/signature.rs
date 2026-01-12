@@ -53,6 +53,64 @@ pub fn verify_signature(
     Ok(expected_bytes.ct_eq(signature_bytes).into())
 }
 
+/// Generate document signature for temporary access URLs
+///
+/// Format: HMAC-SHA256("document:{document_id}:{expires}", secret)
+pub fn generate_document_signature(
+    document_id: &str,
+    expires: i64,
+    secret: &str,
+) -> Result<String, anyhow::Error> {
+    let message = format!("document:{}:{}", document_id, expires);
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .map_err(|e| anyhow::anyhow!("Invalid key length: {}", e))?;
+
+    mac.update(message.as_bytes());
+    let result = mac.finalize();
+
+    Ok(hex::encode(result.into_bytes()))
+}
+
+/// Validate document signature for temporary access URLs
+pub fn validate_document_signature(
+    document_id: &str,
+    signature: &str,
+    expires: i64,
+    secret: &str,
+) -> Result<(), crate::error::AppError> {
+    use chrono::Utc;
+
+    // Check expiration
+    if Utc::now().timestamp() > expires {
+        return Err(crate::error::AppError::Unauthorized(anyhow::anyhow!(
+            "Signature expired"
+        )));
+    }
+
+    // Generate expected signature
+    let expected = generate_document_signature(document_id, expires, secret)
+        .map_err(crate::error::AppError::InternalError)?;
+
+    // Constant time comparison
+    let expected_bytes = expected.as_bytes();
+    let signature_bytes = signature.as_bytes();
+
+    if expected_bytes.len() != signature_bytes.len() {
+        return Err(crate::error::AppError::Unauthorized(anyhow::anyhow!(
+            "Invalid signature"
+        )));
+    }
+
+    let is_valid: bool = expected_bytes.ct_eq(signature_bytes).into();
+    if !is_valid {
+        return Err(crate::error::AppError::Unauthorized(anyhow::anyhow!(
+            "Invalid signature"
+        )));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

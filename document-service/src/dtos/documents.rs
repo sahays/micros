@@ -31,3 +31,28 @@ impl From<crate::models::Document> for DocumentResponse {
         }
     }
 }
+
+#[derive(Debug, Serialize)]
+pub struct ChunkedVideoResponse {
+    #[serde(rename = "type")]
+    pub type_: String,
+    pub original_name: String,
+    pub resolution: Option<String>,
+    pub total_size: i64,
+    pub chunk_count: usize,
+    pub chunks: Vec<ChunkMetadata>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ChunkMetadata {
+    pub index: usize,
+    pub url: String,
+    pub size: i64,
+    pub content_type: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DownloadParams {
+    pub signature: Option<String>,
+    pub expires: Option<i64>,
+}

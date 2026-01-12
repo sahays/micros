@@ -12,6 +12,13 @@ pub enum DocumentStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChunkInfo {
+    pub index: usize,
+    pub path: String,
+    pub size: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcessingMetadata {
     pub extracted_text: Option<String>,
     pub page_count: Option<i32>,
@@ -19,6 +26,12 @@ pub struct ProcessingMetadata {
     pub optimized_size: Option<i64>,
     pub thumbnail_path: Option<String>,
     pub error_details: Option<String>,
+
+    // Video chunking fields
+    pub resolution: Option<String>,
+    pub chunks: Option<Vec<ChunkInfo>>,
+    pub chunk_count: Option<i32>,
+    pub total_size: Option<i64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

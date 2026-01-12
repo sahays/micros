@@ -1,3 +1,3 @@
 pub mod document;
 
-pub use document::{Document, DocumentStatus, ProcessingMetadata};
+pub use document::{ChunkInfo, Document, DocumentStatus, ProcessingMetadata};

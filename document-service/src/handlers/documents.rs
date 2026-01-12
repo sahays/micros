@@ -1,11 +1,14 @@
-use crate::dtos::{DocumentResponse, ProcessingOptions, ProcessingStatusResponse};
+use crate::dtos::{
+    ChunkMetadata, ChunkedVideoResponse, DocumentResponse, DownloadParams, ProcessingOptions,
+    ProcessingStatusResponse,
+};
 use crate::middleware::user_id::UserId;
 use crate::models::{Document, DocumentStatus};
 use crate::startup::AppState;
 use crate::workers::ProcessingJob;
 use axum::{
-    extract::{Multipart, Path, State},
-    http::StatusCode,
+    extract::{Multipart, Path, Query, State},
+    http::{header, StatusCode},
     response::IntoResponse,
     Json,
 };
@@ -188,4 +191,208 @@ pub async fn get_document_status(
     let status_response = ProcessingStatusResponse::from(document);
 
     Ok(Json(status_response))
+}
+
+enum FileToServe {
+    File {
+        storage_key: String,
+        content_type: String,
+        filename: String,
+    },
+    ChunkedVideo(ChunkedVideoResponse),
+}
+
+fn determine_file_to_serve(document: &Document) -> Result<FileToServe, AppError> {
+    // Check if processed file exists
+    if let Some(ref metadata) = document.processing_metadata {
+        // For videos: check if chunked
+        if document.mime_type.starts_with("video/") {
+            if let Some(ref chunks) = metadata.chunks {
+                // Chunked video - return JSON metadata
+                return Ok(FileToServe::ChunkedVideo(ChunkedVideoResponse {
+                    type_: "chunked_video".to_string(),
+                    original_name: document.original_name.clone(),
+                    resolution: metadata.resolution.clone(),
+                    total_size: metadata.total_size.unwrap_or(0),
+                    chunk_count: chunks.len(),
+                    chunks: chunks
+                        .iter()
+                        .map(|c| ChunkMetadata {
+                            index: c.index,
+                            url: format!("/documents/{}/chunks/{}", document.id, c.index),
+                            size: c.size,
+                            content_type: "video/mp4".to_string(),
+                        })
+                        .collect(),
+                }));
+            }
+        }
+
+        // For images or unchunked videos: serve processed file
+        if let Some(ref processed_path) = metadata.thumbnail_path {
+            return Ok(FileToServe::File {
+                storage_key: processed_path.clone(),
+                content_type: detect_content_type(processed_path),
+                filename: document.original_name.clone(),
+            });
+        }
+    }
+
+    // Default: serve original file
+    Ok(FileToServe::File {
+        storage_key: document.storage_key.clone(),
+        content_type: document.mime_type.clone(),
+        filename: document.original_name.clone(),
+    })
+}
+
+fn detect_content_type(path: &str) -> String {
+    if path.ends_with(".webp") {
+        "image/webp".to_string()
+    } else if path.ends_with(".mp4") {
+        "video/mp4".to_string()
+    } else if path.ends_with(".pdf") {
+        "application/pdf".to_string()
+    } else {
+        "application/octet-stream".to_string()
+    }
+}
+
+pub async fn download_document(
+    State(state): State<AppState>,
+    user_id: Option<UserId>,
+    Path(document_id): Path<String>,
+    Query(params): Query<DownloadParams>,
+) -> Result<impl IntoResponse, AppError> {
+    // Validate signature if provided, otherwise require user_id
+    if let (Some(signature), Some(expires)) = (&params.signature, &params.expires) {
+        service_core::utils::signature::validate_document_signature(
+            &document_id,
+            signature,
+            *expires,
+            &state.config.signature.signing_secret,
+        )?;
+    } else {
+        // Normal flow: require X-User-ID header
+        user_id.ok_or_else(|| {
+            AppError::Unauthorized(anyhow::anyhow!("Missing user ID or signature"))
+        })?;
+    }
+
+    // Fetch document metadata
+    let document = state
+        .db
+        .documents()
+        .find_one(doc! { "_id": &document_id }, None)
+        .await
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Document not found")))?;
+
+    // Determine what to serve
+    match determine_file_to_serve(&document)? {
+        FileToServe::File {
+            storage_key,
+            content_type,
+            filename,
+        } => {
+            // Download file from storage
+            let file_data = state.storage.download(&storage_key).await.map_err(|e| {
+                tracing::error!(
+                    document_id = %document_id,
+                    storage_key = %storage_key,
+                    error = %e,
+                    "Failed to download file"
+                );
+                e
+            })?;
+
+            tracing::info!(
+                document_id = %document_id,
+                storage_key = %storage_key,
+                content_type = %content_type,
+                size = file_data.len(),
+                "Document download completed"
+            );
+
+            // Return file
+            Ok((
+                StatusCode::OK,
+                [
+                    (header::CONTENT_TYPE, content_type),
+                    (
+                        header::CONTENT_DISPOSITION,
+                        format!("inline; filename=\"{}\"", filename),
+                    ),
+                ],
+                file_data,
+            )
+                .into_response())
+        }
+        FileToServe::ChunkedVideo(metadata) => {
+            tracing::info!(
+                document_id = %document_id,
+                chunk_count = metadata.chunk_count,
+                "Returning chunked video metadata"
+            );
+
+            // Return JSON with chunk URLs
+            Ok((StatusCode::OK, Json(metadata)).into_response())
+        }
+    }
+}
+
+pub async fn download_video_chunk(
+    State(state): State<AppState>,
+    _user_id: UserId,
+    Path((document_id, chunk_index)): Path<(String, usize)>,
+) -> Result<impl IntoResponse, AppError> {
+    // 1. Fetch document metadata
+    let document = state
+        .db
+        .documents()
+        .find_one(doc! { "_id": &document_id }, None)
+        .await
+        .map_err(AppError::from)?
+        .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Document not found")))?;
+
+    // 2. Verify it's a chunked video
+    let chunks = document
+        .processing_metadata
+        .as_ref()
+        .and_then(|m| m.chunks.as_ref())
+        .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Document is not chunked")))?;
+
+    // 3. Validate chunk index
+    let chunk_info = chunks
+        .get(chunk_index)
+        .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Chunk index out of range")))?;
+
+    // 4. Download chunk
+    let chunk_data = state
+        .storage
+        .download(&chunk_info.path)
+        .await
+        .map_err(|e| {
+            tracing::error!(
+                document_id = %document_id,
+                chunk_index = chunk_index,
+                error = %e,
+                "Failed to download chunk"
+            );
+            AppError::NotFound(anyhow::anyhow!("Chunk file not found"))
+        })?;
+
+    tracing::info!(
+        document_id = %document_id,
+        chunk_index = chunk_index,
+        size = chunk_data.len(),
+        "Video chunk download completed"
+    );
+
+    // 5. Return chunk
+    Ok((
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "video/mp4")],
+        chunk_data,
+    ))
 }

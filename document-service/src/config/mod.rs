@@ -18,6 +18,7 @@ pub struct DocumentConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct SignatureConfig {
     pub require_signatures: bool,
+    pub signing_secret: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -68,6 +69,7 @@ impl DocumentConfig {
                     .unwrap_or_else(|_| "false".to_string())
                     .parse()
                     .unwrap_or(false),
+                signing_secret: get_env("SIGNING_SECRET", Some("dev-signing-secret"), is_prod)?,
             },
             worker: WorkerConfig {
                 enabled: env::var("WORKER_ENABLED")

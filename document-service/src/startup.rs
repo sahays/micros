@@ -75,6 +75,11 @@ impl Application {
             .route("/documents", post(handlers::upload_document))
             .route("/documents/:id/process", post(handlers::process_document))
             .route("/documents/:id/status", get(handlers::get_document_status))
+            .route("/documents/:id/content", get(handlers::download_document))
+            .route(
+                "/documents/:id/chunks/:chunk_index",
+                get(handlers::download_video_chunk),
+            )
             .layer(TraceLayer::new_for_http())
             .with_state(state.clone());
 

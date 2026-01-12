@@ -65,6 +65,10 @@ impl Processor for PdfProcessor {
             optimized_size: None,
             thumbnail_path: None,
             error_details: None,
+            resolution: None,
+            chunks: None,
+            chunk_count: None,
+            total_size: None,
         })
     }
 }

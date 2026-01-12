@@ -79,6 +79,10 @@ impl Processor for ImageProcessor {
             optimized_size: Some(optimized_size),
             thumbnail_path: Some(output_path.to_string_lossy().to_string()),
             error_details: None,
+            resolution: None,
+            chunks: None,
+            chunk_count: None,
+            total_size: None,
         })
     }
 }
