@@ -13,6 +13,7 @@ use crate::handlers::{
         register_handler, register_page,
     },
     documents::list_documents_page,
+    download::{download_document, download_with_signature, generate_signed_url},
     upload::{upload_handler, upload_page},
     user::dashboard_handler,
 };
@@ -58,6 +59,21 @@ pub fn build_router(app_state: AppState) -> Router {
                     auth_middleware,
                 )),
         )
+        .route(
+            "/documents/:id/download",
+            get(download_document).layer(axum::middleware::from_fn_with_state(
+                app_state.clone(),
+                auth_middleware,
+            )),
+        )
+        .route(
+            "/documents/:id/share",
+            get(generate_signed_url).layer(axum::middleware::from_fn_with_state(
+                app_state.clone(),
+                auth_middleware,
+            )),
+        )
+        .route("/share/:id", get(download_with_signature))
         .route(
             "/admin",
             get(admin_dashboard_handler).layer(axum::middleware::from_fn_with_state(

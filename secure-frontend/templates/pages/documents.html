@@ -116,6 +116,28 @@
                 const sizes = ['Bytes', 'KB', 'MB', 'GB'];
                 const i = Math.floor(Math.log(bytes) / Math.log(k));
                 return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            },
+
+            async shareDocument(documentId) {
+                try {
+                    // Generate signed URL
+                    const response = await fetch(`/documents/${documentId}/share?ttl=3600`);
+
+                    if (!response.ok) {
+                        throw new Error('Failed to generate shareable link');
+                    }
+
+                    const data = await response.json();
+
+                    // Copy to clipboard
+                    await navigator.clipboard.writeText(data.url);
+
+                    // Show success notification
+                    alert(`Shareable link copied to clipboard!\n\nExpires in: ${Math.floor(data.expires_in_seconds / 60)} minutes\n\nYou can now paste and share this link with anyone.`);
+                } catch (error) {
+                    console.error('Error generating shareable link:', error);
+                    alert('Failed to generate shareable link. Please try again.');
+                }
             }
         }));
     });

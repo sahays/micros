@@ -115,4 +115,47 @@ impl DocumentClient {
 
         Ok(response)
     }
+
+    /// Download document content
+    ///
+    /// Downloads the file content from document-service.
+    /// Returns original or processed file depending on processing status.
+    pub async fn download_document(
+        &self,
+        user_id: &str,
+        document_id: &str,
+    ) -> Result<reqwest::Response> {
+        let path = format!("/documents/{}/content", document_id);
+        let url = format!("{}{}", self.settings.url, path);
+        let body_hash = compute_body_hash(b"");
+
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+        let nonce = Uuid::new_v4().to_string();
+
+        let signature = create_signature(
+            &self.settings.signing_secret,
+            "GET",
+            &path,
+            timestamp,
+            &nonce,
+            &body_hash,
+        );
+
+        let response = self
+            .client
+            .get(&url)
+            .header("X-Client-ID", &self.settings.client_id)
+            .header("X-Timestamp", timestamp)
+            .header("X-Nonce", nonce)
+            .header("X-Signature", signature)
+            .header("X-User-ID", user_id)
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to send download request to {}: {}", url, e);
+                anyhow::anyhow!("HTTP request failed: {}", e)
+            })?;
+
+        Ok(response)
+    }
 }

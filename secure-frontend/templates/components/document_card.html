@@ -44,14 +44,16 @@
     </div>
 
     <div class="mt-auto flex gap-2">
-        <a :href="`/documents/${doc.id}/download`" 
+        <a :href="`/documents/${doc.id}/download`"
            class="flex-1 btn-secondary text-xs py-2 text-center"
-           x-show="doc.status === 'Ready'">
+           x-show="doc.status === 'Ready'"
+           download>
             Download
         </a>
-        <button class="flex-1 glass-panel text-xs py-2 font-bold hover:bg-white/10 transition-colors"
+        <button @click="shareDocument(doc.id)"
+                class="flex-1 glass-panel text-xs py-2 font-bold hover:bg-white/10 transition-colors"
                 x-show="doc.status === 'Ready'">
-            Details
+            Share
         </button>
         <div class="flex-1 text-center text-xs text-secondary py-2" x-show="doc.status === 'Processing'">
             Processing...
