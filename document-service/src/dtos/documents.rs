@@ -56,3 +56,20 @@ pub struct DownloadParams {
     pub signature: Option<String>,
     pub expires: Option<i64>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct DocumentListParams {
+    pub page: Option<u64>,
+    pub page_size: Option<u64>,
+    pub status: Option<DocumentStatus>,
+    pub mime_type: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DocumentListResponse {
+    pub documents: Vec<DocumentResponse>,
+    pub total: u64,
+    pub page: u64,
+    pub page_size: u64,
+    pub total_pages: u64,
+}

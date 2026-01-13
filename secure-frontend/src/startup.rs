@@ -13,6 +13,7 @@ use crate::handlers::{
         google_oauth_callback, google_oauth_redirect, login_handler, login_page, logout_handler,
         register_handler, register_page,
     },
+    documents::list_documents_page,
     upload::{upload_handler, upload_page},
     user::dashboard_handler,
 };
@@ -38,6 +39,13 @@ pub fn build_router(auth_client: Arc<AuthClient>) -> Router {
         .route(
             "/dashboard",
             get(dashboard_handler).layer(axum::middleware::from_fn_with_state(
+                auth_client.clone(),
+                auth_middleware,
+            )),
+        )
+        .route(
+            "/documents",
+            get(list_documents_page).layer(axum::middleware::from_fn_with_state(
                 auth_client.clone(),
                 auth_middleware,
             )),

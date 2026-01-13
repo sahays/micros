@@ -1,6 +1,6 @@
 use crate::dtos::{
-    ChunkMetadata, ChunkedVideoResponse, DocumentResponse, DownloadParams, ProcessingOptions,
-    ProcessingStatusResponse,
+    ChunkMetadata, ChunkedVideoResponse, DocumentListParams, DocumentListResponse,
+    DocumentResponse, DownloadParams, ProcessingOptions, ProcessingStatusResponse,
 };
 use crate::middleware::user_id::UserId;
 use crate::models::{Document, DocumentStatus};
@@ -12,9 +12,78 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use futures::stream::TryStreamExt;
 use mongodb::bson::doc;
+use mongodb::options::FindOptions;
 use service_core::error::AppError;
 use uuid::Uuid;
+
+pub async fn list_documents(
+    State(state): State<AppState>,
+    user_id: UserId,
+    Query(params): Query<DocumentListParams>,
+) -> Result<impl IntoResponse, AppError> {
+    let page = params.page.unwrap_or(1).max(1);
+    let page_size = params.page_size.unwrap_or(20).max(1).min(100);
+    let skip = (page - 1) * page_size;
+
+    let mut filter = doc! { "owner_id": user_id.0 };
+
+    if let Some(status) = params.status {
+        // Convert status enum to bson string if needed, depending on model serialization
+        // Assuming serde handles it or we match explicitly
+        // Since DocumentStatus derives Serialize/Deserialize, bson should handle it but let's be safe
+        // Actually, mongodb driver uses to_bson, so direct usage might be tricky if it's an enum
+        // Let's assume standard serde serialization (lowercase usually)
+        let bson_status = mongodb::bson::to_bson(&status).map_err(|e| {
+            AppError::InternalError(anyhow::anyhow!("Failed to serialize status: {}", e))
+        })?;
+        filter.insert("status", bson_status);
+    }
+
+    if let Some(mime_type) = params.mime_type {
+        // Simple partial match using regex could be better, but exact match for now
+        // or prefix match: { "mime_type": { "$regex": format!("^{}", mime_type) } }
+        filter.insert("mime_type", doc! { "$regex": format!("^{}", mime_type) });
+    }
+
+    // Count total documents
+    let total = state
+        .db
+        .documents()
+        .count_documents(filter.clone(), None)
+        .await
+        .map_err(AppError::from)?;
+
+    // Fetch documents
+    let find_options = FindOptions::builder()
+        .sort(doc! { "created_at": -1 }) // Newest first
+        .skip(skip)
+        .limit(page_size as i64)
+        .build();
+
+    let mut cursor = state
+        .db
+        .documents()
+        .find(filter, find_options)
+        .await
+        .map_err(AppError::from)?;
+
+    let mut documents = Vec::new();
+    while let Some(doc) = cursor.try_next().await.map_err(AppError::from)? {
+        documents.push(DocumentResponse::from(doc));
+    }
+
+    let total_pages = (total as f64 / page_size as f64).ceil() as u64;
+
+    Ok(Json(DocumentListResponse {
+        documents,
+        total,
+        page,
+        page_size,
+        total_pages,
+    }))
+}
 
 pub async fn upload_document(
     State(state): State<AppState>,
