@@ -1,0 +1,38 @@
+<div class="glass-panel p-4 flex items-center gap-4 transition-all" :class="{ 'border-red-500/50': file.status === 'error', 'border-emerald-500/50': file.status === 'success' }">
+    <!-- File Icon -->
+    <div class="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-tertiary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+    </div>
+
+    <!-- Info -->
+    <div class="flex-1 min-w-0">
+        <div class="flex justify-between mb-1">
+            <p class="font-medium truncate" x-text="file.name"></p>
+            <button @click="removeFile(index)" class="text-tertiary hover:text-red-400" x-show="file.status !== 'uploading'">
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        
+        <div class="flex justify-between text-xs text-secondary mb-1">
+            <span x-text="file.size"></span>
+            <span x-text="file.status === 'success' ? 'Completed' : (file.status === 'error' ? file.message : file.progress + '%')"></span>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+            <div class="h-full rounded-full transition-all duration-300"
+                 :class="{
+                     'bg-primary': file.status === 'uploading',
+                     'bg-emerald-500': file.status === 'success',
+                     'bg-red-500': file.status === 'error',
+                     'bg-tertiary': file.status === 'pending'
+                 }"
+                 :style="`width: ${file.progress}%`">
+            </div>
+        </div>
+    </div>
+</div>

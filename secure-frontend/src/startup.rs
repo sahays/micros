@@ -13,6 +13,7 @@ use crate::handlers::{
         google_oauth_callback, google_oauth_redirect, login_handler, login_page, logout_handler,
         register_handler, register_page,
     },
+    upload::{upload_handler, upload_page},
     user::dashboard_handler,
 };
 use crate::middleware::auth::auth_middleware;
@@ -40,6 +41,15 @@ pub fn build_router(auth_client: Arc<AuthClient>) -> Router {
                 auth_client.clone(),
                 auth_middleware,
             )),
+        )
+        .route(
+            "/documents/upload",
+            get(upload_page)
+                .post(upload_handler)
+                .layer(axum::middleware::from_fn_with_state(
+                    auth_client.clone(),
+                    auth_middleware,
+                )),
         )
         .route(
             "/admin",
