@@ -1,44 +1,47 @@
-use crate::models::user::UserProfile;
+use crate::models::user::{AuthUser, UserProfile};
 use crate::services::auth_client::AuthClient;
 use askama::Template;
-use axum::{
-    extract::State,
-    response::{IntoResponse, Redirect},
-};
+use axum::{extract::State, response::IntoResponse};
 use std::sync::Arc;
-use tower_sessions::Session;
 
 #[derive(Template)]
 #[template(path = "dashboard.html")]
 pub struct DashboardTemplate {
     pub user: UserProfile,
+    pub current_page: &'static str,
 }
 
 pub async fn dashboard_handler(
     State(auth_client): State<Arc<AuthClient>>,
-    session: Session,
+    auth_user: AuthUser,
 ) -> impl IntoResponse {
-    let access_token: String = session
-        .get("access_token")
-        .await
-        .unwrap_or_default()
-        .unwrap_or_default();
-
-    if access_token.is_empty() {
-        return Redirect::to("/login").into_response();
-    }
-
-    let response = auth_client.get_with_auth("/users/me", &access_token).await;
+    let response = auth_client
+        .get_with_auth("/users/me", &auth_user.access_token)
+        .await;
 
     match response {
         Ok(res) if res.status().is_success() => {
             let user: UserProfile = res.json().await.unwrap_or(UserProfile {
-                email: "unknown".to_string(),
+                email: auth_user.email,
                 verified: false,
             });
-            let template = DashboardTemplate { user };
+            let template = DashboardTemplate {
+                user,
+                current_page: "dashboard",
+            };
             template.into_response()
         }
-        _ => Redirect::to("/login").into_response(),
+        _ => {
+            // If fetching profile fails, we can still show a basic dashboard with session data
+            let user = UserProfile {
+                email: auth_user.email,
+                verified: false,
+            };
+            let template = DashboardTemplate {
+                user,
+                current_page: "dashboard",
+            };
+            template.into_response()
+        }
     }
 }

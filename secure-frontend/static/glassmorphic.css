@@ -1,61 +1,49 @@
-/* Glassmorphic Design System */
+/* Avant-Garde Glass Design System */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter+Display:wght@300;400;500;600;700;800;900&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Geist+Sans:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
 
 :root {
-    /* Colors - Deep purple/blue primary palette */
-    --color-primary-900: #1a0b2e;
-    --color-primary-800: #2d1b5a;
-    --color-primary-700: #3f2b7c;
-    --color-primary-600: #523ba6;
-    --color-primary-500: #6446d1;
+    /* Colors - Avant-Garde High Contrast Palette */
+    --color-primary: #FF8C42; /* Electric Tangerine */
+    --color-secondary: #08415C; /* Deep Royal Blue */
+    --color-success: #12E193; /* Emerald Teal */
+    --color-bg-slate: #E2E8F0; /* Cool Slate Grey */
 
-    /* Emerald secondary */
-    --color-secondary-600: #059669;
-    --color-secondary-500: #10b981;
-    --color-secondary-400: #34d399;
-
-    /* Amber accent */
-    --color-accent-600: #d97706;
-    --color-accent-500: #f59e0b;
-    --color-accent-400: #fbbf24;
-
-    /* Background gradients */
-    --bg-gradient-dark: linear-gradient(135deg, #0a0e27 0%, #16213e 50%, #1a0b2e 100%);
-    --bg-gradient-card: linear-gradient(135deg, rgba(100, 70, 209, 0.1) 0%, rgba(42, 27, 82, 0.1) 100%);
-
-    /* Glass surface colors */
-    --glass-white: rgba(255, 255, 255, 0.08);
-    --glass-border: rgba(255, 255, 255, 0.15);
-    --glass-highlight: rgba(255, 255, 255, 0.25);
+    /* Glass surface colors - High Depth */
+    --glass-white: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(255, 255, 255, 0.4);
+    --glass-highlight: rgba(255, 255, 255, 0.6);
 
     /* Text colors */
-    --text-primary: #f8fafc;
-    --text-secondary: #cbd5e1;
-    --text-tertiary: #94a3b8;
-    --text-muted: #64748b;
+    --text-primary: #1A202C;
+    --text-secondary: #4A5568;
+    --text-tertiary: #718096;
+    --text-muted: #A0AEC0;
 
-    /* Shadows */
-    --shadow-glass: 0 8px 32px rgba(31, 38, 135, 0.37);
-    --shadow-glass-lg: 0 16px 48px rgba(31, 38, 135, 0.5);
-    --shadow-glow: 0 0 24px rgba(100, 70, 209, 0.3);
+    /* Shadows - Multi-layered */
+    --shadow-glass: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 20px 25px -5px rgb(0 0 0 / 0.05);
+    --shadow-glass-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 25px 50px -12px rgb(0 0 0 / 0.15);
+    --shadow-glow: 0 0 24px rgba(255, 140, 66, 0.3);
 
-    /* Border radius */
-    --radius-sm: 12px;
+    /* Border radius - Extreme rounding */
+    --radius-sm: 8px;
     --radius-md: 16px;
     --radius-lg: 24px;
     --radius-xl: 32px;
 
-    /* Typography */
-    --font-display: 'Inter Display', sans-serif;
-    --font-body: 'Geist Sans', system-ui, -apple-system, sans-serif;
+    /* Typography - Non-standard Pairing */
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'JetBrains Mono', monospace;
 }
 
 /* Base styles */
 body {
     font-family: var(--font-body);
-    background: var(--bg-gradient-dark);
+    background-color: var(--color-bg-slate);
+    background-image: 
+        radial-gradient(at 0% 0%, rgba(255, 140, 66, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 0%, rgba(8, 65, 92, 0.15) 0px, transparent 50%);
     color: var(--text-primary);
     line-height: 1.6;
     min-height: 100vh;
@@ -88,13 +76,14 @@ h3 {
     background: var(--glass-white);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border: 1px solid var(--glass-border);
+    border: 1.5px solid var(--glass-border);
     box-shadow: var(--shadow-glass);
+    border-radius: var(--radius-lg);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .glass-panel-hover:hover {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.85);
     border-color: var(--glass-highlight);
     box-shadow: var(--shadow-glass-lg);
     transform: translateY(-2px);
@@ -104,7 +93,7 @@ h3 {
     background: var(--glass-white);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid var(--glass-border);
+    border: 1.5px solid var(--glass-border);
     border-radius: var(--radius-lg);
     padding: 1.5rem;
     box-shadow: var(--shadow-glass);
@@ -114,7 +103,7 @@ h3 {
     background: var(--glass-white);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border: 1px solid var(--glass-border);
+    border: 1.5px solid var(--glass-border);
     border-radius: var(--radius-xl);
     padding: 2.5rem;
     box-shadow: var(--shadow-glass-lg);
@@ -122,39 +111,41 @@ h3 {
 
 /* Button styles */
 .btn-primary {
-    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-700) 100%);
-    color: var(--text-primary);
+    background: var(--color-primary);
+    color: white;
     font-weight: 600;
     padding: 0.875rem 1.75rem;
     border-radius: var(--radius-md);
-    border: 1px solid var(--glass-highlight);
+    border: 1.5px solid var(--glass-border);
     box-shadow: var(--shadow-glass);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .btn-primary:hover {
-    background: linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%);
+    filter: brightness(1.1);
     box-shadow: var(--shadow-glow);
     transform: translateY(-2px);
 }
 
 .btn-secondary {
-    background: var(--glass-white);
-    backdrop-filter: blur(12px);
-    color: var(--text-primary);
+    background: var(--color-secondary);
+    color: white;
     font-weight: 600;
     padding: 0.875rem 1.75rem;
     border-radius: var(--radius-md);
-    border: 1px solid var(--glass-border);
+    border: 1.5px solid var(--glass-border);
     box-shadow: var(--shadow-glass);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     cursor: pointer;
+    font-family: var(--font-display);
 }
 
 .btn-secondary:hover {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: var(--glass-highlight);
+    filter: brightness(1.2);
     transform: translateY(-2px);
 }
 
@@ -326,7 +317,7 @@ a:hover {
 .dashboard-container {
     display: flex;
     min-height: 100vh;
-    background: var(--bg-gradient-dark);
+    background-color: var(--color-bg-slate);
 }
 
 .dashboard-sidebar {
@@ -335,14 +326,16 @@ a:hover {
     background: var(--glass-white);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
-    border-right: 1px solid var(--glass-border);
+    border: 1.5px solid var(--glass-border);
     display: flex;
     flex-direction: column;
     position: fixed;
-    left: 0;
-    top: 0;
-    bottom: 0;
+    left: 20px;
+    top: 20px;
+    bottom: 20px;
+    border-radius: var(--radius-xl);
     z-index: 40;
+    box-shadow: var(--shadow-glass);
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -350,8 +343,9 @@ a:hover {
     flex: 1;
     display: flex;
     flex-direction: column;
-    margin-left: 260px;
-    width: calc(100% - 260px);
+    margin-left: 300px;
+    padding: 20px;
+    width: calc(100% - 300px);
 }
 
 .dashboard-header {
@@ -361,16 +355,18 @@ a:hover {
     background: var(--glass-white);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border-bottom: 1px solid var(--glass-border);
+    border: 1.5px solid var(--glass-border);
+    border-radius: var(--radius-lg);
     padding: 1rem 1.5rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-glass);
 }
 
 .dashboard-content {
     flex: 1;
-    padding: 2rem;
     overflow-y: auto;
 }
 
@@ -421,10 +417,10 @@ a:hover {
 }
 
 .nav-item.active {
-    background: linear-gradient(135deg, rgba(100, 70, 209, 0.2) 0%, rgba(82, 59, 166, 0.2) 100%);
-    color: var(--text-primary);
-    border: 1px solid rgba(100, 70, 209, 0.3);
-    box-shadow: 0 0 20px rgba(100, 70, 209, 0.3);
+    background: var(--color-primary);
+    color: white;
+    border: 1.5px solid var(--glass-border);
+    box-shadow: var(--shadow-glow);
 }
 
 /* User Dropdown */
@@ -461,12 +457,13 @@ a:hover {
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--color-primary-600) 0%, var(--color-primary-700) 100%);
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%);
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 600;
     font-size: 0.875rem;
+    color: white;
     border: 2px solid var(--glass-highlight);
 }
 

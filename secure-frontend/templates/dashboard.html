@@ -1,82 +1,124 @@
-{% extends "layout.html" %}
+{% extends "dashboard_layout.html" %}
 
-{% block title %}Dashboard - Secure Frontend{% endblock %}
+{% block title %}Overview - Secure Portal{% endblock %}
+
+{% block breadcrumbs %}Overview{% endblock %}
 
 {% block content %}
-<div class="py-12">
-    <div class="flex justify-between items-end mb-12">
+<div class="space-y-8">
+    <!-- Welcome Section -->
+    <div class="flex justify-between items-end">
         <div>
-            <h1 class="text-4xl font-bold tracking-tight">User Dashboard</h1>
-            <p class="text-zinc-400">Welcome back, {{ user.email }}</p>
+            <h1 class="text-3xl font-bold tracking-tight" style="font-family: var(--font-display);">
+                Welcome back, <span class="text-primary" style="color: var(--color-primary);">{{ user.name() }}</span>
+            </h1>
+            <p class="text-secondary">Here's what's happening with your secure account today.</p>
         </div>
         <div class="flex gap-4">
-            <a href="/logout" class="glass-panel px-6 py-3 rounded-xl hover:bg-red-500/10 hover:text-red-400 transition-all font-medium">
-                Logout
-            </a>
+            <button class="btn-primary">
+                Quick Action
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="glass-card flex flex-col gap-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-tertiary">Account Status</span>
+            <div class="flex items-center gap-3">
+                <h3 class="text-2xl font-bold">
+                    {% if user.verified %}
+                    Verified
+                    {% else %}
+                    Pending
+                    {% endif %}
+                </h3>
+                {% if user.verified %}
+                <span class="w-3 h-3 bg-emerald-500 rounded-full glow" style="background-color: var(--color-success);"></span>
+                {% else %}
+                <span class="w-3 h-3 bg-amber-500 rounded-full animate-pulse"></span>
+                {% endif %}
+            </div>
+            <p class="text-xs text-muted">Your email is {{ user.email }}</p>
+        </div>
+
+        <div class="glass-card flex flex-col gap-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-tertiary">Active Sessions</span>
+            <h3 class="text-2xl font-bold">1 Device</h3>
+            <p class="text-xs text-muted">Last active 2 minutes ago</p>
+        </div>
+
+        <div class="glass-card flex flex-col gap-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-tertiary">Security Score</span>
+            <h3 class="text-2xl font-bold">85/100</h3>
+            <div class="w-full bg-slate-200 rounded-full h-1.5 mt-2">
+                <div class="bg-primary h-1.5 rounded-full" style="width: 85%; background-color: var(--color-primary);"></div>
+            </div>
         </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div class="lg:col-span-2 space-y-8">
-            <div class="glass-panel p-8 rounded-3xl">
-                <h3 class="text-xl font-bold mb-6 flex items-center gap-3">
-                    <span class="w-2 h-2 bg-blue-500 rounded-full"></span>
-                    Account Security
+        <!-- Main Activity -->
+        <div class="lg:col-span-2 space-y-6">
+            <div class="glass-panel p-6">
+                <h3 class="text-lg font-bold mb-4 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-primary" style="color: var(--color-primary);" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    Recent Security Events
                 </h3>
-                <div class="space-y-6">
-                    <div class="flex justify-between items-center p-4 bg-white/5 rounded-2xl">
-                        <div>
-                            <p class="font-medium">Email Verification</p>
-                            <p class="text-sm text-zinc-400">Status of your registered email</p>
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between p-4 bg-white/40 rounded-xl border border-white/20">
+                        <div class="flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                            </div>
+                            <div>
+                                <p class="font-bold text-sm">Successful Login</p>
+                                <p class="text-xs text-secondary">Chrome on Linux • 127.0.0.1</p>
+                            </div>
                         </div>
-                        {% if user.verified %}
-                        <span class="bg-emerald-500/10 text-emerald-500 px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Verified</span>
-                        {% else %}
-                        <span class="bg-amber-500/10 text-amber-500 px-4 py-1 rounded-full text-xs font-bold uppercase tracking-wider">Pending</span>
-                        {% endif %}
+                        <span class="text-xs text-tertiary">10 mins ago</span>
                     </div>
-                    <div class="flex justify-between items-center p-4 bg-white/5 rounded-2xl">
-                        <div>
-                            <p class="font-medium">Password Management</p>
-                            <p class="text-sm text-zinc-400">Last changed 30 days ago</p>
+                    
+                    <div class="flex items-center justify-between p-4 bg-white/40 rounded-xl border border-white/20">
+                        <div class="flex items-center gap-4">
+                            <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            </div>
+                            <div>
+                                <p class="font-bold text-sm">Profile Updated</p>
+                                <p class="text-xs text-secondary">Changed display name</p>
+                            </div>
                         </div>
-                        <button class="text-blue-400 hover:underline text-sm font-medium">Change Password</button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="glass-panel p-8 rounded-3xl">
-                <h3 class="text-xl font-bold mb-6 flex items-center gap-3">
-                    <span class="w-2 h-2 bg-purple-500 rounded-full"></span>
-                    Active Sessions
-                </h3>
-                <p class="text-zinc-400 text-sm mb-4">You are currently logged in from 1 device.</p>
-                <div class="p-4 border border-white/5 rounded-2xl flex items-center gap-4">
-                    <div class="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center">
-                        <svg class="w-5 h-5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-                    </div>
-                    <div>
-                        <p class="font-medium text-sm">Chrome on Linux (Current)</p>
-                        <p class="text-xs text-zinc-500">IP: 127.0.0.1 • Started 10 mins ago</p>
+                        <span class="text-xs text-tertiary">2 hours ago</span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="space-y-8">
-            <div class="glass-panel p-8 rounded-3xl border-blue-500/30">
-                <h3 class="font-bold mb-4">Quick Actions</h3>
-                <div class="grid grid-cols-1 gap-3">
-                    <button class="w-full text-left p-4 bg-white/5 hover:bg-white/10 rounded-2xl transition-all text-sm font-medium">
-                        Update Profile
-                    </button>
-                    <button class="w-full text-left p-4 bg-white/5 hover:bg-white/10 rounded-2xl transition-all text-sm font-medium">
+        <!-- Right Column -->
+        <div class="space-y-6">
+            <div class="glass-panel p-6 border-primary/30" style="border-color: rgba(255, 140, 66, 0.3);">
+                <h3 class="font-bold mb-4">Account Protection</h3>
+                <p class="text-sm text-secondary mb-6">Enhance your account security by enabling additional layers of protection.</p>
+                <div class="space-y-3">
+                    <button class="w-full btn-secondary text-sm py-3">
                         Enable 2FA
                     </button>
-                    <a href="/admin" class="w-full text-left p-4 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-2xl transition-all text-sm font-medium border border-blue-500/20">
-                        Admin Dashboard
-                    </a>
+                    <button class="w-full glass-panel py-3 text-sm font-bold hover:bg-white/60 transition-colors">
+                        Security Audit
+                    </button>
                 </div>
+            </div>
+
+            <div class="glass-card bg-secondary text-white" style="background-color: var(--color-secondary);">
+                <h3 class="font-bold mb-2">Storage Usage</h3>
+                <p class="text-xs text-blue-200 mb-4">You've used 12% of your 5GB storage.</p>
+                <div class="w-full bg-white/20 rounded-full h-2 mb-4">
+                    <div class="bg-white h-2 rounded-full" style="width: 12%;"></div>
+                </div>
+                <button class="text-xs font-bold uppercase tracking-widest hover:underline">Manage Storage &rarr;</button>
             </div>
         </div>
     </div>

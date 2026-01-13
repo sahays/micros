@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Dashboard - Secure Portal{% endblock %}</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13.3/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="/static/glassmorphic.css">
+    {% block head %}{% endblock %}
+</head>
+<body x-data="{ sidebarOpen: false }">
+    <div class="dashboard-container">
+        <!-- Sidebar Backdrop (mobile) -->
+        <div class="sidebar-backdrop" :class="{ 'open': sidebarOpen }" @click="sidebarOpen = false"></div>
+
+        <!-- Sidebar -->
+        {% include "components/sidebar.html" %}
+
+        <!-- Main Content -->
+        <div class="dashboard-main">
+            <!-- Header -->
+            {% include "components/header.html" %}
+
+            <!-- Content Area -->
+            <main class="dashboard-content fade-in">
+                {% block content %}{% endblock %}
+            </main>
+
+            <!-- Footer -->
+            <footer class="mt-auto py-6 text-center text-sm text-muted">
+                <p>&copy; 2026 Secure Frontend. Built with Rust & HTMX.</p>
+            </footer>
+        </div>
+    </div>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

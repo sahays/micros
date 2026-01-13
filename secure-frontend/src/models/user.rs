@@ -13,6 +13,23 @@ pub struct UserProfile {
     pub verified: bool,
 }
 
+impl UserProfile {
+    pub fn name(&self) -> String {
+        self.email.split('@').next().unwrap_or("User").to_string()
+    }
+
+    pub fn initials(&self) -> String {
+        let name = self.name();
+        if name.len() >= 2 {
+            name[0..2].to_uppercase()
+        } else if !name.is_empty() {
+            name[0..1].to_uppercase()
+        } else {
+            "U".to_string()
+        }
+    }
+}
+
 /// Authenticated user context extracted from session
 #[derive(Debug, Clone)]
 pub struct AuthUser {
