@@ -6,43 +6,17 @@
     <title>{% block title %}Secure Portal{% endblock %}</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/glassmorphic.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-        
-        :root {
-            --bg-primary: #0a0a0c;
-            --bg-secondary: #141417;
-            --accent: #3b82f6;
-            --text-primary: #f4f4f5;
-            --text-secondary: #a1a1aa;
+        /* Tailwind utility overrides for custom glassmorphic classes */
+        .text-secondary {
+            color: var(--text-secondary);
         }
-
-        body {
-            font-family: 'Space Grotesk', sans-serif;
-            background-color: var(--bg-primary);
-            color: var(--text-primary);
-            line-height: 1.6;
+        .text-tertiary {
+            color: var(--text-tertiary);
         }
-
-        code, pre {
-            font-family: 'JetBrains Mono', monospace;
-        }
-
-        .glass-panel {
-            background: rgba(20, 20, 23, 0.7);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .htmx-indicator {
-            opacity: 0;
-            transition: opacity 200ms ease-in;
-        }
-        .htmx-request .htmx-indicator {
-            opacity: 1;
-        }
-        .htmx-request.htmx-indicator {
-            opacity: 1;
+        .text-muted {
+            color: var(--text-muted);
         }
     </style>
     {% block head %}{% endblock %}
@@ -50,13 +24,13 @@
 <body class="min-h-screen flex flex-col">
     <nav class="glass-panel sticky top-0 z-50 px-6 py-4 mb-8">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
-            <a href="/" class="text-2xl font-bold tracking-tighter hover:text-blue-400 transition-colors">
-                SECURE<span class="text-blue-500">FRONTEND</span>
+            <a href="/" class="text-2xl font-bold tracking-tighter hover:text-blue-400 transition-colors" style="font-family: var(--font-display);">
+                SECURE<span class="text-gradient">FRONTEND</span>
             </a>
             <div id="nav-auth" class="flex gap-6 items-center">
                 <!-- Navigation links will be injected or updated here -->
-                <a href="/login" class="hover:text-blue-400 transition-colors">Login</a>
-                <a href="/register" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-medium transition-all">Get Started</a>
+                <a href="/login" class="text-secondary hover:text-primary transition-colors">Login</a>
+                <a href="/register" class="btn-primary">Get Started</a>
             </div>
         </div>
     </nav>
@@ -65,7 +39,7 @@
         {% block content %}{% endblock %}
     </main>
 
-    <footer class="mt-20 py-10 border-t border-white/5 text-center text-sm text-zinc-500">
+    <footer class="mt-20 py-10 border-t border-white/5 text-center text-sm text-muted">
         <p>&copy; 2026 Secure Frontend. Built with Rust & HTMX.</p>
     </footer>
 

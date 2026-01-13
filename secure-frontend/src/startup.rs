@@ -9,7 +9,10 @@ use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
 use crate::handlers::{
     admin::{admin_dashboard_handler, service_list_fragment, user_list_fragment},
     app::{health_check, index},
-    auth::{login_handler, login_page, logout_handler, register_handler, register_page},
+    auth::{
+        google_oauth_callback, google_oauth_redirect, login_handler, login_page, logout_handler,
+        register_handler, register_page,
+    },
     user::dashboard_handler,
 };
 use crate::middleware::auth::auth_middleware;
@@ -29,6 +32,8 @@ pub fn build_router(auth_client: Arc<AuthClient>) -> Router {
         .route("/login", get(login_page).post(login_handler))
         .route("/register", get(register_page).post(register_handler))
         .route("/logout", get(logout_handler))
+        .route("/auth/google", get(google_oauth_redirect))
+        .route("/auth/google/callback", get(google_oauth_callback))
         .route(
             "/dashboard",
             get(dashboard_handler).layer(axum::middleware::from_fn_with_state(
