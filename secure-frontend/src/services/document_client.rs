@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 pub struct DocumentClient {
     client: Client,
-    settings: DocumentServiceSettings,
+    pub settings: DocumentServiceSettings,
 }
 
 impl DocumentClient {

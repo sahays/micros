@@ -3,41 +3,40 @@
 {% block title %}Register - Secure Frontend{% endblock %}
 
 {% block content %}
-<div class="max-w-md mx-auto mt-20">
-    <div class="glass-panel p-10 rounded-3xl shadow-2xl">
-        <h2 class="text-3xl font-bold mb-2">Create Account</h2>
-        <p class="text-zinc-400 mb-8">Join the most secure platform on the web.</p>
-        
-        <form hx-post="/register" hx-target="#register-message" hx-indicator="#loading" class="space-y-6">
+<div class="max-w-md mx-auto mt-20 fade-in">
+    <div class="glass-card-lg">
+        <div class="text-center mb-8">
+            <h2 class="text-4xl font-bold mb-3 text-gradient">Create Account</h2>
+            <p class="text-secondary">Join the most secure document management platform</p>
+        </div>
+
+        <form hx-post="/register" hx-target="#register-message" hx-indicator="#loading" class="space-y-5">
             <div>
-                <label for="email" class="block text-sm font-medium text-zinc-300 mb-2">Email Address</label>
+                <label for="email" class="block text-sm font-medium text-secondary mb-2">Email Address</label>
                 <input type="email" name="email" id="email" required
-                    class="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                    class="input-glass"
                     placeholder="name@example.com">
             </div>
             <div>
-                <label for="password" class="block text-sm font-medium text-zinc-300 mb-2">Password</label>
+                <label for="password" class="block text-sm font-medium text-secondary mb-2">Password</label>
                 <input type="password" name="password" id="password" required minlength="8"
-                    class="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                    placeholder="min 8 characters">
+                    class="input-glass"
+                    placeholder="Minimum 8 characters">
             </div>
-            
-            <div id="register-message"></div>
 
-            <button type="submit" 
-                class="w-full bg-white text-black font-bold py-4 rounded-xl hover:scale-[1.02] transition-all flex justify-center items-center gap-3">
+            <div id="register-message" class="text-sm"></div>
+
+            <button type="submit"
+                class="btn-primary w-full flex justify-center items-center gap-3">
                 <span>Create Account</span>
                 <div id="loading" class="htmx-indicator">
-                    <svg class="animate-spin h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <div class="spinner"></div>
                 </div>
             </button>
         </form>
 
-        <p class="mt-8 text-center text-sm text-zinc-500">
-            Already have an account? <a href="/login" class="text-blue-400 hover:underline">Sign in</a>
+        <p class="mt-8 text-center text-sm text-tertiary">
+            Already have an account? <a href="/login" class="font-medium">Sign in</a>
         </p>
     </div>
 </div>

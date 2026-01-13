@@ -1,5 +1,5 @@
-use crate::services::auth_client::AuthClient;
 use crate::utils::jwt::decode_jwt_claims;
+use crate::AppState;
 use askama::Template;
 use axum::{
     extract::{Query, State},
@@ -8,7 +8,6 @@ use axum::{
     Form,
 };
 use serde::Deserialize;
-use std::sync::Arc;
 use tower_sessions::Session;
 
 #[derive(Template)]
@@ -40,11 +39,12 @@ pub async fn register_page() -> impl IntoResponse {
 }
 
 pub async fn login_handler(
-    State(auth_client): State<Arc<AuthClient>>,
+    State(state): State<AppState>,
     session: Session,
     Form(payload): Form<LoginRequest>,
 ) -> impl IntoResponse {
-    let response = auth_client
+    let response = state
+        .auth_client
         .post(
             "/auth/login",
             serde_json::json!({
@@ -111,10 +111,11 @@ pub async fn login_handler(
 }
 
 pub async fn register_handler(
-    State(auth_client): State<Arc<AuthClient>>,
+    State(state): State<AppState>,
     Form(payload): Form<RegisterRequest>,
 ) -> impl IntoResponse {
-    let response = auth_client
+    let response = state
+        .auth_client
         .post(
             "/auth/register",
             serde_json::json!({
@@ -134,15 +135,13 @@ pub async fn register_handler(
     }
 }
 
-pub async fn logout_handler(
-    State(auth_client): State<Arc<AuthClient>>,
-    session: Session,
-) -> impl IntoResponse {
+pub async fn logout_handler(State(state): State<AppState>, session: Session) -> impl IntoResponse {
     // Get access token before clearing session
     if let Some(access_token) = session.get::<String>("access_token").await.unwrap_or(None) {
         // Attempt to revoke token via auth-service
         // We don't fail the logout if this fails - just log the error
-        if let Err(e) = auth_client
+        if let Err(e) = state
+            .auth_client
             .post(
                 "/auth/logout",
                 serde_json::json!({
@@ -175,14 +174,12 @@ pub struct OAuthCallbackParams {
 }
 
 /// Initiates Google OAuth flow by redirecting to auth-service
-pub async fn google_oauth_redirect(
-    State(auth_client): State<Arc<AuthClient>>,
-) -> impl IntoResponse {
+pub async fn google_oauth_redirect(State(state): State<AppState>) -> impl IntoResponse {
     // Generate PKCE code_verifier and code_challenge
     // In production, store code_verifier in session
     // For now, auth-service handles the OAuth flow completely
 
-    let auth_url = format!("{}/auth/social/google/login", auth_client.base_url());
+    let auth_url = format!("{}/auth/social/google/login", state.auth_client.base_url());
 
     tracing::info!("Redirecting to Google OAuth via auth-service");
 
@@ -191,14 +188,15 @@ pub async fn google_oauth_redirect(
 
 /// Processes OAuth callback from Google
 pub async fn google_oauth_callback(
-    State(auth_client): State<Arc<AuthClient>>,
+    State(state): State<AppState>,
     Query(params): Query<OAuthCallbackParams>,
     session: Session,
 ) -> impl IntoResponse {
     tracing::info!("Processing Google OAuth callback");
 
     // Exchange authorization code for tokens via auth-service
-    let response = auth_client
+    let response = state
+        .auth_client
         .post(
             "/auth/social/google/callback",
             serde_json::json!({

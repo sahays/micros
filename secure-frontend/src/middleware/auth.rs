@@ -1,5 +1,7 @@
+use crate::AppState;
 use axum::{
     body::Body,
+    extract::State,
     http::{Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Redirect, Response},
@@ -7,6 +9,7 @@ use axum::{
 use tower_sessions::Session;
 
 pub async fn auth_middleware(
+    State(_state): State<AppState>,
     session: Session,
     request: Request<Body>,
     next: Next,

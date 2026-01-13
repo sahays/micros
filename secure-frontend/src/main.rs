@@ -1,7 +1,9 @@
 use dotenvy::dotenv;
 use secure_frontend::config::get_configuration;
 use secure_frontend::services::auth_client::AuthClient;
+use secure_frontend::services::document_client::DocumentClient;
 use secure_frontend::startup::build_router;
+use secure_frontend::AppState;
 use service_core::observability::logging::init_tracing;
 use std::sync::Arc;
 use tracing::info;
@@ -20,9 +22,14 @@ async fn main() -> anyhow::Result<()> {
 
     secure_frontend::services::metrics::init_metrics();
 
+    // Initialize service clients
     let auth_client = Arc::new(AuthClient::new(configuration.auth_service.clone()));
+    let document_client = Arc::new(DocumentClient::new(configuration.document_service.clone()));
 
-    let app = build_router(auth_client);
+    // Create shared application state
+    let app_state = AppState::new(auth_client, document_client);
+
+    let app = build_router(app_state);
 
     let address = format!(
         "{}:{}",

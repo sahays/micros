@@ -1,6 +1,5 @@
 use axum::{middleware::from_fn, routing::get, Router};
 use service_core::middleware::{metrics::metrics_middleware, tracing::request_id_middleware};
-use std::sync::Arc;
 use time::Duration;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
@@ -18,9 +17,9 @@ use crate::handlers::{
     user::dashboard_handler,
 };
 use crate::middleware::auth::auth_middleware;
-use crate::services::auth_client::AuthClient;
+use crate::AppState;
 
-pub fn build_router(auth_client: Arc<AuthClient>) -> Router {
+pub fn build_router(app_state: AppState) -> Router {
     // Session setup
     let session_store = MemoryStore::default();
     let session_layer = SessionManagerLayer::new(session_store)
@@ -39,14 +38,14 @@ pub fn build_router(auth_client: Arc<AuthClient>) -> Router {
         .route(
             "/dashboard",
             get(dashboard_handler).layer(axum::middleware::from_fn_with_state(
-                auth_client.clone(),
+                app_state.clone(),
                 auth_middleware,
             )),
         )
         .route(
             "/documents",
             get(list_documents_page).layer(axum::middleware::from_fn_with_state(
-                auth_client.clone(),
+                app_state.clone(),
                 auth_middleware,
             )),
         )
@@ -55,28 +54,28 @@ pub fn build_router(auth_client: Arc<AuthClient>) -> Router {
             get(upload_page)
                 .post(upload_handler)
                 .layer(axum::middleware::from_fn_with_state(
-                    auth_client.clone(),
+                    app_state.clone(),
                     auth_middleware,
                 )),
         )
         .route(
             "/admin",
             get(admin_dashboard_handler).layer(axum::middleware::from_fn_with_state(
-                auth_client.clone(),
+                app_state.clone(),
                 auth_middleware,
             )),
         )
         .route(
             "/admin/services/list",
             get(service_list_fragment).layer(axum::middleware::from_fn_with_state(
-                auth_client.clone(),
+                app_state.clone(),
                 auth_middleware,
             )),
         )
         .route(
             "/admin/users/list",
             get(user_list_fragment).layer(axum::middleware::from_fn_with_state(
-                auth_client.clone(),
+                app_state.clone(),
                 auth_middleware,
             )),
         )
@@ -103,5 +102,5 @@ pub fn build_router(auth_client: Arc<AuthClient>) -> Router {
         )
         // Add tracing middleware for request_id
         .layer(from_fn(request_id_middleware))
-        .with_state(auth_client)
+        .with_state(app_state)
 }

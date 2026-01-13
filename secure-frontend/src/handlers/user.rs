@@ -1,8 +1,7 @@
 use crate::models::user::{AuthUser, UserProfile};
-use crate::services::auth_client::AuthClient;
+use crate::AppState;
 use askama::Template;
 use axum::{extract::State, response::IntoResponse};
-use std::sync::Arc;
 
 #[derive(Template)]
 #[template(path = "dashboard.html")]
@@ -12,10 +11,11 @@ pub struct DashboardTemplate {
 }
 
 pub async fn dashboard_handler(
-    State(auth_client): State<Arc<AuthClient>>,
+    State(state): State<AppState>,
     auth_user: AuthUser,
 ) -> impl IntoResponse {
-    let response = auth_client
+    let response = state
+        .auth_client
         .get_with_auth("/users/me", &auth_user.access_token)
         .await;
 

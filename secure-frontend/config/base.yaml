@@ -3,3 +3,5 @@ server:
   port: 8080
 auth_service:
   url: "http://localhost:3000"
+document_service:
+  url: "http://localhost:8002"

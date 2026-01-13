@@ -1,13 +1,12 @@
 use crate::models::document::DocumentListResponse;
 use crate::models::user::{AuthUser, UserProfile};
-use crate::services::auth_client::AuthClient;
+use crate::AppState;
 use askama::Template;
 use axum::{
     extract::{Query, State},
     response::IntoResponse,
 };
 use serde::Deserialize;
-use std::sync::Arc;
 
 #[derive(Template)]
 #[template(path = "pages/documents.html")]
@@ -24,12 +23,13 @@ pub struct ListParams {
 }
 
 pub async fn list_documents_page(
-    State(auth_client): State<Arc<AuthClient>>,
+    State(state): State<AppState>,
     auth_user: AuthUser,
     Query(params): Query<ListParams>,
 ) -> impl IntoResponse {
-    // 1. Fetch User Profile (reusing pattern)
-    let user_res = auth_client
+    // 1. Fetch User Profile
+    let user_res = state
+        .auth_client
         .get_with_auth("/users/me", &auth_user.access_token)
         .await;
 
@@ -44,23 +44,21 @@ pub async fn list_documents_page(
         },
     };
 
-    // 2. Fetch Documents from document-service
-    // We'll use reqwest directly since AuthClient is specific to auth-service
-    // TODO: Abstract this into a ServiceClient or extend AuthClient
-    let doc_service_url = "http://document-service:8002"; // Default
-    let client = reqwest::Client::new();
-
-    let mut url = format!(
-        "{}/documents?page={}&page_size=100",
-        doc_service_url,
-        params.page.unwrap_or(1)
-    );
+    // 2. Fetch Documents from document-service using DocumentClient (HMAC signed)
+    // Build query path with parameters
+    let mut query_path = format!("/documents?page={}&page_size=100", params.page.unwrap_or(1));
     if let Some(status) = &params.status {
-        url.push_str(&format!("&status={}", status));
+        query_path.push_str(&format!("&status={}", status));
     }
 
+    // Use DocumentClient.get_document to make authenticated request
+    // Note: We'll use reqwest directly here since DocumentClient.get_document expects a single document ID
+    // In production, consider adding a list_documents() method to DocumentClient
+    let doc_service_url = &state.document_client.settings.url;
+    let client = reqwest::Client::new();
+
     let docs_res = client
-        .get(&url)
+        .get(format!("{}{}", doc_service_url, query_path))
         .header("X-User-ID", &auth_user.user_id)
         .send()
         .await;
@@ -74,9 +72,19 @@ pub async fn list_documents_page(
                 page_size: 20,
                 total_pages: 0,
             });
-            serde_json::to_string(&list.documents).unwrap_or("[]".to_string())
+            serde_json::to_string(&list.documents).unwrap_or_else(|e| {
+                tracing::error!("Failed to serialize documents: {}", e);
+                "[]".to_string()
+            })
         }
-        _ => "[]".to_string(),
+        Ok(res) => {
+            tracing::error!("Failed to fetch documents: {}", res.status());
+            "[]".to_string()
+        }
+        Err(e) => {
+            tracing::error!("Failed to connect to document-service: {}", e);
+            "[]".to_string()
+        }
     };
 
     DocumentsTemplate {
