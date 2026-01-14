@@ -55,5 +55,5 @@ Cards follow a strict anatomical structure:
 ## CSS Architecture
 - **Framework:** Tailwind CSS (via CLI).
 - **Input:** `static/input.css` (defines CSS variables and component layers).
-- **Output:** `static/glassmorphic.css` (built output).
+- **Output:** `static/output.css` (built output).
 - **Variables:** Uses CSS Custom Properties for all tokens to support seamless Dark/Light mode switching via `prefers-color-scheme`.

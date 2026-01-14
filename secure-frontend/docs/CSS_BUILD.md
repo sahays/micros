@@ -21,7 +21,7 @@ npm install
 ```bash
 npm run build:css
 ```
-Generates minified `static/glassmorphic.css` from `static/input.css`
+Generates minified `static/output.css` from `static/input.css`
 
 ### Watch mode (during development)
 ```bash
@@ -34,7 +34,7 @@ Automatically rebuilds CSS when templates or input.css change
 The Dockerfile includes a CSS build stage that:
 1. Installs Node.js and Tailwind CLI
 2. Scans `templates/**/*.html` for used classes
-3. Generates optimized `glassmorphic.css`
+3. Generates optimized `output.css`
 4. Copies only the final CSS to runtime image
 
 No Node.js in the final container - only the optimized CSS file.
@@ -45,7 +45,7 @@ No Node.js in the final container - only the optimized CSS file.
 secure-frontend/
 ├── static/
 │   ├── input.css           # Source CSS with @tailwind directives
-│   └── glassmorphic.css    # Generated output (gitignored if needed)
+│   └── output.css    # Generated output (gitignored if needed)
 ├── templates/              # Scanned by Tailwind for class usage
 ├── tailwind.config.js      # Tailwind configuration
 ├── package.json            # Build scripts
@@ -54,11 +54,10 @@ secure-frontend/
 
 ## Custom Styles
 
-All custom glassmorphic components are defined in `static/input.css` using `@layer components`:
-- `.glass-panel`, `.glass-card`, `.glass-card-lg`
-- `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-google`
-- `.input-glass`
-- `.text-gradient`
+All design system components are defined in `static/input.css` using `@layer components`:
+- `.card`, `.card-header`, `.card-body`, `.card-footer`
+- `.btn-gradient`, `.btn-primary` (alias), `.btn-action`
+- `.input-field`, `.input-glass` (alias)
 - Status badges, spinners, animations
 
 ## Performance
