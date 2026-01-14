@@ -6,6 +6,7 @@
     {% block head %}{% endblock %}
 </head>
 <body class="min-h-screen flex flex-col bg-background text-text-primary">
+    <div class="progress-bar"></div>
     <nav class="sticky top-0 z-50 px-6 py-4 mb-8 bg-surface/80 backdrop-blur-md border-b border-border transition-colors duration-200">
         <div class="max-w-7xl mx-auto flex justify-between items-center">
             <a href="/" class="text-2xl font-bold tracking-tight hover:opacity-80 transition-opacity font-display">
@@ -14,7 +15,10 @@
             <div id="nav-auth" class="flex gap-6 items-center">
                 <!-- Navigation links will be injected or updated here -->
                 <a href="/login" class="text-text-secondary hover:text-brand transition-colors font-medium">Login</a>
-                <a href="/register" class="btn-gradient">Get Started</a>
+                <a href="/register" class="btn-gradient">
+                    <span>Get Started</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </a>
             </div>
         </div>
     </nav>

@@ -12,13 +12,13 @@
 
     /* Semantic Colors */
     --color-background: #FFFFFF;
-    --color-surface: #F9FAFB;
+    --color-surface: #FFFFFF;
     --color-border: #E5E7EB;
 
     /* Text Colors */
     --text-primary: #000000;
-    --text-secondary: #374151;
-    --text-tertiary: #6B7280;
+    --text-secondary: #171717;
+    --text-tertiary: #525252;
     --text-inverse: #FFFFFF;
 
     /* Shadows */
@@ -39,11 +39,11 @@
 @media (prefers-color-scheme: dark) {
     :root {
         --color-background: #000000;
-        --color-surface: #111111;
-        --color-border: #333333;
+        --color-surface: #0a0a0a;
+        --color-border: #262626;
         --text-primary: #FFFFFF;
-        --text-secondary: #D1D5DB;
-        --text-tertiary: #9CA3AF;
+        --text-secondary: #e5e5e5;
+        --text-tertiary: #a3a3a3;
         --text-inverse: #000000;
     }
 }
@@ -59,6 +59,34 @@ body {
 h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-main);
     color: var(--text-primary);
+}
+
+/* Progress Bar */
+.progress-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: linear-gradient(to right, var(--brand-primary), var(--brand-primary-dark));
+    z-index: 9999;
+    transform-origin: 0 50%;
+    animation: progress-indeterminate 1s infinite linear;
+    display: none;
+}
+
+.htmx-request .progress-bar {
+    display: block;
+}
+
+.htmx-request.progress-bar {
+    display: block;
+}
+
+@keyframes progress-indeterminate {
+    0% { transform: translateX(0) scaleX(0); }
+    40% { transform: translateX(0) scaleX(0.4); }
+    100% { transform: translateX(100%) scaleX(0.5); }
 }
 
 /* Animations */
@@ -176,6 +204,7 @@ h1, h2, h3, h4, h5, h6 {
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        text-align: center;
         gap: 8px;
         cursor: pointer;
     }
@@ -196,6 +225,9 @@ h1, h2, h3, h4, h5, h6 {
         box-shadow: var(--shadow-sm);
         transition: all 0.2s;
         cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .btn-action:hover {
@@ -214,7 +246,7 @@ h1, h2, h3, h4, h5, h6 {
 
     /* Inputs */
     .input-glass, .input-field {
-        background-color: var(--color-surface);
+        background-color: #ffffff;
         border: 1px solid var(--color-border);
         color: var(--text-primary);
         padding: 10px 14px;
