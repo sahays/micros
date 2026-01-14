@@ -10,7 +10,14 @@ pub struct Config {
     pub database: DatabaseConfig,
     pub redis: RedisConfig,
     pub signature: ServiceSignatureConfig,
+    pub upi: UpiConfig,
     pub service_name: String,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct UpiConfig {
+    pub vpa: String,
+    pub merchant_name: String,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -54,6 +61,9 @@ impl Config {
         let signature_secret = env::var("PAYMENT_SIGNATURE_SECRET").unwrap_or_else(|_| "dev-secret".to_string());
         let signature_enabled = env::var("PAYMENT_SIGNATURE_ENABLED").unwrap_or_else(|_| "false".to_string()).parse().unwrap_or(false);
 
+        let upi_vpa = env::var("PAYMENT_UPI_VPA").unwrap_or_else(|_| "merchant@upi".to_string());
+        let upi_merchant_name = env::var("PAYMENT_UPI_MERCHANT_NAME").unwrap_or_else(|_| "Micros Merchant".to_string());
+
         Ok(Self {
             server: ServerConfig { host, port },
             database: DatabaseConfig { 
@@ -67,6 +77,10 @@ impl Config {
                 enabled: signature_enabled,
                 secret: Secret::new(signature_secret),
                 expiry_seconds: 300,
+            },
+            upi: UpiConfig {
+                vpa: upi_vpa,
+                merchant_name: upi_merchant_name,
             },
             service_name: "payment-service".to_string(),
         })

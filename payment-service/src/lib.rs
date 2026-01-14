@@ -6,7 +6,7 @@ pub mod middleware;
 pub mod services;
 pub mod utils;
 
-use axum::{routing::get, Router};
+use axum::{routing::{get, post}, Router};
 use mongodb::{options::ClientOptions, Client};
 use secrecy::ExposeSecret;
 use std::net::SocketAddr;
@@ -112,6 +112,7 @@ impl Application {
         let router = Router::new()
             .route("/health", get(handlers::health_check))
             .route("/metrics", get(handlers::metrics))
+            .route("/payments/qr/generate", post(handlers::upi::generate_qr))
             .layer(from_fn_with_state(state.clone(), signature_validation_middleware::<AppState>))
             .layer(from_fn(metrics_middleware))
             .layer(from_fn(request_id_middleware))

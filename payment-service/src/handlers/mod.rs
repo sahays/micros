@@ -1,3 +1,5 @@
+pub mod upi;
+
 use axum::{response::IntoResponse, Json, http::StatusCode};
 use serde_json::json;
 
