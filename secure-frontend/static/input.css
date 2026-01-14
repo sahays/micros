@@ -3,8 +3,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Import fonts - Scope One and JetBrains Mono */
-@import url('https://fonts.googleapis.com/css2?family=Scope+One&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+/* Import fonts */
+@import url('https://fonts.googleapis.com/css2?family=Scope+One&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* CSS Variables - Design System */
 :root {
@@ -61,12 +61,46 @@ body {
 
 h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-main);
-    color: var(--text-primary); /* Black in light, White in dark via vars */
+    color: var(--text-primary);
+}
+
+/* Animations */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeInUp 0.6s ease-out;
+}
+
+.stagger-1 {
+    animation-delay: 0.1s;
+    opacity: 0;
+    animation-fill-mode: forwards;
+}
+
+.stagger-2 {
+    animation-delay: 0.2s;
+    opacity: 0;
+    animation-fill-mode: forwards;
+}
+
+.stagger-3 {
+    animation-delay: 0.3s;
+    opacity: 0;
+    animation-fill-mode: forwards;
 }
 
 /* Component System */
 @layer components {
-    /* Cards - Header with icon, Footer with actions */
+    /* Cards */
     .card {
         background: var(--color-surface);
         border: 1px solid var(--color-border);
@@ -81,6 +115,17 @@ h1, h2, h3, h4, h5, h6 {
     .card:hover {
         transform: translateY(-2px);
         box-shadow: var(--shadow-lg);
+    }
+
+    /* Aliases for legacy/layout compatibility */
+    .glass-card, .glass-panel {
+        @apply card;
+        padding: 24px;
+    }
+    
+    .glass-card-lg {
+        @apply card;
+        padding: 32px;
     }
 
     .card-header {
@@ -98,14 +143,14 @@ h1, h2, h3, h4, h5, h6 {
 
     .card-footer {
         padding: 16px 20px;
-        background-color: rgba(0,0,0,0.02); /* Slight tint */
+        background-color: rgba(0,0,0,0.02);
         border-top: 1px solid var(--color-border);
         display: flex;
         gap: 12px;
         align-items: center;
     }
 
-    /* Buttons - Monochromatic Gradient */
+    /* Buttons */
     .btn-gradient, .btn-primary {
         background: linear-gradient(135deg, var(--brand-primary), var(--brand-primary-dark));
         color: white;
@@ -117,10 +162,12 @@ h1, h2, h3, h4, h5, h6 {
         transition: all 0.2s ease;
         display: inline-flex;
         align-items: center;
+        justify-content: center;
         gap: 8px;
+        cursor: pointer;
     }
 
-    .btn-gradient:hover {
+    .btn-gradient:hover, .btn-primary:hover {
         filter: brightness(1.1);
         box-shadow: 0 6px 8px -1px rgba(255, 140, 66, 0.4);
         transform: translateY(-1px);
@@ -135,14 +182,24 @@ h1, h2, h3, h4, h5, h6 {
         font-weight: 500;
         box-shadow: var(--shadow-sm);
         transition: all 0.2s;
+        cursor: pointer;
     }
 
     .btn-action:hover {
         background-color: var(--color-border);
         box-shadow: var(--shadow-md);
     }
-    
-    /* Input Fields */
+
+    .btn-google {
+        @apply btn-action w-full;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        background-color: white;
+    }
+
+    /* Inputs */
     .input-glass, .input-field {
         background-color: var(--color-surface);
         border: 1px solid var(--color-border);
@@ -156,5 +213,40 @@ h1, h2, h3, h4, h5, h6 {
     .input-glass:focus, .input-field:focus {
         border-color: var(--brand-primary);
         outline: none;
+        box-shadow: 0 0 0 2px rgba(255, 140, 66, 0.1);
+    }
+
+    /* Utilities */
+    .divider {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin: 24px 0;
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-tertiary);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .divider::before,
+    .divider::after {
+        content: '';
+        flex: 1;
+        height: 1px;
+        background-color: var(--color-border);
+    }
+
+    .spinner {
+        width: 20px;
+        height: 20px;
+        border: 2px solid rgba(255, 140, 66, 0.2);
+        border-top-color: var(--brand-primary);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
     }
 }
