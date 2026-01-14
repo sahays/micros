@@ -24,9 +24,9 @@ module.exports = {
         'text-muted': '#A0AEC0',
       },
       fontFamily: {
-        display: ['"Geist Sans"', 'sans-serif'],
-        sans: ['"Geist Sans"', 'sans-serif'],
-        body: ['"Geist Sans"', 'sans-serif'],
+        display: ['"Geist"', 'sans-serif'],
+        sans: ['"Geist"', 'sans-serif'],
+        body: ['"Geist"', 'sans-serif'],
         mono: ['"Geist Mono"', 'monospace'],
       },
       borderRadius: {
