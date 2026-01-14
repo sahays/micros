@@ -24,8 +24,10 @@ module.exports = {
         'text-muted': '#A0AEC0',
       },
       fontFamily: {
-        display: ['Space Grotesk', 'sans-serif'],
-        body: ['JetBrains Mono', 'monospace'],
+        display: ['"Scope One"', 'serif'],
+        sans: ['"Scope One"', 'sans-serif'],
+        body: ['"Scope One"', 'serif'],
+        mono: ['JetBrains Mono', 'monospace'],
       },
       borderRadius: {
         '3xl': '32px',
