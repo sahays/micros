@@ -51,7 +51,7 @@ COPY --from=builder /app/target/release/secure-frontend /usr/local/bin/secure-fr
 # Copy static assets and templates if they are not embedded
 # Askama embeds templates, but static files might be needed
 RUN mkdir -p /app/secure-frontend/static
-COPY --from=css-builder /app/static/glassmorphic.css /app/secure-frontend/static/glassmorphic.css
+COPY --from=css-builder /app/static/output.css /app/secure-frontend/static/output.css
 COPY --from=builder /app/secure-frontend/config /app/secure-frontend/config
 
 # Expose the service port
