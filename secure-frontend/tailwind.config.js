@@ -24,10 +24,10 @@ module.exports = {
         'text-muted': '#A0AEC0',
       },
       fontFamily: {
-        display: ['"Scope One"', 'serif'],
-        sans: ['"Scope One"', 'sans-serif'],
-        body: ['"Scope One"', 'serif'],
-        mono: ['JetBrains Mono', 'monospace'],
+        display: ['"Geist Sans"', 'sans-serif'],
+        sans: ['"Geist Sans"', 'sans-serif'],
+        body: ['"Geist Sans"', 'sans-serif'],
+        mono: ['"Geist Mono"', 'monospace'],
       },
       borderRadius: {
         '3xl': '32px',

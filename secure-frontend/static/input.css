@@ -28,8 +28,8 @@
     --shadow-button: 0 4px 6px -1px rgba(255, 140, 66, 0.3);
 
     /* Typography */
-    --font-main: 'Scope One', serif;
-    --font-mono: 'JetBrains Mono', monospace;
+    --font-main: 'Geist Sans', sans-serif;
+    --font-mono: 'Geist Mono', monospace;
 
     /* Spacing & Radius */
     --radius-md: 8px;
