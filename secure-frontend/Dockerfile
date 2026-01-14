@@ -24,7 +24,17 @@ COPY secure-frontend ./secure-frontend
 COPY service-core ./service-core
 RUN cargo build --release --bin secure-frontend
 
-# Stage 4: Runtime (The final image)
+# Stage 4: CSS Builder (Build optimized CSS with Tailwind)
+FROM node:20-slim AS css-builder
+WORKDIR /app
+COPY secure-frontend/package.json secure-frontend/package-lock.json* ./
+RUN npm install
+COPY secure-frontend/tailwind.config.js ./
+COPY secure-frontend/templates ./templates
+COPY secure-frontend/static/input.css ./static/input.css
+RUN npm run build:css
+
+# Stage 5: Runtime (The final image)
 FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 
@@ -40,8 +50,8 @@ COPY --from=builder /app/target/release/secure-frontend /usr/local/bin/secure-fr
 
 # Copy static assets and templates if they are not embedded
 # Askama embeds templates, but static files might be needed
-RUN mkdir -p /app/secure-frontend
-COPY --from=builder /app/secure-frontend/static /app/secure-frontend/static
+RUN mkdir -p /app/secure-frontend/static
+COPY --from=css-builder /app/static/glassmorphic.css /app/secure-frontend/static/glassmorphic.css
 COPY --from=builder /app/secure-frontend/config /app/secure-frontend/config
 
 # Expose the service port

@@ -16,6 +16,7 @@ async fn health_check_works() {
     // 1. Setup (mock auth client config)
     let auth_config = secure_frontend::config::AuthServiceSettings {
         url: "http://localhost:8081".to_string(),
+        public_url: "http://localhost:8081".to_string(),
         client_id: "test_client".to_string(),
         signing_secret: Secret::new("test_secret".to_string()),
     };

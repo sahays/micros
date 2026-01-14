@@ -52,3 +52,9 @@ grafana_data/
 # Docker
 docker-compose.override.yml
 tests/api/reports/
+
+# Node
+node_modules/
+package-lock.json
+secure-frontend/node_modules/
+secure-frontend/package-lock.json

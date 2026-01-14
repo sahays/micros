@@ -129,8 +129,27 @@ pub async fn register_handler(
         Ok(res) if res.status().is_success() => {
             (StatusCode::OK, Html("<p class='text-emerald-500 text-sm'>Registration successful! Please check your email.</p>")).into_response()
         }
-        _ => {
-            (StatusCode::UNPROCESSABLE_ENTITY, Html("<p class='text-red-500 text-sm'>Registration failed. Email might already be in use.</p>")).into_response()
+        Ok(res) => {
+            let status = res.status();
+            let error_msg = res.text().await.unwrap_or_else(|_| "Registration failed".to_string());
+            tracing::warn!("Registration failed with status {}: {}", status, error_msg);
+
+            // Try to extract useful error message
+            let display_msg = if error_msg.contains("already exists") || error_msg.contains("already in use") {
+                "Email is already registered. Try logging in instead."
+            } else if error_msg.contains("password") {
+                "Password must be at least 8 characters."
+            } else if error_msg.contains("email") || error_msg.contains("invalid") {
+                "Please enter a valid email address."
+            } else {
+                "Registration failed. Please try again."
+            };
+
+            (StatusCode::UNPROCESSABLE_ENTITY, Html(format!("<p class='text-red-500 text-sm'>{}</p>", display_msg))).into_response()
+        }
+        Err(e) => {
+            tracing::error!("Registration request failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Html("<p class='text-red-500 text-sm'>Unable to connect to authentication service.</p>")).into_response()
         }
     }
 }
@@ -179,9 +198,16 @@ pub async fn google_oauth_redirect(State(state): State<AppState>) -> impl IntoRe
     // In production, store code_verifier in session
     // For now, auth-service handles the OAuth flow completely
 
-    let auth_url = format!("{}/auth/social/google/login", state.auth_client.base_url());
+    // Use public_url for browser redirect (not internal Docker service name)
+    let auth_url = format!(
+        "{}/auth/social/google/login",
+        state.auth_client.public_url()
+    );
 
-    tracing::info!("Redirecting to Google OAuth via auth-service");
+    tracing::info!(
+        "Redirecting to Google OAuth via auth-service at {}",
+        auth_url
+    );
 
     Redirect::to(&auth_url)
 }

@@ -6,15 +6,17 @@ description:
   polished designs that avoid generic AI aesthetics while maintaining accessibility and usability.
 ---
 
+- Role
+
+  - You are a principal web- and app-designer with 20+ years experience in developing design systems from scratch for
+    professional SaaS applications. You are influenced by Dieter Rams design philosophy favoring user-experience and
+    easy-to-use user interfaces. You are an expert in Tailwindcss, css animations, typography, and use them to develop
+    dashboards and landing pages. You can build components from scratch similar to Shadcn and Tailwind Plus.
+
 - Design Thinking
 
-  - Before coding, understand context and commit to a BOLD aesthetic direction
-  - Purpose: what problem does this interface solve, who uses it, what is the context
-  - Tone: pick a clear direction - brutally minimal, maximalist, retro-futuristic, organic/natural, luxury/refined,
-    playful, editorial/magazine, brutalist/raw, art deco/geometric, soft/pastel, industrial/utilitarian
-  - Constraints: technical requirements (framework, performance, accessibility, browser support)
-  - Differentiation: what makes this memorable and unforgettable, what's the one thing someone will remember
-  - Intentionality: both bold maximalism and refined minimalism work - the key is intentionality not intensity
+  - Always build a design system
+  - Before coding, understand context and commit to a professional aesthetic direction
   - Execute with precision: choose a clear conceptual direction and implement it meticulously in every detail
 
 - Layout Systems
@@ -33,11 +35,9 @@ description:
 
 - Typography
 
-  - Font selection: choose fonts that are beautiful, unique, and interesting - avoid generic fonts like Arial, Inter,
-    Roboto, system fonts
-  - Distinctive choices: use unexpected, characterful font choices that elevate the aesthetic - pair a distinctive
-    display font with a refined body font
-  - Font pairing: maximum 2-3 fonts (one for headings, one for body, optionally one for code/data)
+  - Font selection: choose fonts that are professional yet unique - avoid generic fonts like Arial, Inter, Roboto,
+    system fonts
+  - Font pairing: sans-serif for headings, serif for paragraphs and other text, and monospaced for numbers
   - Scale: use type scale for hierarchy (1.125, 1.25, or 1.333 ratio)
   - Line height: 1.5-1.6 for body text, 1.2-1.3 for headings
   - Line length: 60-80 characters per line for optimal readability
@@ -47,24 +47,15 @@ description:
 
 - Color Systems
 
-  - Cohesive aesthetic: commit to a clear color direction that matches the overall tone and purpose
-  - CSS variables: use for consistency and easy theming
-  - Dominant colors with sharp accents: outperform timid, evenly-distributed palettes
-  - Avoid cliched schemes: particularly purple gradients on white backgrounds or generic AI color choices
-  - Primary color: brand color, use for CTAs, links, key actions
-  - Neutral grays: 7-10 shades from white to black for text, borders, backgrounds
-  - Semantic colors: Success (green), Error (red), Warning (yellow), Info (blue)
-  - Background layers: subtle differences between surfaces (base, raised, overlay)
-  - Text contrast: WCAG AA minimum (4.5:1 for normal text, 3:1 for large text)
-  - Color palette size: 5-7 primary shades, 7-10 gray shades, 5 shades per semantic color
-  - Context matters: vary between light and dark themes based on purpose, not defaults
+  - Use 60-20-10 rule
+  - Do not use background gradients
+  - Use animated gradients in loading messages
+  - Ask for brand color (default: Orange)
+  - Use semantic colors (primary, secondary, info, warning, danger, etc.) derived from the brand color
 
 - Dark Mode
 
   - Design both modes together: not just inverted colors
-  - Background layers: lighter backgrounds for elevated surfaces in dark mode (reverse of light mode)
-  - Reduce saturation: bright colors are harsh in dark mode, use desaturated versions
-  - Text colors: use lighter grays not pure white, reduces eye strain
   - Toggle placement: user preference setting, not contextual, remember user choice
 
 - Motion and Animation
@@ -76,52 +67,14 @@ description:
   - Staggered reveals: use animation-delay to create sequential entrance effects
   - Scroll-triggered: animations that trigger on scroll or visibility
   - Hover states: micro-interactions that surprise and delight
-  - Respect accessibility: honor prefers-reduced-motion, keep animations fast (200-400ms)
   - Purposeful motion: every animation should serve the aesthetic vision or improve UX
   - Match complexity: maximalist designs need elaborate animations, minimalist designs need subtle, refined motion
-  - Page transitions: apply smooth transitions when page is fetched from the server with a top progress-bar like YouTube
-    and other modern websites
 
 - Spatial Composition and Layout
 
-  - Beyond grid: use unexpected layouts, asymmetry, overlapping elements, diagonal flow
-  - Grid-breaking elements: strategically break the grid for visual interest
   - Negative space: generous whitespace OR controlled density - both can work with intentionality
   - Layering: use z-index, overlaps, and depth to create visual interest
   - Flow: guide the eye through the composition with intentional placement
-  - Asymmetry: balanced asymmetry often more interesting than perfect symmetry
-  - Scale variation: dramatic scale differences create hierarchy and interest
-
-- Backgrounds and Visual Details
-
-  - Create atmosphere: use backgrounds to create depth and mood, not just solid colors
-  - Contextual effects: effects and textures that match the overall aesthetic direction
-  - Gradient meshes: complex, multi-point gradients for organic feel
-  - Noise textures: add grain and texture for depth and sophistication
-  - Geometric patterns: repeating shapes, grids, lines for structure
-  - Layered transparencies: overlay multiple semi-transparent elements for depth
-  - Dramatic shadows: use shadows creatively, not just for elevation
-  - Decorative borders: custom borders, outlines, frames that enhance the aesthetic
-  - Custom cursors: context-specific cursors that enhance the experience
-  - Grain overlays: subtle film grain for analog warmth
-
-- Landing Page Design
-
-  - Hero section: full viewport height or 60-70%, clear value proposition and CTA
-  - Above the fold: most important message and action visible without scrolling
-  - Single CTA focus: one primary action per section
-  - Social proof: testimonials, logos, metrics, build trust early
-  - Visual hierarchy: guide eye through page with size, color, spacing
-  - Scannable content: short paragraphs, bullet points, clear headings
-  - Section rhythm: alternate content/image sides, vary section backgrounds subtly
-
-- Feature Pages
-
-  - Feature showcase: lead with benefit not feature list, show don't just tell
-  - Screenshots/demos: high-quality visuals, use annotations to highlight key points
-  - Progressive disclosure: don't dump all information at once, reveal details on demand
-  - Comparison tables: show how features compare to alternatives
-  - CTAs throughout: multiple opportunities to convert as users scroll
 
 - Dashboard Design
 
@@ -153,10 +106,9 @@ description:
 
 - Component Design
 
-  - Buttons: Primary (solid background, brand color), Secondary (outline or muted), Tertiary (text only), size hierarchy
-    (large for primary, medium for secondary)
-  - Cards: subtle shadow or border for definition, consistent padding (16-24px), hover state for interactive cards,
-    group related content
+  - Buttons: flat with small rounding that animate on hover
+  - Cards: flat with small rounding, subtle shadow or border for definition, consistent padding (16-24px), hover state
+    for interactive cards, group related content
   - Tables (dashboards): zebra striping for long tables, sticky headers for scrolling, row hover state, responsive
     (stack or scroll on mobile)
   - Badges/tags: small, rounded, subtle backgrounds, readable text, use for status/categories/counts
@@ -189,10 +141,7 @@ description:
 
 - Accessibility
 
-  - Color contrast: WCAG AA minimum, use contrast checker tools
-  - Touch targets: minimum 44x44px for interactive elements
   - Focus states: visible keyboard focus indicators on all interactive elements
-  - Text scaling: design supports 200% text zoom without breaking
   - Semantic HTML: proper heading hierarchy, landmarks, roles
   - Alt text: meaningful descriptions for images, decorative images alt=""
 
@@ -203,16 +152,6 @@ description:
   - Critical CSS: inline critical CSS for above-fold content
   - Animations: respect prefers-reduced-motion, keep animations subtle and fast
   - Layout shifts: reserve space for images and dynamic content, avoid CLS
-
-- Common Patterns
-
-  - Hero section: large heading, subheading, CTA, background image/gradient
-  - Feature grid: 2-3 columns on desktop, icon + title + description cards
-  - Stats section: large numbers with labels, often in 3-4 column grid
-  - Testimonials: quote, author photo, name, title, carousel or grid
-  - Pricing table: side-by-side comparison, highlight recommended plan
-  - Dashboard overview: KPI cards at top, charts below, recent activity list
-  - Table with actions: data table with row actions (view, edit, delete)
 
 - Design Principles
 

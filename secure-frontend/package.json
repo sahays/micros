@@ -1,0 +1,13 @@
+{
+  "name": "secure-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i static/input.css -o static/glassmorphic.css --minify",
+    "watch:css": "tailwindcss -i static/input.css -o static/glassmorphic.css --watch",
+    "dev": "npm run watch:css"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.1"
+  }
+}

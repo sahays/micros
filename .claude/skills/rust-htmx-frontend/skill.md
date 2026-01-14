@@ -1,18 +1,17 @@
 ---
 name: rust-htmx-frontend
 description:
-  Build secure, performant frontends using Rust web frameworks and Htmx for progressive enhancement. Use when
-  developing server-rendered applications with dynamic behavior, minimal JavaScript, and focus on performance and
-  security.
+  Build secure, performant frontends using Rust web frameworks and Htmx for progressive enhancement. Use when developing
+  server-rendered applications with dynamic behavior, minimal JavaScript, and focus on performance and security.
 ---
 
 - Framework Selection
-  - Axum: modern, ergonomic, built on Tower, excellent for Htmx integration, strong type safety, best choice for new projects
-  - Actix-web: mature, high performance, extensive ecosystem, good for high-throughput applications
-  - Leptos: Rust-native reactive framework, SSR + hydration, type-safe templates, consider for full Rust stack
-  - Template engines: Askama (compile-time), Tera (Jinja2-like), Maud (type-safe HTML macros)
+
+  - Axum: use Axum
+  - Template engines: use Askama (compile-time)
 
 - Htmx Core Principles
+
   - Progressive enhancement: start with working HTML forms, enhance with Htmx
   - Hypermedia-driven: server returns HTML fragments, not JSON
   - Minimal JavaScript: use Htmx attributes for interactivity, avoid custom JS when possible
@@ -20,9 +19,11 @@ description:
   - Graceful degradation: application functions without Htmx when necessary
 
 - Htmx Attributes
+
   - hx-get/post/put/delete/patch: make AJAX requests from any element
   - hx-target: specify where to insert response (CSS selector), use #id or .class or this, closest, next, previous
-  - hx-swap: control how content is swapped (innerHTML, outerHTML, beforebegin, afterbegin, beforeend, afterend, delete, none)
+  - hx-swap: control how content is swapped (innerHTML, outerHTML, beforebegin, afterbegin, beforeend, afterend, delete,
+    none)
   - hx-trigger: specify events that trigger requests (click, submit, change, load, revealed, every Xs, custom events)
   - hx-swap-oob: out-of-band swaps for updating multiple parts of page from single response
   - hx-push-url: update browser URL and history
@@ -33,6 +34,7 @@ description:
   - hx-confirm: show confirmation dialog before request
 
 - Response Headers
+
   - HX-Trigger: trigger client-side events after swap (for custom JS, close modals, refresh other sections)
   - HX-Redirect: client-side redirect to new URL
   - HX-Refresh: force client-side page refresh
@@ -42,6 +44,7 @@ description:
   - HX-Location: client-side redirect with context for Htmx
 
 - Template Patterns
+
   - Partial templates: create reusable HTML fragments for Htmx responses
   - Layout composition: base layout with blocks for full pages, minimal fragments for Htmx responses
   - Conditional rendering: render different content based on request headers (HX-Request for Htmx detection)
@@ -49,13 +52,16 @@ description:
   - Form templates: extract forms as partials for reuse in create/edit flows
 
 - Routing Architecture
+
   - Full page routes: return complete HTML documents for initial page loads
   - Fragment routes: return HTML fragments for Htmx requests
   - Dual routes: same endpoint serves full page or fragment based on HX-Request header
-  - RESTful structure: GET /items (list), GET /items/:id (detail), GET /items/:id/edit (edit form), POST /items (create), PUT /items/:id (update), DELETE /items/:id (delete)
+  - RESTful structure: GET /items (list), GET /items/:id (detail), GET /items/:id/edit (edit form), POST /items
+    (create), PUT /items/:id (update), DELETE /items/:id (delete)
   - Fragment endpoints: GET /items/:id/fragment for partial updates
 
 - State Management
+
   - Server-side sessions: use session cookies for user state, tower-sessions or actix-session
   - CSRF protection: required for all mutations, use tower-csrf or actix-csrf
   - Form state: preserve form data across validation failures, return pre-filled forms
@@ -64,6 +70,7 @@ description:
   - Flash messages: temporary messages stored in session, display once then clear
 
 - Form Handling
+
   - POST-Redirect-GET: prevent duplicate submissions on refresh for full page forms
   - Inline validation: use hx-post with hx-target on individual fields for live validation
   - Error display: return form fragment with errors highlighted, show errors next to fields
@@ -72,6 +79,7 @@ description:
   - File uploads: use multipart/form-data, validate size/type server-side, show progress with HX-Trigger events
 
 - Common UI Patterns
+
   - Infinite scroll: hx-get on sentinel element with hx-trigger="revealed", append new items with hx-swap="beforeend"
   - Search-as-you-type: hx-get hx-trigger="keyup changed delay:300ms" on input
   - Inline editing: click to show edit form, save with hx-put, cancel returns read-only view
@@ -83,6 +91,7 @@ description:
   - Delete confirmation: hx-confirm attribute or modal pattern
 
 - Performance Optimization
+
   - Minimize fragment size: return only changed HTML, use hx-swap-oob for multiple updates
   - Template caching: cache compiled templates, not rendered output
   - Conditional rendering: skip expensive rendering if not needed for Htmx fragments
@@ -93,6 +102,7 @@ description:
   - Lazy loading: defer loading non-critical content until needed
 
 - Security
+
   - CSRF tokens: include in all forms, validate on mutations
   - Input validation: validate all inputs server-side, sanitize for XSS
   - Output encoding: template engines auto-escape by default, be careful with raw HTML
@@ -104,6 +114,7 @@ description:
   - Secret management: use secrecy crate, never log sensitive data
 
 - Error Handling
+
   - Validation errors: return 422 with form fragment showing errors
   - Server errors: return 500 with user-friendly error fragment
   - Not found: return 404 with helpful message fragment
@@ -113,6 +124,7 @@ description:
   - Logging: structured logging with tracing, include request context
 
 - Progressive Enhancement Strategy
+
   - Start with working HTML: forms submit, links navigate
   - Add Htmx: enhance with hx attributes for better UX
   - Add minimal JS: use Alpine.js or hyperscript for client-only interactions (modals, dropdowns)
@@ -120,13 +132,17 @@ description:
   - Accessibility: keyboard navigation, screen reader support, ARIA attributes
 
 - CSS and Styling
+
   - Utility-first CSS: Tailwind CSS works excellently with Htmx
   - Scoped styles: use BEM or CSS modules to prevent conflicts
   - Transition classes: CSS transitions for smooth swaps, use htmx.config.defaultSwapDelay
   - Loading states: show spinners or skeleton screens with hx-indicator
   - Theme support: CSS variables for theming, persist theme choice in session
+  - Page transitions: eliminate browser view flickers on page navigation
+  - Page loading progressbars: use YouTube-like progressbar at the top of the page while page transitions
 
 - Integration with JavaScript
+
   - Minimal JS: prefer Htmx and server-side logic
   - Alpine.js: lightweight reactivity for client-only state (modals, dropdowns, tabs)
   - Hyperscript: event-oriented scripting alternative to Alpine.js
@@ -135,6 +151,7 @@ description:
   - Libraries: integrate charts, maps, rich text editors on specific pages only
 
 - Testing
+
   - Integration tests: test full request/response cycle with real templates
   - Template tests: verify templates render correctly with different data
   - Form tests: test validation, error handling, success flows
@@ -143,6 +160,7 @@ description:
   - Accessibility tests: automated checks with axe-core
 
 - Development Workflow
+
   - Live reload: use cargo-watch with browser auto-refresh
   - Template hot reload: some engines support reloading without restart
   - Request logging: log all Htmx requests for debugging
@@ -150,6 +168,7 @@ description:
   - Htmx debug: enable htmx.logAll() in development
 
 - Code Organization
+
   - handlers/: request handlers grouped by feature
   - templates/: HTML templates, organized by feature with shared layouts/components
   - models/: database models and business logic
@@ -158,6 +177,7 @@ description:
   - extractors/: custom Axum extractors for common patterns
 
 - Common Patterns with Axum
+
   - HxRequest extractor: detect Htmx requests via HX-Request header
   - Conditional rendering: return full page or fragment based on HxRequest
   - Template response: custom response type that renders templates
@@ -166,6 +186,7 @@ description:
   - CSRF middleware: validate tokens automatically
 
 - Anti-Patterns to Avoid
+
   - Never return JSON to Htmx (return HTML fragments)
   - Never build complex client-side state machines (use server state)
   - Never skip CSRF protection on mutations
@@ -182,7 +203,6 @@ description:
   - Always sanitize and escape output
 
 - Production Checklist
-  - Enable HTTPS and HSTS
   - Set secure session cookies (httpOnly, secure, sameSite)
   - Enable CSRF protection
   - Configure CSP headers
@@ -196,3 +216,4 @@ description:
   - Verify accessibility with screen reader
   - Load test critical paths
   - Set up health checks for monitoring
+  - Zero flickers on page navigation

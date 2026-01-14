@@ -1,7 +1,9 @@
+use axum::http::header::{HeaderValue, CACHE_CONTROL};
 use axum::{middleware::from_fn, routing::get, Router};
 use service_core::middleware::{metrics::metrics_middleware, tracing::request_id_middleware};
 use time::Duration;
 use tower_http::services::ServeDir;
+use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::trace::TraceLayer;
 use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer};
 
@@ -27,7 +29,13 @@ pub fn build_router(app_state: AppState) -> Router {
         .with_secure(false) // Set to true in production with HTTPS
         .with_expiry(Expiry::OnInactivity(Duration::hours(24)));
 
-    Router::new()
+    // Static file service with aggressive caching (1 year)
+    let static_service = ServeDir::new("secure-frontend/static")
+        .precompressed_gzip()
+        .precompressed_br();
+
+    // API routes with full middleware stack
+    let api_routes = Router::new()
         .route("/", get(index))
         .route("/health", get(health_check))
         .route("/metrics", get(crate::handlers::metrics::metrics))
@@ -95,7 +103,6 @@ pub fn build_router(app_state: AppState) -> Router {
                 auth_middleware,
             )),
         )
-        .nest_service("/static", ServeDir::new("secure-frontend/static"))
         .layer(session_layer)
         .layer(from_fn(metrics_middleware))
         // Add tracing layer
@@ -118,5 +125,16 @@ pub fn build_router(app_state: AppState) -> Router {
         )
         // Add tracing middleware for request_id
         .layer(from_fn(request_id_middleware))
-        .with_state(app_state)
+        .with_state(app_state);
+
+    // Static files with cache headers (bypass heavy middleware)
+    let static_routes = Router::new().nest_service("/static", static_service).layer(
+        SetResponseHeaderLayer::if_not_present(
+            CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=31536000, immutable"),
+        ),
+    );
+
+    // Merge routes - static files bypass session/metrics/tracing middleware
+    Router::new().merge(api_routes).merge(static_routes)
 }

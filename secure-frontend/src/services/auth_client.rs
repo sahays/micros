@@ -22,6 +22,10 @@ impl AuthClient {
         &self.settings.url
     }
 
+    pub fn public_url(&self) -> &str {
+        &self.settings.public_url
+    }
+
     pub async fn post(&self, path: &str, body: serde_json::Value) -> Result<reqwest::Response> {
         let url = format!("{}{}", self.settings.url, path);
         let body_bytes = serde_json::to_vec(&body)?;

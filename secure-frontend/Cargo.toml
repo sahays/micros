@@ -28,7 +28,7 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tower = { workspace = true, features = ["util"] }
-tower-http = { workspace = true, features = ["cors", "trace", "fs"] }
+tower-http = { workspace = true, features = ["cors", "trace", "fs", "set-header", "compression-gzip", "compression-br"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter", "json"] }
 tracing-opentelemetry = { workspace = true }

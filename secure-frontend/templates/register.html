@@ -1,24 +1,24 @@
-{% extends "layout.html" %}
+{% extends "auth_layout.html" %}
 
 {% block title %}Register - Secure Frontend{% endblock %}
 
 {% block content %}
-<div class="max-w-md mx-auto mt-20 fade-in">
-    <div class="glass-card-lg">
-        <div class="text-center mb-8">
-            <h2 class="text-4xl font-bold mb-3 text-gradient">Create Account</h2>
+<div class="max-w-md w-full">
+    <div class="glass-card-lg fade-in">
+        <div class="text-center mb-10 fade-in stagger-1">
+            <h2 class="text-4xl font-bold mb-3">Create Account</h2>
             <p class="text-secondary">Join the most secure document management platform</p>
         </div>
 
-        <form hx-post="/register" hx-target="#register-message" hx-indicator="#loading" class="space-y-5">
+        <form hx-post="/register" hx-target="#register-message" hx-indicator="#loading" class="space-y-6 fade-in stagger-2">
             <div>
-                <label for="email" class="block text-sm font-medium text-secondary mb-2">Email Address</label>
+                <label for="email">Email Address</label>
                 <input type="email" name="email" id="email" required
                     class="input-glass"
                     placeholder="name@example.com">
             </div>
             <div>
-                <label for="password" class="block text-sm font-medium text-secondary mb-2">Password</label>
+                <label for="password">Password</label>
                 <input type="password" name="password" id="password" required minlength="8"
                     class="input-glass"
                     placeholder="Minimum 8 characters">
@@ -35,8 +35,8 @@
             </button>
         </form>
 
-        <p class="mt-8 text-center text-sm text-tertiary">
-            Already have an account? <a href="/login" class="font-medium">Sign in</a>
+        <p class="mt-10 text-center text-sm text-secondary">
+            Already have an account? <a href="/login">Sign in</a>
         </p>
     </div>
 </div>
