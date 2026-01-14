@@ -1,17 +1,17 @@
 use payment_service::{config::Config, Application};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use service_core::observability::logging::init_tracing;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initialize tracing
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new(
-            std::env::var("RUST_LOG").unwrap_or_else(|_| "info,payment_service=debug".into()),
-        ))
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-
     let config = Config::from_env().expect("Failed to load configuration");
+
+    // Initialize tracing
+    let otlp_endpoint = std::env::var("OTLP_ENDPOINT").unwrap_or_else(|_| "http://tempo:4317".to_string());
+    init_tracing(&config.service_name, "info", &otlp_endpoint);
+
+    // Initialize metrics
+    payment_service::services::metrics::init_metrics();
+
     let application = Application::build(config).await?;
     application.run_until_stopped().await?;
 

@@ -28,6 +28,17 @@ validator = { workspace = true, features = ["derive"] }
 secrecy = { version = "0.8", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
+# Observability & Security
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
+opentelemetry = { workspace = true }
+opentelemetry-otlp = { workspace = true }
+opentelemetry_sdk = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+redis = { workspace = true, features = ["tokio-comp", "connection-manager"] }
+dashmap = { workspace = true }
+http = { workspace = true }
+
 [dev-dependencies]
 tokio-test = "0.4"
 wiremock = "0.5"
