@@ -14,14 +14,24 @@ impl UpiService {
         Self { config }
     }
 
-    pub fn generate_upi_link(&self, amount: f64, description: Option<String>, tr_id: Option<String>) -> String {
+    pub fn generate_upi_link(
+        &self, 
+        amount: f64, 
+        description: Option<String>, 
+        tr_id: Option<String>,
+        vpa: Option<String>,
+        merchant_name: Option<String>
+    ) -> String {
         let description = description.unwrap_or_else(|| "Payment".to_string());
+        let vpa = vpa.unwrap_or_else(|| self.config.vpa.clone());
+        let merchant_name = merchant_name.unwrap_or_else(|| self.config.merchant_name.clone());
+
         // Basic UPI intent format: upi://pay?pa=...&pn=...&am=...&cu=INR&tn=...
         // tr is transaction reference ID
         let mut link = format!(
             "upi://pay?pa={}&pn={}&am={:.2}&cu=INR&tn={}",
-            self.config.vpa,
-            urlencoding::encode(&self.config.merchant_name),
+            vpa,
+            urlencoding::encode(&merchant_name),
             amount,
             urlencoding::encode(&description)
         );

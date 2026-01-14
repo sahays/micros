@@ -6,6 +6,8 @@ pub struct QrGenerateRequest {
     pub amount: f64,
     pub description: Option<String>,
     pub transaction_id: Option<Uuid>,
+    pub vpa: Option<String>,
+    pub merchant_name: Option<String>,
 }
 
 #[derive(Serialize)]
