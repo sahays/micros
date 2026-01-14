@@ -130,24 +130,40 @@ h1, h2, h3, h4, h5, h6 {
 
     .card-header {
         padding: 16px 20px;
+        background-color: #eaeaea;
         border-bottom: 1px solid var(--color-border);
         display: flex;
         align-items: center;
         gap: 12px;
+        color: var(--text-primary);
     }
 
     .card-body {
         padding: 20px;
+        background-color: #ffffff;
         flex-grow: 1;
+        color: var(--text-secondary);
     }
 
     .card-footer {
         padding: 16px 20px;
-        background-color: rgba(0,0,0,0.02);
+        background-color: #eaeaea;
         border-top: 1px solid var(--color-border);
         display: flex;
         gap: 12px;
         align-items: center;
+    }
+
+    /* Links */
+    a:not([class]) {
+        color: var(--brand-primary);
+        text-decoration: none;
+        transition: color 0.2s;
+    }
+
+    a:not([class]):hover {
+        color: var(--brand-primary-dark);
+        text-decoration: underline;
     }
 
     /* Buttons */
