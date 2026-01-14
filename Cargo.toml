@@ -3,6 +3,7 @@ members = [
     "auth-service", "document-service",
     "secure-frontend",
     "service-core",
+    "payment-service",
 ]
 
 [workspace.dependencies]
