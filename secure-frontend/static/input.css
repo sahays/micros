@@ -3,9 +3,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Import fonts */
-@import url('https://fonts.googleapis.com/css2?family=Scope+One&family=JetBrains+Mono:wght@400;500&display=swap');
-
 /* CSS Variables - Design System */
 :root {
     /* Brand Colors - Orange Primary */
