@@ -22,7 +22,7 @@ hex = { workspace = true }
 hmac = { workspace = true }
 jsonwebtoken = { workspace = true }
 lettre = { workspace = true, features = ["tokio1-native-tls", "smtp-transport"] }
-mongodb = { workspace = true, features = ["bson-chrono-0_4"] }
+sqlx = { workspace = true }
 opentelemetry = { workspace = true }
 opentelemetry_sdk = { workspace = true, features = ["rt-tokio"] }
 opentelemetry-otlp = { workspace = true, features = ["grpc-tonic"] }

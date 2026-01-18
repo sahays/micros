@@ -1,6 +1,6 @@
 # Story: Password Authentication
 
-Status: pending
+Status: completed
 Epic: [001-auth-service-v2](../epics/001-auth-service-v2.md)
 Priority: P0
 
@@ -10,13 +10,13 @@ Implement email/password signup, login, refresh, and logout flows.
 
 ## Tasks
 
-- [ ] Create `handlers/auth/signup.rs` - User registration
-- [ ] Create `handlers/auth/login.rs` - Password login
-- [ ] Create `handlers/auth/refresh.rs` - Token refresh
-- [ ] Create `handlers/auth/logout.rs` - Session revocation
-- [ ] Adapt JWT service for new user model
-- [ ] Create refresh_sessions repository
-- [ ] Password hashing with argon2
+- [x] Create `handlers/auth/signup.rs` - User registration
+- [x] Create `handlers/auth/login.rs` - Password login
+- [x] Create `handlers/auth/refresh.rs` - Token refresh
+- [x] Create `handlers/auth/logout.rs` - Session revocation
+- [x] Adapt JWT service for new user model
+- [x] Create refresh_sessions repository
+- [x] Password hashing with argon2
 
 ## API Endpoints
 
@@ -63,9 +63,9 @@ pub struct AccessTokenClaims {
 
 ## Acceptance Criteria
 
-- [ ] Signup creates user + password identity
-- [ ] Login validates password, returns tokens
-- [ ] Refresh rotates tokens, invalidates old
-- [ ] Logout revokes refresh session
-- [ ] Password hashed with argon2id
-- [ ] Refresh token stored as hash only
+- [x] Signup creates user + password identity
+- [x] Login validates password, returns tokens
+- [x] Refresh rotates tokens, invalidates old
+- [x] Logout revokes refresh session
+- [x] Password hashed with argon2id
+- [x] Refresh token stored as hash only

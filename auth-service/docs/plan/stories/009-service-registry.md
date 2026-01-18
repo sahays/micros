@@ -1,6 +1,6 @@
 # Story: Service Registry (Know-Your-Service)
 
-Status: pending
+Status: completed
 Epic: [001-auth-service-v2](../epics/001-auth-service-v2.md)
 Priority: P0
 
@@ -10,13 +10,13 @@ Implement KYS model for service-to-service authentication.
 
 ## Tasks
 
-- [ ] Create `models/service.rs` - Service, ServiceSecret
-- [ ] Create `models/service_permission.rs`
-- [ ] Create service repository
-- [ ] Implement Basic auth extraction middleware
-- [ ] Implement service token minting (optional)
-- [ ] Add admin endpoints for service management
-- [ ] Add permission checking middleware
+- [x] Create `models/service.rs` - Service, ServiceSecret
+- [x] Create `models/service_permission.rs`
+- [x] Create service repository
+- [x] Implement Basic auth extraction middleware
+- [x] Implement service token minting (optional)
+- [x] Add admin endpoints for service management
+- [x] Add permission checking middleware
 
 ## Service Auth Options
 
@@ -96,9 +96,9 @@ pub async fn require_service_permission(
 
 ## Acceptance Criteria
 
-- [ ] Service registration returns secret once
-- [ ] Basic auth validates against hashed secret
-- [ ] Secret rotation works (old revoked)
-- [ ] Service can be disabled/enabled
-- [ ] Permission checking blocks unauthorized calls
-- [ ] /authz/evaluate requires "authz.evaluate" permission
+- [x] Service registration returns secret once
+- [x] Basic auth validates against hashed secret
+- [x] Secret rotation works (old revoked)
+- [x] Service can be disabled/enabled
+- [x] Permission checking blocks unauthorized calls
+- [x] /authz/evaluate requires "authz.evaluate" permission

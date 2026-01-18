@@ -1,6 +1,6 @@
 # Story: Roles & Capabilities Registry
 
-Status: pending
+Status: completed
 Epic: [001-auth-service-v2](../epics/001-auth-service-v2.md)
 Priority: P0
 
@@ -10,13 +10,13 @@ Implement capability registry and tenant-scoped roles with capability mappings.
 
 ## Tasks
 
-- [ ] Create `models/capability.rs` - Global capability registry
-- [ ] Create `models/role.rs` - Tenant-scoped roles
-- [ ] Create `models/role_capability.rs` - Role→capability mapping
-- [ ] Seed default capabilities
-- [ ] Create role repository
-- [ ] Create capability repository
-- [ ] Add role/capability API endpoints
+- [x] Create `models/capability.rs` - Global capability registry
+- [x] Create `models/role.rs` - Tenant-scoped roles
+- [x] Create `models/role_capability.rs` - Role→capability mapping
+- [x] Seed default capabilities
+- [x] Create role repository
+- [x] Create capability repository
+- [x] Add role/capability API endpoints
 
 ## Capability Naming Convention
 
@@ -79,8 +79,8 @@ GET /roles/{role_id}/capabilities
 
 ## Acceptance Criteria
 
-- [ ] Capabilities are globally unique by cap_key
-- [ ] Roles are unique per tenant by role_label
-- [ ] Role→capability mappings work
-- [ ] Prefix search on capabilities works
-- [ ] Default capabilities seeded on migration
+- [x] Capabilities are globally unique by cap_key
+- [x] Roles are unique per tenant by role_label
+- [x] Role→capability mappings work
+- [x] Prefix search on capabilities works
+- [x] Default capabilities seeded on migration

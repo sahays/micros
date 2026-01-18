@@ -1,12 +1,12 @@
+//! Service layer errors.
+
 use service_core::error::AppError;
 use thiserror::Error;
-
-use super::PolicyError;
 
 #[derive(Error, Debug)]
 pub enum ServiceError {
     #[error("Database error: {0}")]
-    Database(#[from] mongodb::error::Error),
+    Database(#[from] sqlx::Error),
 
     #[error("Redis error: {0}")]
     Redis(#[from] redis::RedisError),
@@ -35,11 +35,11 @@ pub enum ServiceError {
     #[error("User not found")]
     UserNotFound,
 
-    #[error("Organization not found")]
-    OrganizationNotFound,
+    #[error("Tenant not found")]
+    TenantNotFound,
 
-    #[error("Organization is disabled")]
-    OrganizationDisabled,
+    #[error("Tenant is suspended")]
+    TenantSuspended,
 
     #[error("Password policy violation: {0}")]
     PasswordPolicyViolation(String),
@@ -57,7 +57,9 @@ pub enum ServiceError {
 impl From<ServiceError> for AppError {
     fn from(err: ServiceError) -> Self {
         match err {
-            ServiceError::Database(e) => AppError::DatabaseError(e),
+            ServiceError::Database(e) => {
+                AppError::DatabaseError(anyhow::anyhow!("Database error: {}", e))
+            }
             ServiceError::Redis(e) => AppError::RedisError(e),
             ServiceError::Internal(e) => AppError::InternalError(e),
             ServiceError::InternalString(e) => AppError::InternalError(anyhow::anyhow!(e)),
@@ -73,11 +75,9 @@ impl From<ServiceError> for AppError {
             ServiceError::InvalidToken => AppError::BadRequest(anyhow::anyhow!("Invalid token")),
             ServiceError::TokenExpired => AppError::BadRequest(anyhow::anyhow!("Token expired")),
             ServiceError::UserNotFound => AppError::NotFound(anyhow::anyhow!("User not found")),
-            ServiceError::OrganizationNotFound => {
-                AppError::NotFound(anyhow::anyhow!("Organization not found"))
-            }
-            ServiceError::OrganizationDisabled => {
-                AppError::BadRequest(anyhow::anyhow!("Organization is disabled"))
+            ServiceError::TenantNotFound => AppError::NotFound(anyhow::anyhow!("Tenant not found")),
+            ServiceError::TenantSuspended => {
+                AppError::BadRequest(anyhow::anyhow!("Tenant is suspended"))
             }
             ServiceError::PasswordPolicyViolation(msg) => {
                 AppError::BadRequest(anyhow::anyhow!(msg))
@@ -86,11 +86,5 @@ impl From<ServiceError> for AppError {
             ServiceError::EmailError(e) => AppError::EmailError(e),
             ServiceError::ValidationError(e) => AppError::BadRequest(anyhow::anyhow!(e)),
         }
-    }
-}
-
-impl From<PolicyError> for ServiceError {
-    fn from(err: PolicyError) -> Self {
-        ServiceError::PasswordPolicyViolation(err.to_string())
     }
 }

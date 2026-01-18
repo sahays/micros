@@ -1,6 +1,6 @@
 # Story: Auth Context Endpoint
 
-Status: pending
+Status: completed
 Epic: [001-auth-service-v2](../epics/001-auth-service-v2.md)
 Priority: P0
 
@@ -10,10 +10,10 @@ Implement `/auth/context` endpoint returning user's full authorization context.
 
 ## Tasks
 
-- [ ] Create `handlers/auth/context.rs`
-- [ ] Build context aggregation query
-- [ ] Return assignments, roles, capabilities, visibility grants
-- [ ] Add service-authenticated variant for BFFs
+- [x] Create `handlers/auth/context.rs`
+- [x] Build context aggregation query
+- [x] Return assignments, roles, capabilities, visibility grants
+- [x] Add service-authenticated variant for BFFs
 
 ## API Endpoints
 
@@ -54,8 +54,8 @@ Response: Same as above
 
 ## Acceptance Criteria
 
-- [ ] User can fetch own context with JWT
-- [ ] Service can fetch any user's context with service auth
-- [ ] Capabilities aggregated from all active assignments
-- [ ] Visibility grants included
-- [ ] Response cached briefly (optional)
+- [x] User can fetch own context with JWT
+- [x] Service can fetch any user's context with service auth
+- [x] Capabilities aggregated from all active assignments
+- [x] Visibility grants included
+- [x] Response cached briefly (optional)

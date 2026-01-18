@@ -1,6 +1,6 @@
 # Story: Org Assignments
 
-Status: pending
+Status: completed
 Epic: [001-auth-service-v2](../epics/001-auth-service-v2.md)
 Priority: P0
 
@@ -10,13 +10,13 @@ Implement time-bounded user→org→role assignments.
 
 ## Tasks
 
-- [ ] Create `models/org_assignment.rs`
-- [ ] Create assignment repository
-- [ ] Implement assignment creation with start_utc
-- [ ] Implement assignment ending (set end_utc)
-- [ ] Query active assignments for user
-- [ ] Query users at org node with role filter
-- [ ] Add assignment API endpoints
+- [x] Create `models/org_assignment.rs`
+- [x] Create assignment repository
+- [x] Implement assignment creation with start_utc
+- [x] Implement assignment ending (set end_utc)
+- [x] Query active assignments for user
+- [x] Query users at org node with role filter
+- [x] Add assignment API endpoints
 
 ## Key Concepts
 
@@ -74,8 +74,8 @@ Response: [{ user_id, role_id, org_node_id, assignment_id }]
 
 ## Acceptance Criteria
 
-- [ ] Assignments created with start_utc
-- [ ] Assignments ended by setting end_utc
-- [ ] Active query filters by time correctly
-- [ ] Subtree user query uses closure table
-- [ ] No assignment mutation (only create/end)
+- [x] Assignments created with start_utc
+- [x] Assignments ended by setting end_utc
+- [x] Active query filters by time correctly
+- [x] Subtree user query uses closure table
+- [x] No assignment mutation (only create/end)

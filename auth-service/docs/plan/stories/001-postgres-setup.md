@@ -1,6 +1,6 @@
 # Story: PostgreSQL Setup & Migration Infrastructure
 
-Status: pending
+Status: completed
 Epic: [001-auth-service-v2](../epics/001-auth-service-v2.md)
 Priority: P0
 
@@ -10,15 +10,15 @@ Replace MongoDB with PostgreSQL using sqlx for compile-time checked queries and 
 
 ## Tasks
 
-- [ ] Add sqlx, sqlx-cli dependencies to Cargo.toml
-- [ ] Remove mongodb dependency
-- [ ] Create DATABASE_URL config
-- [ ] Set up connection pool (PgPool)
-- [ ] Create migrations folder structure
-- [ ] Write initial migration with all tables
-- [ ] Update docker-compose with PostgreSQL service
-- [ ] Create health check endpoint using Postgres
-- [ ] Update .env.example with Postgres config
+- [x] Add sqlx, sqlx-cli dependencies to Cargo.toml
+- [x] Remove mongodb dependency
+- [x] Create DATABASE_URL config
+- [x] Set up connection pool (PgPool)
+- [x] Create migrations folder structure
+- [x] Write initial migration with all tables
+- [x] Update docker-compose with PostgreSQL service
+- [x] Create health check endpoint using Postgres
+- [x] Update .env.example with Postgres config
 
 ## Schema (Migration 001)
 
@@ -232,8 +232,8 @@ CREATE TABLE service_sessions (
 
 ## Acceptance Criteria
 
-- [ ] `cargo sqlx prepare` generates offline query data
-- [ ] `sqlx migrate run` applies migrations
-- [ ] Connection pool configured with env vars
-- [ ] Health check queries database
-- [ ] Docker Compose includes PostgreSQL 16
+- [x] `cargo sqlx prepare` generates offline query data
+- [x] `sqlx migrate run` applies migrations
+- [x] Connection pool configured with env vars
+- [x] Health check queries database
+- [x] Docker Compose includes PostgreSQL 16

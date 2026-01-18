@@ -1,105 +1,137 @@
+//! User model - tenant-scoped user accounts.
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct User {
-    #[serde(rename = "_id")]
-    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
-    pub id: String,
-
-    /// Application ID (maps to Client.client_id) - identifies which app this user belongs to
-    #[schema(example = "770e8400-e29b-41d4-a716-446655440002")]
-    pub app_id: String,
-
-    /// Organization ID - identifies which org within the app this user belongs to
-    #[schema(example = "660e8400-e29b-41d4-a716-446655440001")]
-    pub org_id: String,
-
-    #[schema(example = "user@example.com")]
-    pub email: String,
-    #[schema(read_only)]
-    pub password_hash: String,
-    #[schema(example = "John Doe")]
-    pub name: Option<String>,
-    pub verified: bool,
-    pub google_id: Option<String>,
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
-    #[schema(value_type = String, format = "date-time")]
-    pub created_at: DateTime<Utc>,
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
-    #[schema(value_type = String, format = "date-time")]
-    pub updated_at: DateTime<Utc>,
+/// User state codes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UserState {
+    Active,
+    Suspended,
+    Deactivated,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)]
-pub struct NewUser {
-    pub app_id: String,
-    pub org_id: String,
+impl UserState {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            UserState::Active => "active",
+            UserState::Suspended => "suspended",
+            UserState::Deactivated => "deactivated",
+        }
+    }
+}
+
+/// User entity (tenant-scoped).
+#[derive(Debug, Clone, FromRow)]
+pub struct User {
+    pub user_id: Uuid,
+    pub tenant_id: Uuid,
     pub email: String,
-    pub password_hash: String,
-    pub name: Option<String>,
+    pub email_verified: bool,
+    pub google_id: Option<String>,
+    pub display_name: Option<String>,
+    pub user_state_code: String,
+    pub created_utc: DateTime<Utc>,
 }
 
 impl User {
-    pub fn new(
-        app_id: String,
-        org_id: String,
-        email: String,
-        password_hash: String,
-        name: Option<String>,
-    ) -> Self {
-        let now = Utc::now();
+    /// Create a new user.
+    pub fn new(tenant_id: Uuid, email: String, display_name: Option<String>) -> Self {
         Self {
-            id: Uuid::new_v4().to_string(),
-            app_id,
-            org_id,
+            user_id: Uuid::new_v4(),
+            tenant_id,
             email,
-            password_hash,
-            name,
-            verified: false,
+            email_verified: false,
             google_id: None,
-            created_at: now,
-            updated_at: now,
+            display_name,
+            user_state_code: UserState::Active.as_str().to_string(),
+            created_utc: Utc::now(),
         }
     }
 
-    pub fn sanitized(&self) -> SanitizedUser {
-        SanitizedUser {
-            id: self.id.clone(),
-            app_id: self.app_id.clone(),
-            org_id: self.org_id.clone(),
-            email: self.email.clone(),
-            name: self.name.clone(),
-            verified: self.verified,
-            google_id: self.google_id.clone(),
-            created_at: self.created_at,
-            updated_at: self.updated_at,
+    /// Check if user is active.
+    pub fn is_active(&self) -> bool {
+        self.user_state_code == UserState::Active.as_str()
+    }
+
+    /// Convert to sanitized response (no sensitive fields).
+    pub fn sanitized(&self) -> UserResponse {
+        UserResponse::from(self.clone())
+    }
+}
+
+/// Request to register a new user.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct RegisterUserRequest {
+    pub tenant_id: Uuid,
+    pub email: String,
+    pub password: String,
+    pub display_name: Option<String>,
+}
+
+/// Request to login with email/password.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct LoginRequest {
+    pub tenant_id: Uuid,
+    pub email: String,
+    pub password: String,
+}
+
+/// User response for API (without sensitive fields).
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct UserResponse {
+    pub user_id: Uuid,
+    pub tenant_id: Uuid,
+    pub email: String,
+    pub email_verified: bool,
+    pub google_id: Option<String>,
+    pub display_name: Option<String>,
+    pub user_state_code: String,
+    pub created_utc: DateTime<Utc>,
+}
+
+impl From<User> for UserResponse {
+    fn from(u: User) -> Self {
+        Self {
+            user_id: u.user_id,
+            tenant_id: u.tenant_id,
+            email: u.email,
+            email_verified: u.email_verified,
+            google_id: u.google_id,
+            display_name: u.display_name,
+            user_state_code: u.user_state_code,
+            created_utc: u.created_utc,
         }
     }
 }
 
-/// User without sensitive fields (for API responses)
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct SanitizedUser {
-    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
-    pub id: String,
-    #[schema(example = "770e8400-e29b-41d4-a716-446655440002")]
-    pub app_id: String,
-    #[schema(example = "660e8400-e29b-41d4-a716-446655440001")]
-    pub org_id: String,
-    #[schema(example = "user@example.com")]
-    pub email: String,
-    #[schema(example = "John Doe")]
-    pub name: Option<String>,
-    pub verified: bool,
-    pub google_id: Option<String>,
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
-    #[schema(value_type = String, format = "date-time")]
-    pub created_at: DateTime<Utc>,
-    #[serde(with = "mongodb::bson::serde_helpers::chrono_datetime_as_bson_datetime")]
-    #[schema(value_type = String, format = "date-time")]
-    pub updated_at: DateTime<Utc>,
+/// Token pair response after successful auth.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct TokenResponse {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub expires_in: i64,
+    pub token_type: String,
+}
+
+impl TokenResponse {
+    pub fn new(access_token: String, refresh_token: String, expires_in: i64) -> Self {
+        Self {
+            access_token,
+            refresh_token,
+            expires_in,
+            token_type: "Bearer".to_string(),
+        }
+    }
+}
+
+/// Auth response with user info and tokens.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AuthResponse {
+    pub user: UserResponse,
+    pub tokens: TokenResponse,
 }

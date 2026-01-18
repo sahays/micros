@@ -42,7 +42,7 @@ pub enum AppError {
     ServiceUnavailable,
 
     #[error("Database error: {0}")]
-    DatabaseError(#[from] mongodb::error::Error),
+    DatabaseError(anyhow::Error),
 
     #[error("Redis error: {0}")]
     RedisError(#[from] redis::RedisError),

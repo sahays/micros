@@ -1,6 +1,6 @@
 # Story: Org Node Hierarchy
 
-Status: pending
+Status: completed
 Epic: [001-auth-service-v2](../epics/001-auth-service-v2.md)
 Priority: P0
 
@@ -10,12 +10,12 @@ Implement org node tree with closure table for efficient subtree queries.
 
 ## Tasks
 
-- [ ] Create `models/org_node.rs` - OrgNode struct
-- [ ] Create `models/org_node_path.rs` - Closure table
-- [ ] Implement closure table maintenance (insert/delete)
-- [ ] Create org node repository
-- [ ] Add tree query helpers (ancestors, descendants, subtree)
-- [ ] Create org node API endpoints
+- [x] Create `models/org_node.rs` - OrgNode struct
+- [x] Create `models/org_node_path.rs` - Closure table
+- [x] Implement closure table maintenance (insert/delete)
+- [x] Create org node repository
+- [x] Add tree query helpers (ancestors, descendants, subtree)
+- [x] Create org node API endpoints
 
 ## Closure Table Operations
 
@@ -70,8 +70,8 @@ Response: Nested tree structure
 
 ## Acceptance Criteria
 
-- [ ] Nodes created with closure table entries
-- [ ] Subtree queries work efficiently
-- [ ] Ancestor queries work
-- [ ] Tree endpoint returns full hierarchy
-- [ ] Deactivate marks node inactive (no delete)
+- [x] Nodes created with closure table entries
+- [x] Subtree queries work efficiently
+- [x] Ancestor queries work
+- [x] Tree endpoint returns full hierarchy
+- [x] Deactivate marks node inactive (no delete)

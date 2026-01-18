@@ -1,6 +1,6 @@
 # Story: Authorization Evaluate Endpoint
 
-Status: pending
+Status: completed
 Epic: [001-auth-service-v2](../epics/001-auth-service-v2.md)
 Priority: P0
 
@@ -10,11 +10,11 @@ Implement `/authz/evaluate` endpoint for BFFs to check authorization decisions.
 
 ## Tasks
 
-- [ ] Create `handlers/authz/evaluate.rs`
-- [ ] Implement capability matching logic
-- [ ] Implement org scope checking (own, subtree)
-- [ ] Implement resource attribute matching
-- [ ] Add service authentication requirement
+- [x] Create `handlers/authz/evaluate.rs`
+- [x] Implement capability matching logic
+- [x] Implement org scope checking (own, subtree)
+- [x] Implement resource attribute matching
+- [x] Add service authentication requirement
 
 ## API Endpoint
 
@@ -76,8 +76,8 @@ Response:
 
 ## Acceptance Criteria
 
-- [ ] Service-only endpoint (rejects user JWTs)
-- [ ] Capability matching works
-- [ ] :own scope checks owner_user_id
-- [ ] :subtree scope uses closure table
-- [ ] Returns structured allow/deny with reason
+- [x] Service-only endpoint (rejects user JWTs)
+- [x] Capability matching works
+- [x] :own scope checks owner_user_id
+- [x] :subtree scope uses closure table
+- [x] Returns structured allow/deny with reason

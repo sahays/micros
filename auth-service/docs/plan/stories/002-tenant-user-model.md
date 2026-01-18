@@ -1,6 +1,6 @@
 # Story: Tenant & User Data Model
 
-Status: pending
+Status: completed
 Epic: [001-auth-service-v2](../epics/001-auth-service-v2.md)
 Priority: P0
 
@@ -10,13 +10,13 @@ Implement tenant and user models with proper identity management.
 
 ## Tasks
 
-- [ ] Create `models/tenant.rs` - Tenant struct and queries
-- [ ] Create `models/user.rs` - User struct and queries
-- [ ] Create `models/user_identity.rs` - Identity providers
-- [ ] Create tenant repository with CRUD
-- [ ] Create user repository with CRUD
-- [ ] Add tenant admin endpoints (create, get, list)
-- [ ] Add user admin endpoints (create, get, update state)
+- [x] Create `models/tenant.rs` - Tenant struct and queries
+- [x] Create `models/user.rs` - User struct and queries
+- [x] Create `models/user_identity.rs` - Identity providers
+- [x] Create tenant repository with CRUD
+- [x] Create user repository with CRUD
+- [x] Add tenant admin endpoints (create, get, list)
+- [x] Add user admin endpoints (create, get, update state)
 
 ## Models
 
@@ -69,8 +69,8 @@ PATCH  /admin/users/{id}/state  - Update user state
 
 ## Acceptance Criteria
 
-- [ ] Tenant CRUD working
-- [ ] User CRUD working with tenant scoping
-- [ ] Email uniqueness per tenant enforced
-- [ ] Phone uniqueness per tenant enforced
-- [ ] User identity linking works
+- [x] Tenant CRUD working
+- [x] User CRUD working with tenant scoping
+- [x] Email uniqueness per tenant enforced
+- [x] Phone uniqueness per tenant enforced
+- [x] User identity linking works

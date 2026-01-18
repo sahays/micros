@@ -11,7 +11,7 @@ pub struct AuthConfig {
     pub service_name: String,
     pub service_version: String,
     pub log_level: String,
-    pub mongodb: MongoConfig,
+    pub database: DatabaseConfig,
     pub redis: RedisConfig,
     pub jwt: JwtConfig,
     pub google: GoogleOAuthConfig,
@@ -29,9 +29,10 @@ pub enum Environment {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct MongoConfig {
-    pub uri: String,
-    pub database: String,
+pub struct DatabaseConfig {
+    pub url: String,
+    pub max_connections: u32,
+    pub min_connections: u32,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -115,9 +116,14 @@ impl AuthConfig {
             service_name: get_env("SERVICE_NAME", Some("auth-service"), is_prod)?,
             service_version: get_env("SERVICE_VERSION", Some(env!("CARGO_PKG_VERSION")), is_prod)?,
             log_level: get_env("LOG_LEVEL", Some("info"), is_prod)?,
-            mongodb: MongoConfig {
-                uri: get_env("MONGODB_URI", None, is_prod)?,
-                database: get_env("MONGODB_DATABASE", None, is_prod)?,
+            database: DatabaseConfig {
+                url: get_env("DATABASE_URL", None, is_prod)?,
+                max_connections: get_env("DATABASE_MAX_CONNECTIONS", Some("10"), is_prod)?
+                    .parse()
+                    .unwrap_or(10),
+                min_connections: get_env("DATABASE_MIN_CONNECTIONS", Some("2"), is_prod)?
+                    .parse()
+                    .unwrap_or(2),
             },
             redis: RedisConfig {
                 url: get_env("REDIS_URL", None, is_prod)?,
