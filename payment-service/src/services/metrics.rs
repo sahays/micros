@@ -8,7 +8,7 @@ pub fn init_metrics() {
     let handle = builder
         .install_recorder()
         .expect("failed to install Prometheus recorder");
-    
+
     if let Err(_) = METRICS_HANDLE.set(handle) {
         panic!("failed to set metrics handle: already initialized");
     }

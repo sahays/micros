@@ -175,7 +175,13 @@ pub async fn google_callback(
         }
         None => {
             // Create new user (social login users are auto-verified)
+            // TODO(Story #277): Extract app_id and org_id from tenant context
+            let app_id = "00000000-0000-0000-0000-000000000000".to_string();
+            let org_id = "00000000-0000-0000-0000-000000000000".to_string();
+
             let mut new_user = crate::models::User::new(
+                app_id,
+                org_id,
                 user_info.email.clone(),
                 "SOCIAL_AUTH".to_string(),
                 user_info.name,
@@ -196,9 +202,11 @@ pub async fn google_callback(
         }
     };
 
-    // 6. Generate tokens
+    // 6. Generate tokens with tenant context
     let (access_token, refresh_token_str, refresh_token_id) =
-        state.jwt.generate_token_pair(&user.id, &user.email)?;
+        state
+            .jwt
+            .generate_token_pair(&user.id, &user.app_id, &user.org_id, &user.email)?;
 
     // Store refresh token
     use crate::models::RefreshToken;

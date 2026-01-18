@@ -8,6 +8,15 @@ pub struct User {
     #[serde(rename = "_id")]
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub id: String,
+
+    /// Application ID (maps to Client.client_id) - identifies which app this user belongs to
+    #[schema(example = "770e8400-e29b-41d4-a716-446655440002")]
+    pub app_id: String,
+
+    /// Organization ID - identifies which org within the app this user belongs to
+    #[schema(example = "660e8400-e29b-41d4-a716-446655440001")]
+    pub org_id: String,
+
     #[schema(example = "user@example.com")]
     pub email: String,
     #[schema(read_only)]
@@ -27,16 +36,26 @@ pub struct User {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[allow(dead_code)]
 pub struct NewUser {
+    pub app_id: String,
+    pub org_id: String,
     pub email: String,
     pub password_hash: String,
     pub name: Option<String>,
 }
 
 impl User {
-    pub fn new(email: String, password_hash: String, name: Option<String>) -> Self {
+    pub fn new(
+        app_id: String,
+        org_id: String,
+        email: String,
+        password_hash: String,
+        name: Option<String>,
+    ) -> Self {
         let now = Utc::now();
         Self {
             id: Uuid::new_v4().to_string(),
+            app_id,
+            org_id,
             email,
             password_hash,
             name,
@@ -50,6 +69,8 @@ impl User {
     pub fn sanitized(&self) -> SanitizedUser {
         SanitizedUser {
             id: self.id.clone(),
+            app_id: self.app_id.clone(),
+            org_id: self.org_id.clone(),
             email: self.email.clone(),
             name: self.name.clone(),
             verified: self.verified,
@@ -65,6 +86,10 @@ impl User {
 pub struct SanitizedUser {
     #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
     pub id: String,
+    #[schema(example = "770e8400-e29b-41d4-a716-446655440002")]
+    pub app_id: String,
+    #[schema(example = "660e8400-e29b-41d4-a716-446655440001")]
+    pub org_id: String,
     #[schema(example = "user@example.com")]
     pub email: String,
     #[schema(example = "John Doe")]

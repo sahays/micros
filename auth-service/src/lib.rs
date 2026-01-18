@@ -2,6 +2,7 @@ pub mod config;
 pub mod dtos;
 pub mod handlers;
 pub mod middleware;
+pub mod migrations;
 pub mod models;
 pub mod services;
 pub mod utils;
@@ -130,6 +131,7 @@ pub struct AppState {
     pub jwt: JwtService,
     pub auth_service: crate::services::AuthService,
     pub admin_service: crate::services::admin::AdminService,
+    pub security_audit: crate::services::SecurityAuditService,
     pub redis: Arc<dyn crate::services::TokenBlacklist>,
     pub login_rate_limiter: service_core::middleware::rate_limit::IpRateLimiter,
     pub register_rate_limiter: service_core::middleware::rate_limit::IpRateLimiter,
@@ -225,6 +227,31 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
             middleware::admin_auth_middleware,
         ));
 
+    // Organization admin routes (protected by app token auth)
+    let org_admin_routes = Router::new()
+        .route("/admin/orgs", post(handlers::admin::create_organization))
+        .route("/admin/orgs", get(handlers::admin::list_organizations))
+        .route(
+            "/admin/orgs/:org_id",
+            get(handlers::admin::get_organization),
+        )
+        .route(
+            "/admin/orgs/:org_id",
+            service_core::axum::routing::put(handlers::admin::update_organization),
+        )
+        .route(
+            "/admin/orgs/:org_id",
+            service_core::axum::routing::delete(handlers::admin::delete_organization),
+        )
+        .route(
+            "/admin/orgs/:org_id/auth-policy",
+            service_core::axum::routing::put(handlers::admin::update_auth_policy),
+        )
+        .layer(from_fn_with_state(
+            state.clone(),
+            middleware::app_auth_middleware,
+        ));
+
     // Create login route with rate limiting
     let login_limiter = state.login_rate_limiter.clone();
     let login_route = Router::new()
@@ -304,6 +331,7 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
         .merge(register_route)
         .merge(reset_request_route)
         .merge(admin_routes)
+        .merge(org_admin_routes)
         .route(
             "/auth/password-reset/confirm",
             post(handlers::auth::confirm_password_reset),

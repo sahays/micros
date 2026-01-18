@@ -36,9 +36,14 @@ pub async fn register(
     let ip_address = addr.to_string();
     let base_url = format!("http://localhost:{}", state.config.common.port);
 
+    // TODO(Story #277): Extract app_id and org_id from tenant context middleware
+    // For now, use placeholder values for backward compatibility
+    let app_id = "00000000-0000-0000-0000-000000000000".to_string();
+    let org_id = "00000000-0000-0000-0000-000000000000".to_string();
+
     let res = state
         .auth_service
-        .register(req, ip_address, base_url)
+        .register(req, app_id, org_id, ip_address, base_url)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, ip = %addr.to_string(), "Failed to register user");

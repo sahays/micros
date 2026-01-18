@@ -16,6 +16,7 @@ use validator::Validate;
 use crate::{
     middleware::AuthUser,
     models::{AuditLog, VerificationToken},
+    services::PolicyService,
     utils::{hash_password, verify_password, Password, PasswordHashString},
     AppState,
 };
@@ -258,11 +259,20 @@ pub async fn change_password(
     )
     .map_err(|_| AppError::AuthError(anyhow::anyhow!("Incorrect current password")))?;
 
-    // 4. Hash new password
+    // 4. Validate new password against org's auth policy
+    let org = state
+        .db
+        .find_organization_in_app(&user.app_id, &user.org_id)
+        .await?
+        .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Organization not found")))?;
+
+    PolicyService::validate_password(&req.new_password, &org.auth_policy)
+        .map_err(|e| AppError::BadRequest(anyhow::anyhow!("{}", e)))?;
+
+    // 5. Hash new password
     let new_password_hash = hash_password(&Password::new(req.new_password))?;
 
-    // 5. Update password and invalidate refresh tokens
-    // Update password
+    // 6. Update password and invalidate refresh tokens
     state
         .db
         .users()

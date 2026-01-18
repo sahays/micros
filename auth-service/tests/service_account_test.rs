@@ -2,7 +2,9 @@ use auth_service::{
     build_router,
     config::AuthConfig,
     dtos::admin::CreateServiceAccountResponse,
-    services::{EmailService, JwtService, MockBlacklist, MongoDb, TokenBlacklist},
+    services::{
+        EmailService, JwtService, MockBlacklist, MongoDb, SecurityAuditService, TokenBlacklist,
+    },
     AppState,
 };
 use axum::{
@@ -56,6 +58,7 @@ async fn test_create_service_account_flow() {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     let state = AppState {
         config: config.clone(),
@@ -71,6 +74,7 @@ async fn test_create_service_account_flow() {
         app_token_rate_limiter: create_ip_rate_limiter(100, 60),
         client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: create_ip_rate_limiter(100, 60),
+        security_audit,
     };
 
     let app = build_router(state).await.expect("Failed to build router");
@@ -166,6 +170,7 @@ async fn test_service_auth_middleware() {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     let state = AppState {
         config: config.clone(),
@@ -181,6 +186,7 @@ async fn test_service_auth_middleware() {
         app_token_rate_limiter: create_ip_rate_limiter(100, 60),
         client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: create_ip_rate_limiter(100, 60),
+        security_audit,
     };
 
     // Create a router with a protected route
@@ -323,6 +329,7 @@ async fn test_scope_validation() {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     let state = AppState {
         config: config.clone(),
@@ -338,6 +345,7 @@ async fn test_scope_validation() {
         app_token_rate_limiter: create_ip_rate_limiter(100, 60),
         client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: create_ip_rate_limiter(100, 60),
+        security_audit,
     };
 
     use auth_service::middleware::{require_scopes, service_auth_middleware, ServiceContext};
@@ -490,6 +498,7 @@ async fn test_service_rotation_revocation() {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     let state = AppState {
         config: config.clone(),
@@ -505,6 +514,7 @@ async fn test_service_rotation_revocation() {
         app_token_rate_limiter: create_ip_rate_limiter(100, 60),
         client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: create_ip_rate_limiter(100, 60),
+        security_audit,
     };
 
     let app = build_router(state.clone())

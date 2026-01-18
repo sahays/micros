@@ -1,8 +1,10 @@
 use auth_service::{
     build_router,
     config::AuthConfig,
-    models::{RefreshToken, User},
-    services::{EmailService, JwtService, MockBlacklist, MongoDb, TokenBlacklist},
+    models::{Organization, RefreshToken, User},
+    services::{
+        EmailService, JwtService, MockBlacklist, MongoDb, SecurityAuditService, TokenBlacklist,
+    },
     AppState,
 };
 use axum::{
@@ -65,6 +67,7 @@ async fn test_refresh_token_flow() {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     let state = AppState {
         config: config.clone(),
@@ -73,6 +76,7 @@ async fn test_refresh_token_flow() {
         jwt: jwt.clone(),
         auth_service,
         admin_service,
+        security_audit,
         redis: redis.clone(),
         login_rate_limiter: login_limiter,
         register_rate_limiter: register_limiter,
@@ -82,20 +86,31 @@ async fn test_refresh_token_flow() {
         ip_rate_limiter: ip_limiter,
     };
 
-    // 3. Create Test User
+    // 3. Create Organization (required for refresh flow org check)
+    let app_id = "test-app-id".to_string();
+    let org_id = "test-org-id".to_string();
+    let org = Organization::new(app_id.clone(), "Test Org".to_string());
+    let org = Organization {
+        org_id: org_id.clone(),
+        ..org
+    };
+    db.organizations().insert_one(&org, None).await.unwrap();
+
+    // 4. Create Test User
+    let user = User::new(
+        app_id.clone(),
+        org_id.clone(),
+        "test_refresh@example.com".to_string(),
+        "hash".to_string(),
+        Some("Test User".to_string()),
+    );
     let user = User {
-        id: Uuid::new_v4().to_string(),
-        email: "test_refresh@example.com".to_string(),
-        password_hash: "hash".to_string(),
-        name: Some("Test User".to_string()),
         verified: true,
-        google_id: None,
-        created_at: chrono::Utc::now(),
-        updated_at: chrono::Utc::now(),
+        ..user
     };
     db.users().insert_one(&user, None).await.unwrap();
 
-    // 4. Generate Initial Refresh Token
+    // 5. Generate Initial Refresh Token
     let refresh_token_id = Uuid::new_v4().to_string();
     let refresh_token_str = jwt
         .generate_refresh_token(&user.id, &refresh_token_id)
@@ -108,10 +123,10 @@ async fn test_refresh_token_flow() {
         .await
         .unwrap();
 
-    // 5. Build Router
+    // 6. Build Router
     let app = build_router(state).await.expect("Failed to build router");
 
-    // 6. Test Refresh
+    // 7. Test Refresh
     let response = app
         .clone()
         .oneshot(

@@ -2,7 +2,9 @@ use auth_service::{
     build_router,
     config::AuthConfig,
     models::{Client, ClientType},
-    services::{EmailService, JwtService, MockBlacklist, MockEmailService, MongoDb},
+    services::{
+        EmailService, JwtService, MockBlacklist, MockEmailService, MongoDb, SecurityAuditService,
+    },
     utils::{hash_password, Password},
     AppState,
 };
@@ -59,6 +61,7 @@ async fn test_app_token_success() {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     let state = AppState {
         config: config.clone(),
@@ -74,6 +77,7 @@ async fn test_app_token_success() {
         app_token_rate_limiter: ip_limiter.clone(),
         client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: ip_limiter,
+        security_audit,
     };
 
     // 3. Create Test Client
@@ -162,6 +166,7 @@ async fn test_app_token_invalid_secret() {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     let state = AppState {
         config: config.clone(),
@@ -177,6 +182,7 @@ async fn test_app_token_invalid_secret() {
         app_token_rate_limiter: ip_limiter.clone(),
         client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: ip_limiter,
+        security_audit,
     };
 
     // 3. Create Test Client
@@ -245,6 +251,7 @@ async fn test_app_token_invalid_grant_type() {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     let state = AppState {
         config: config.clone(),
@@ -260,6 +267,7 @@ async fn test_app_token_invalid_grant_type() {
         app_token_rate_limiter: ip_limiter.clone(),
         client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: ip_limiter,
+        security_audit,
     };
 
     // 4. Build Router

@@ -43,6 +43,11 @@ image = "0.23.14"
 base64 = { workspace = true }
 urlencoding = "2.1"
 
+# Razorpay signature verification
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+
 [dev-dependencies]
 tokio-test = "0.4"
 wiremock = "0.5"

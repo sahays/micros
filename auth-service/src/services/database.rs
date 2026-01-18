@@ -4,7 +4,10 @@ use mongodb::{
 use service_core::error::AppError;
 use std::time::Duration;
 
-use crate::models::{AuditLog, Client, RefreshToken, ServiceAccount, User, VerificationToken};
+use super::security_audit::SecurityAuditLog;
+use crate::models::{
+    AuditLog, Client, Organization, RefreshToken, ServiceAccount, User, VerificationToken,
+};
 
 #[derive(Clone)]
 pub struct MongoDb {
@@ -46,6 +49,46 @@ impl MongoDb {
             AppError::from(e)
         })?;
         tracing::info!("Created unique index on users.email");
+
+        // Tenant-scoped compound index on (app_id, org_id, email)
+        // This will become the primary unique constraint after migration
+        // For now, it's non-unique to allow migration of existing users
+        let tenant_email_index = IndexModel::builder()
+            .keys(doc! { "app_id": 1, "org_id": 1, "email": 1 })
+            .options(
+                IndexOptions::builder()
+                    .name("tenant_email_lookup".to_string())
+                    .build(),
+            )
+            .build();
+
+        users
+            .create_index(tenant_email_index, None)
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to create tenant_email index on users collection: {}",
+                    e
+                );
+                AppError::from(e)
+            })?;
+        tracing::info!("Created index on users.(app_id, org_id, email)");
+
+        // Index on (app_id, org_id) for listing users by tenant
+        let tenant_index = IndexModel::builder()
+            .keys(doc! { "app_id": 1, "org_id": 1 })
+            .options(
+                IndexOptions::builder()
+                    .name("tenant_lookup".to_string())
+                    .build(),
+            )
+            .build();
+
+        users.create_index(tenant_index, None).await.map_err(|e| {
+            tracing::error!("Failed to create tenant index on users collection: {}", e);
+            AppError::from(e)
+        })?;
+        tracing::info!("Created index on users.(app_id, org_id)");
 
         // Verification tokens collection indexes
         let tokens = self.verification_tokens();
@@ -298,6 +341,75 @@ impl MongoDb {
             })?;
         tracing::info!("Created indexes on audit_logs collection");
 
+        // Organizations collection indexes
+        let organizations = self.organizations();
+
+        // Unique index on org_id
+        let org_id_index = IndexModel::builder()
+            .keys(doc! { "org_id": 1 })
+            .options(
+                IndexOptions::builder()
+                    .unique(true)
+                    .name("org_id_unique".to_string())
+                    .build(),
+            )
+            .build();
+
+        organizations
+            .create_index(org_id_index, None)
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to create org_id index on organizations collection: {}",
+                    e
+                );
+                AppError::from(e)
+            })?;
+
+        // Unique compound index on (app_id, name) - org names unique within an app
+        let app_name_index = IndexModel::builder()
+            .keys(doc! { "app_id": 1, "name": 1 })
+            .options(
+                IndexOptions::builder()
+                    .unique(true)
+                    .name("app_id_name_unique".to_string())
+                    .build(),
+            )
+            .build();
+
+        organizations
+            .create_index(app_name_index, None)
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to create app_id_name index on organizations collection: {}",
+                    e
+                );
+                AppError::from(e)
+            })?;
+
+        // Index on app_id for listing orgs by app
+        let app_id_index = IndexModel::builder()
+            .keys(doc! { "app_id": 1 })
+            .options(
+                IndexOptions::builder()
+                    .name("app_id_lookup".to_string())
+                    .build(),
+            )
+            .build();
+
+        organizations
+            .create_index(app_id_index, None)
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to create app_id index on organizations collection: {}",
+                    e
+                );
+                AppError::from(e)
+            })?;
+        tracing::info!("Created indexes on organizations collection");
+
         Ok(())
     }
 
@@ -335,6 +447,14 @@ impl MongoDb {
 
     pub fn audit_logs(&self) -> Collection<AuditLog> {
         self.db.collection("audit_logs")
+    }
+
+    pub fn organizations(&self) -> Collection<Organization> {
+        self.db.collection("organizations")
+    }
+
+    pub fn security_audit_logs(&self) -> Collection<SecurityAuditLog> {
+        self.db.collection("security_audit_logs")
     }
 
     pub fn client(&self) -> &MongoClient {
@@ -375,5 +495,77 @@ impl_find_by!(
     VerificationToken, "verification_tokens", find_token_by_token, "token", str;
     RefreshToken, "refresh_tokens", find_refresh_token_by_id, "_id", str;
     Client, "clients", find_client_by_id, "client_id", str;
-    ServiceAccount, "service_accounts", find_service_account_by_id, "service_id", str
+    ServiceAccount, "service_accounts", find_service_account_by_id, "service_id", str;
+    Organization, "organizations", find_organization_by_id, "org_id", str
 );
+
+// Tenant-scoped query methods
+impl MongoDb {
+    /// Find a user by email within a specific tenant (app_id + org_id).
+    pub async fn find_user_by_email_in_tenant(
+        &self,
+        app_id: &str,
+        org_id: &str,
+        email: &str,
+    ) -> Result<Option<User>, mongodb::error::Error> {
+        self.users()
+            .find_one(
+                doc! {
+                    "app_id": app_id,
+                    "org_id": org_id,
+                    "email": email
+                },
+                None,
+            )
+            .await
+    }
+
+    /// Find a user by ID within a specific tenant.
+    pub async fn find_user_by_id_in_tenant(
+        &self,
+        app_id: &str,
+        org_id: &str,
+        user_id: &str,
+    ) -> Result<Option<User>, mongodb::error::Error> {
+        self.users()
+            .find_one(
+                doc! {
+                    "app_id": app_id,
+                    "org_id": org_id,
+                    "_id": user_id
+                },
+                None,
+            )
+            .await
+    }
+
+    /// Find all organizations for an app.
+    pub async fn find_organizations_by_app(
+        &self,
+        app_id: &str,
+    ) -> Result<Vec<Organization>, mongodb::error::Error> {
+        use futures::TryStreamExt;
+        self.organizations()
+            .find(doc! { "app_id": app_id, "enabled": true }, None)
+            .await?
+            .try_collect()
+            .await
+    }
+
+    /// Find organization by app_id and org_id.
+    pub async fn find_organization_in_app(
+        &self,
+        app_id: &str,
+        org_id: &str,
+    ) -> Result<Option<Organization>, mongodb::error::Error> {
+        self.organizations()
+            .find_one(
+                doc! {
+                    "app_id": app_id,
+                    "org_id": org_id
+                },
+                None,
+            )
+            .await
+    }
+}

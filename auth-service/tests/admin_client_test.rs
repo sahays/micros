@@ -3,7 +3,7 @@ use auth_service::{
     config::AuthConfig,
     dtos::admin::CreateClientResponse,
     models::ClientType,
-    services::{EmailService, JwtService, MockBlacklist, MongoDb},
+    services::{EmailService, JwtService, MockBlacklist, MongoDb, SecurityAuditService},
     AppState,
 };
 use axum::{
@@ -66,6 +66,7 @@ async fn test_create_client_flow() {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     let state = AppState {
         config: config.clone(),
@@ -81,6 +82,7 @@ async fn test_create_client_flow() {
         app_token_rate_limiter: ip_limiter.clone(),
         client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: ip_limiter,
+        security_audit,
     };
 
     let app = build_router(state).await.expect("Failed to build router");

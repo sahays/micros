@@ -1,6 +1,8 @@
 use service_core::error::AppError;
 use thiserror::Error;
 
+use super::PolicyError;
+
 #[derive(Error, Debug)]
 pub enum ServiceError {
     #[error("Database error: {0}")]
@@ -33,6 +35,18 @@ pub enum ServiceError {
     #[error("User not found")]
     UserNotFound,
 
+    #[error("Organization not found")]
+    OrganizationNotFound,
+
+    #[error("Organization is disabled")]
+    OrganizationDisabled,
+
+    #[error("Password policy violation: {0}")]
+    PasswordPolicyViolation(String),
+
+    #[error("Account locked: {0}")]
+    AccountLocked(String),
+
     #[error("Email error: {0}")]
     EmailError(String),
 
@@ -59,8 +73,24 @@ impl From<ServiceError> for AppError {
             ServiceError::InvalidToken => AppError::BadRequest(anyhow::anyhow!("Invalid token")),
             ServiceError::TokenExpired => AppError::BadRequest(anyhow::anyhow!("Token expired")),
             ServiceError::UserNotFound => AppError::NotFound(anyhow::anyhow!("User not found")),
+            ServiceError::OrganizationNotFound => {
+                AppError::NotFound(anyhow::anyhow!("Organization not found"))
+            }
+            ServiceError::OrganizationDisabled => {
+                AppError::BadRequest(anyhow::anyhow!("Organization is disabled"))
+            }
+            ServiceError::PasswordPolicyViolation(msg) => {
+                AppError::BadRequest(anyhow::anyhow!(msg))
+            }
+            ServiceError::AccountLocked(msg) => AppError::BadRequest(anyhow::anyhow!(msg)),
             ServiceError::EmailError(e) => AppError::EmailError(e),
             ServiceError::ValidationError(e) => AppError::BadRequest(anyhow::anyhow!(e)),
         }
+    }
+}
+
+impl From<PolicyError> for ServiceError {
+    fn from(err: PolicyError) -> Self {
+        ServiceError::PasswordPolicyViolation(err.to_string())
     }
 }

@@ -1,7 +1,9 @@
 use auth_service::{
     build_router,
     config::AuthConfig,
-    services::{EmailService, JwtService, MockBlacklist, MongoDb, TokenBlacklist},
+    services::{
+        EmailService, JwtService, MockBlacklist, MongoDb, SecurityAuditService, TokenBlacklist,
+    },
     AppState,
 };
 use axum::{
@@ -53,6 +55,7 @@ async fn test_introspection_flow() {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     let state = AppState {
         config: config.clone(),
@@ -61,6 +64,7 @@ async fn test_introspection_flow() {
         jwt: jwt.clone(),
         auth_service,
         admin_service,
+        security_audit,
         redis: redis.clone(),
         login_rate_limiter: login_limiter,
         register_rate_limiter: register_limiter,
@@ -75,8 +79,12 @@ async fn test_introspection_flow() {
 
     // 3. Generate Valid Token
     let user_id = "user_123";
+    let app_id = "test-app-id";
+    let org_id = "test-org-id";
     let user_email = "test@example.com";
-    let token = jwt.generate_access_token(user_id, user_email).unwrap();
+    let token = jwt
+        .generate_access_token(user_id, app_id, org_id, user_email)
+        .unwrap();
 
     // 4. Test Active Token
     let response = app

@@ -1,7 +1,7 @@
 use auth_service::{
     config::AuthConfig,
     models::{Client, ClientType},
-    services::{EmailService, JwtService, MockBlacklist, MongoDb},
+    services::{EmailService, JwtService, MockBlacklist, MongoDb, SecurityAuditService},
     utils::{hash_password, signature::generate_signature, Password},
     AppState,
 };
@@ -60,6 +60,7 @@ async fn test_signature_middleware() {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     let state = AppState {
         config: config.clone(),
@@ -75,6 +76,7 @@ async fn test_signature_middleware() {
         app_token_rate_limiter: ip_limiter.clone(),
         client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: ip_limiter,
+        security_audit,
     };
 
     // 2. Build App

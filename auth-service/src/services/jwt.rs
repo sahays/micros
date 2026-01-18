@@ -41,6 +41,10 @@ pub struct Jwks {
 pub struct AccessTokenClaims {
     /// Subject (user ID)
     pub sub: String,
+    /// Application ID (maps to Client.client_id)
+    pub app_id: String,
+    /// Organization ID within the app
+    pub org_id: String,
     /// Email
     pub email: String,
     /// Expiration time (Unix timestamp)
@@ -184,10 +188,12 @@ impl JwtService {
         })
     }
 
-    /// Generate an access token for a user
+    /// Generate an access token for a user with tenant context
     pub fn generate_access_token(
         &self,
         user_id: &str,
+        app_id: &str,
+        org_id: &str,
         email: &str,
     ) -> Result<String, anyhow::Error> {
         let now = Utc::now();
@@ -195,6 +201,8 @@ impl JwtService {
 
         let claims = AccessTokenClaims {
             sub: user_id.to_string(),
+            app_id: app_id.to_string(),
+            org_id: org_id.to_string(),
             email: email.to_string(),
             exp: exp.timestamp(),
             iat: now.timestamp(),
@@ -233,13 +241,15 @@ impl JwtService {
         Ok(token)
     }
 
-    /// Generate both access and refresh tokens
+    /// Generate both access and refresh tokens with tenant context
     pub fn generate_token_pair(
         &self,
         user_id: &str,
+        app_id: &str,
+        org_id: &str,
         email: &str,
     ) -> Result<(String, String, String), anyhow::Error> {
-        let access_token = self.generate_access_token(user_id, email)?;
+        let access_token = self.generate_access_token(user_id, app_id, org_id, email)?;
         let refresh_token_id = Uuid::new_v4().to_string();
         let refresh_token = self.generate_refresh_token(user_id, &refresh_token_id)?;
 
@@ -415,11 +425,14 @@ HQIDAQAB
 
         let service = JwtService::new(&config)?;
 
-        let token = service.generate_access_token("user_123", "test@example.com")?;
+        let token =
+            service.generate_access_token("user_123", "app_456", "org_789", "test@example.com")?;
         assert!(!token.is_empty());
 
         let claims = service.validate_access_token(&token)?;
         assert_eq!(claims.sub, "user_123");
+        assert_eq!(claims.app_id, "app_456");
+        assert_eq!(claims.org_id, "org_789");
         assert_eq!(claims.email, "test@example.com");
 
         Ok(())
@@ -465,7 +478,7 @@ HQIDAQAB
         let service = JwtService::new(&config)?;
 
         let (access_token, refresh_token, refresh_token_id) =
-            service.generate_token_pair("user_123", "test@example.com")?;
+            service.generate_token_pair("user_123", "app_456", "org_789", "test@example.com")?;
 
         assert!(!access_token.is_empty());
         assert!(!refresh_token.is_empty());
@@ -473,6 +486,8 @@ HQIDAQAB
 
         let access_claims = service.validate_access_token(&access_token)?;
         assert_eq!(access_claims.sub, "user_123");
+        assert_eq!(access_claims.app_id, "app_456");
+        assert_eq!(access_claims.org_id, "org_789");
 
         let refresh_claims = service.validate_refresh_token(&refresh_token)?;
         assert_eq!(refresh_claims.jti, refresh_token_id);

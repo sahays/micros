@@ -1,8 +1,8 @@
 use auth_service::{
     build_router,
     config::AuthConfig,
-    models::{SanitizedUser, User},
-    services::{EmailService, JwtService, MockBlacklist, MongoDb},
+    models::{Organization, SanitizedUser, User},
+    services::{EmailService, JwtService, MockBlacklist, MongoDb, SecurityAuditService},
     utils::{hash_password, Password},
     AppState,
 };
@@ -55,6 +55,7 @@ async fn test_user_profile_flow() {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     let state = AppState {
         config: config.clone(),
@@ -63,6 +64,7 @@ async fn test_user_profile_flow() {
         jwt: jwt.clone(),
         auth_service,
         admin_service,
+        security_audit,
         redis: redis.clone(),
         login_rate_limiter: login_limiter,
         register_rate_limiter: register_limiter,
@@ -72,27 +74,42 @@ async fn test_user_profile_flow() {
         ip_rate_limiter: ip_limiter,
     };
 
-    // 2. Create User
-    let password = "current_password_123";
+    // 2. Create Organization (required for policy validation)
+    let app_id = "test-app-id".to_string();
+    let org_id = "test-org-id".to_string();
+    let org = Organization::new(app_id.clone(), "Test Org".to_string());
+    // Need to set org_id explicitly for the test
+    let org = Organization {
+        org_id: org_id.clone(),
+        ..org
+    };
+    db.organizations().insert_one(&org, None).await.unwrap();
+
+    // 3. Create User
+    let password = "CurrentPassword123";
     let password_hash = hash_password(&Password::new(password.to_string())).unwrap();
+    let user = User::new(
+        app_id.clone(),
+        org_id.clone(),
+        "user_test@example.com".to_string(),
+        password_hash.into_string(),
+        Some("Initial Name".to_string()),
+    );
+    // Mark user as verified
     let user = User {
-        id: Uuid::new_v4().to_string(),
-        email: "user_test@example.com".to_string(),
-        password_hash: password_hash.into_string(),
-        name: Some("Initial Name".to_string()),
         verified: true,
-        google_id: None,
-        created_at: chrono::Utc::now(),
-        updated_at: chrono::Utc::now(),
+        ..user
     };
     db.users().insert_one(&user, None).await.unwrap();
 
-    let token = jwt.generate_access_token(&user.id, &user.email).unwrap();
+    let token = jwt
+        .generate_access_token(&user.id, &user.app_id, &user.org_id, &user.email)
+        .unwrap();
 
-    // 3. Build Router
+    // 4. Build Router
     let app = build_router(state).await.expect("Failed to build router");
 
-    // 4. Test GET /users/me
+    // 5. Test GET /users/me
     let response = app
         .clone()
         .oneshot(
@@ -141,7 +158,7 @@ async fn test_user_profile_flow() {
     assert_eq!(user_info.name, Some(new_name.to_string()));
 
     // 6. Test POST /users/me/password
-    let new_password = "new_password_123";
+    let new_password = "NewPassword123";
     let response = app
         .oneshot(
             Request::builder()

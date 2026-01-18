@@ -1,7 +1,9 @@
 use auth_service::{
     config::AuthConfig,
     middleware::auth_middleware,
-    services::{EmailService, JwtService, MockBlacklist, MongoDb, TokenBlacklist},
+    services::{
+        EmailService, JwtService, MockBlacklist, MongoDb, SecurityAuditService, TokenBlacklist,
+    },
     AppState,
 };
 use axum::{
@@ -56,6 +58,7 @@ async fn test_auth_middleware() {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     let state = AppState {
         config: config.clone(),
@@ -64,6 +67,7 @@ async fn test_auth_middleware() {
         jwt: jwt.clone(),
         auth_service,
         admin_service,
+        security_audit,
         redis: redis.clone(),
         login_rate_limiter: login_limiter,
         register_rate_limiter: register_limiter,
@@ -110,8 +114,12 @@ async fn test_auth_middleware() {
 
     // 5. Test: Valid Token
     let user_id = "user_123";
+    let app_id = "test-app-id";
+    let org_id = "test-org-id";
     let email = "test@example.com";
-    let token = jwt.generate_access_token(user_id, email).unwrap();
+    let token = jwt
+        .generate_access_token(user_id, app_id, org_id, email)
+        .unwrap();
 
     let response = app
         .clone()
@@ -129,7 +137,9 @@ async fn test_auth_middleware() {
 
     // 6. Test: Blacklisted Token
     // Generate a new token
-    let blacklisted_token = jwt.generate_access_token(user_id, email).unwrap();
+    let blacklisted_token = jwt
+        .generate_access_token(user_id, app_id, org_id, email)
+        .unwrap();
     // Parse it to get JTI (we need to peek inside or just use the generated jti if accessible)
     // Since we can't easily peek inside without jwt service methods exposed for it or manually decoding,
     // let's rely on validation parsing it.

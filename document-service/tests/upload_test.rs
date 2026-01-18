@@ -5,6 +5,11 @@ use mongodb::bson::doc;
 use reqwest::multipart;
 use uuid::Uuid;
 
+// Test constants for tenant context
+const TEST_APP_ID: &str = "test-app-id";
+const TEST_ORG_ID: &str = "test-org-id";
+const TEST_USER_ID: &str = "test_user_123";
+
 #[tokio::test]
 async fn upload_document_works() {
     // 1. Setup
@@ -37,7 +42,9 @@ async fn upload_document_works() {
 
     let response = client
         .post(format!("http://127.0.0.1:{}/documents", port))
-        .header("X-User-ID", "test_user_123") // User context from BFF
+        .header("X-App-ID", TEST_APP_ID)
+        .header("X-Org-ID", TEST_ORG_ID)
+        .header("X-User-ID", TEST_USER_ID) // User context from BFF
         .multipart(form)
         .send()
         .await
@@ -62,7 +69,7 @@ async fn upload_document_works() {
         .unwrap()
         .expect("Document not found in DB");
 
-    assert_eq!(stored_doc.owner_id, "test_user_123");
+    assert_eq!(stored_doc.owner_id, TEST_USER_ID);
     assert_eq!(stored_doc.original_name, "test.txt");
     assert_eq!(stored_doc.size, 100);
 

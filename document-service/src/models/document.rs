@@ -38,6 +38,11 @@ pub struct ProcessingMetadata {
 pub struct Document {
     #[serde(rename = "_id")]
     pub id: String,
+    /// Application ID (maps to registered client in auth-service)
+    pub app_id: String,
+    /// Organization ID within the application
+    pub org_id: String,
+    /// User who owns this document
     pub owner_id: String,
     pub original_name: String,
     pub mime_type: String,
@@ -56,6 +61,8 @@ pub struct Document {
 
 impl Document {
     pub fn new(
+        app_id: String,
+        org_id: String,
         owner_id: String,
         original_name: String,
         mime_type: String,
@@ -65,6 +72,8 @@ impl Document {
         let now = Utc::now();
         Self {
             id: Uuid::new_v4().to_string(),
+            app_id,
+            org_id,
             owner_id,
             original_name,
             mime_type,

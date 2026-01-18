@@ -1,7 +1,8 @@
 use auth_service::{
     build_router,
     config::AuthConfig,
-    services::{JwtService, MockBlacklist, MockEmailService, MongoDb},
+    models::Organization,
+    services::{JwtService, MockBlacklist, MockEmailService, MongoDb, SecurityAuditService},
     AppState,
 };
 use axum::{
@@ -47,6 +48,7 @@ async fn test_security_headers_and_cors() {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     let state = AppState {
         config: config.clone(),
@@ -62,6 +64,7 @@ async fn test_security_headers_and_cors() {
         app_token_rate_limiter: create_ip_rate_limiter(100, 60),
         client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: create_ip_rate_limiter(1000, 60),
+        security_audit,
     };
     let app = build_router(state).await.unwrap();
 
@@ -140,6 +143,7 @@ async fn test_input_validation_and_audit_logging() {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     let state = AppState {
         config: config.clone(),
@@ -155,7 +159,18 @@ async fn test_input_validation_and_audit_logging() {
         app_token_rate_limiter: create_ip_rate_limiter(100, 60),
         client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: create_ip_rate_limiter(1000, 60),
+        security_audit,
     };
+
+    // Create placeholder organization for registration (matches registration handler default)
+    let app_id = "00000000-0000-0000-0000-000000000000".to_string();
+    let org = Organization::new(app_id.clone(), "Default Org".to_string());
+    let org = Organization {
+        org_id: "00000000-0000-0000-0000-000000000000".to_string(),
+        ..org
+    };
+    db.organizations().insert_one(&org, None).await.unwrap();
+
     let app = build_router(state).await.unwrap();
 
     // 1. Test Password Length Validation (Short password)
@@ -180,6 +195,7 @@ async fn test_input_validation_and_audit_logging() {
     assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
 
     // 2. Test Audit Logging Persistence after registration
+    // Password must meet policy: 8+ chars, uppercase, number
     let email = "audit_test@example.com";
     let response = app
         .clone()
@@ -193,7 +209,7 @@ async fn test_input_validation_and_audit_logging() {
                     8080,
                 ))))
                 .body(Body::from(format!(
-                    r#"{{"email":"{}", "password":"longenoughpassword", "name":"Audit Test"}}"#,
+                    r#"{{"email":"{}", "password":"ValidPassword123", "name":"Audit Test"}}"#,
                     email
                 )))
                 .unwrap(),
@@ -235,6 +251,7 @@ async fn test_endpoint_specific_rate_limiting() {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     // Set tight limit for registration
     let state = AppState {
@@ -251,6 +268,7 @@ async fn test_endpoint_specific_rate_limiting() {
         app_token_rate_limiter: create_ip_rate_limiter(100, 60),
         client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: create_ip_rate_limiter(1000, 60),
+        security_audit,
     };
     let app = build_router(state).await.unwrap();
 

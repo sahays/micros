@@ -1,9 +1,9 @@
-use anyhow::Result;
-use qrcode::QrCode;
-use image::{Luma, DynamicImage};
-use base64::{Engine as _, engine::general_purpose};
-use std::io::Cursor;
 use crate::config::UpiConfig;
+use anyhow::Result;
+use base64::{engine::general_purpose, Engine as _};
+use image::{DynamicImage, Luma};
+use qrcode::QrCode;
+use std::io::Cursor;
 
 pub struct UpiService {
     config: UpiConfig,
@@ -15,12 +15,12 @@ impl UpiService {
     }
 
     pub fn generate_upi_link(
-        &self, 
-        amount: f64, 
-        description: Option<String>, 
+        &self,
+        amount: f64,
+        description: Option<String>,
         tr_id: Option<String>,
         vpa: Option<String>,
-        merchant_name: Option<String>
+        merchant_name: Option<String>,
     ) -> String {
         let description = description.unwrap_or_else(|| "Payment".to_string());
         let vpa = vpa.unwrap_or_else(|| self.config.vpa.clone());
@@ -46,11 +46,11 @@ impl UpiService {
     pub fn generate_qr_base64(&self, upi_link: &str) -> Result<String> {
         let code = QrCode::new(upi_link)?;
         let image = code.render::<Luma<u8>>().build();
-        
+
         let dynamic_image = DynamicImage::ImageLuma8(image);
         let mut buffer = Cursor::new(Vec::new());
         dynamic_image.write_to(&mut buffer, image::ImageOutputFormat::Png)?;
-        
+
         Ok(general_purpose::STANDARD.encode(buffer.get_ref()))
     }
 }

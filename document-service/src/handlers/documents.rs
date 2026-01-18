@@ -2,7 +2,7 @@ use crate::dtos::{
     ChunkMetadata, ChunkedVideoResponse, DocumentListParams, DocumentListResponse,
     DocumentResponse, DownloadParams, ProcessingOptions, ProcessingStatusResponse,
 };
-use crate::middleware::user_id::UserId;
+use crate::middleware::tenant::TenantContext;
 use crate::models::{Document, DocumentStatus};
 use crate::startup::AppState;
 use crate::workers::ProcessingJob;
@@ -20,14 +20,19 @@ use uuid::Uuid;
 
 pub async fn list_documents(
     State(state): State<AppState>,
-    user_id: UserId,
+    tenant: TenantContext,
     Query(params): Query<DocumentListParams>,
 ) -> Result<impl IntoResponse, AppError> {
     let page = params.page.unwrap_or(1).max(1);
-    let page_size = params.page_size.unwrap_or(20).max(1).min(100);
+    let page_size = params.page_size.unwrap_or(20).clamp(1, 100);
     let skip = (page - 1) * page_size;
 
-    let mut filter = doc! { "owner_id": user_id.0 };
+    // Filter by tenant (app_id, org_id) and owner
+    let mut filter = doc! {
+        "app_id": &tenant.app_id,
+        "org_id": &tenant.org_id,
+        "owner_id": &tenant.user_id
+    };
 
     if let Some(status) = params.status {
         // Convert status enum to bson string if needed, depending on model serialization
@@ -87,7 +92,7 @@ pub async fn list_documents(
 
 pub async fn upload_document(
     State(state): State<AppState>,
-    user_id: UserId,
+    tenant: TenantContext,
     mut multipart: Multipart,
 ) -> Result<impl IntoResponse, AppError> {
     let field = multipart
@@ -129,10 +134,12 @@ pub async fn upload_document(
 
     let storage_key = format!("{}/{}.{}", Uuid::new_v4(), Uuid::new_v4(), extension);
 
-    // Create document metadata with actual user_id from BFF (secure-frontend)
-    // user_id propagated via X-User-ID header in HMAC-signed request
+    // Create document metadata with tenant context from BFF (secure-frontend)
+    // Tenant info propagated via X-App-ID, X-Org-ID, X-User-ID headers in HMAC-signed request
     let mut document = Document::new(
-        user_id.0,
+        tenant.app_id.clone(),
+        tenant.org_id.clone(),
+        tenant.user_id.clone(),
         original_name,
         mime_type,
         size,
@@ -183,15 +190,22 @@ pub async fn upload_document(
 
 pub async fn process_document(
     State(state): State<AppState>,
-    _user_id: UserId, // Available for logging/auditing, but authorization is BFF's responsibility
+    tenant: TenantContext,
     Path(document_id): Path<String>,
     Json(options): Json<ProcessingOptions>,
 ) -> Result<impl IntoResponse, AppError> {
-    // 1. Fetch document from database
+    // 1. Fetch document from database with tenant scoping
     let document = state
         .db
         .documents()
-        .find_one(doc! { "_id": &document_id }, None)
+        .find_one(
+            doc! {
+                "_id": &document_id,
+                "app_id": &tenant.app_id,
+                "org_id": &tenant.org_id
+            },
+            None,
+        )
         .await
         .map_err(AppError::from)?
         .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Document not found")))?;
@@ -220,6 +234,8 @@ pub async fn process_document(
     if let Some(job_tx) = &state.job_tx {
         let job = ProcessingJob {
             document_id: document.id.clone(),
+            app_id: document.app_id.clone(),
+            org_id: document.org_id.clone(),
             owner_id: document.owner_id.clone(),
             mime_type: document.mime_type.clone(),
             storage_key: document.storage_key.clone(),
@@ -243,15 +259,21 @@ pub async fn process_document(
 
 pub async fn get_document_status(
     State(state): State<AppState>,
-    _user_id: UserId, // Available for logging/auditing, but authorization is BFF's responsibility
+    tenant: TenantContext,
     Path(document_id): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    // 1. Fetch document from database
-    // Note: Ownership validation is the BFF's responsibility (secure-frontend)
+    // 1. Fetch document from database with tenant scoping
     let document = state
         .db
         .documents()
-        .find_one(doc! { "_id": &document_id }, None)
+        .find_one(
+            doc! {
+                "_id": &document_id,
+                "app_id": &tenant.app_id,
+                "org_id": &tenant.org_id
+            },
+            None,
+        )
         .await
         .map_err(AppError::from)?
         .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Document not found")))?;
@@ -329,33 +351,57 @@ fn detect_content_type(path: &str) -> String {
 
 pub async fn download_document(
     State(state): State<AppState>,
-    user_id: Option<UserId>,
+    tenant: Option<TenantContext>,
     Path(document_id): Path<String>,
     Query(params): Query<DownloadParams>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Validate signature if provided, otherwise require user_id
-    if let (Some(signature), Some(expires)) = (&params.signature, &params.expires) {
+    // Validate signature if provided, otherwise require tenant context
+    let is_signed = if let (Some(signature), Some(expires)) = (&params.signature, &params.expires) {
         service_core::utils::signature::validate_document_signature(
             &document_id,
             signature,
             *expires,
             &state.config.signature.signing_secret,
         )?;
+        true
     } else {
-        // Normal flow: require X-User-ID header
-        user_id.ok_or_else(|| {
-            AppError::Unauthorized(anyhow::anyhow!("Missing user ID or signature"))
-        })?;
-    }
+        // Normal flow: require tenant context
+        if tenant.is_none() {
+            return Err(AppError::Unauthorized(anyhow::anyhow!(
+                "Missing tenant context or signature"
+            )));
+        }
+        false
+    };
 
-    // Fetch document metadata
-    let document = state
-        .db
-        .documents()
-        .find_one(doc! { "_id": &document_id }, None)
-        .await
-        .map_err(AppError::from)?
-        .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Document not found")))?;
+    // Fetch document metadata with optional tenant scoping
+    let document = if is_signed {
+        // Signed URL: no tenant scoping (public access via signed link)
+        state
+            .db
+            .documents()
+            .find_one(doc! { "_id": &document_id }, None)
+            .await
+            .map_err(AppError::from)?
+            .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Document not found")))?
+    } else {
+        // Authenticated: require tenant scoping
+        let tenant = tenant.unwrap();
+        state
+            .db
+            .documents()
+            .find_one(
+                doc! {
+                    "_id": &document_id,
+                    "app_id": &tenant.app_id,
+                    "org_id": &tenant.org_id
+                },
+                None,
+            )
+            .await
+            .map_err(AppError::from)?
+            .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Document not found")))?
+    };
 
     // Determine what to serve
     match determine_file_to_serve(&document)? {
@@ -412,14 +458,21 @@ pub async fn download_document(
 
 pub async fn download_video_chunk(
     State(state): State<AppState>,
-    _user_id: UserId,
+    tenant: TenantContext,
     Path((document_id, chunk_index)): Path<(String, usize)>,
 ) -> Result<impl IntoResponse, AppError> {
-    // 1. Fetch document metadata
+    // 1. Fetch document metadata with tenant scoping
     let document = state
         .db
         .documents()
-        .find_one(doc! { "_id": &document_id }, None)
+        .find_one(
+            doc! {
+                "_id": &document_id,
+                "app_id": &tenant.app_id,
+                "org_id": &tenant.org_id
+            },
+            None,
+        )
         .await
         .map_err(AppError::from)?
         .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Document not found")))?;

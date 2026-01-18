@@ -5,7 +5,12 @@ use document_service::startup::Application;
 use reqwest::multipart;
 use uuid::Uuid;
 
-/// Helper function to upload a document
+// Test constants for tenant context
+const TEST_APP_ID: &str = "test-app-id";
+const TEST_ORG_ID: &str = "test-org-id";
+const TEST_USER_ID: &str = "test_user";
+
+/// Helper function to upload a document with tenant headers
 async fn upload_document(
     client: &reqwest::Client,
     port: u16,
@@ -24,6 +29,8 @@ async fn upload_document(
 
     let response = client
         .post(format!("http://127.0.0.1:{}/documents", port))
+        .header("X-App-ID", TEST_APP_ID)
+        .header("X-Org-ID", TEST_ORG_ID)
         .header("X-User-ID", user_id)
         .multipart(form)
         .send()
@@ -59,7 +66,7 @@ async fn download_original_file_works() {
     let doc = upload_document(
         &client,
         port,
-        "test_user",
+        TEST_USER_ID,
         "test.txt",
         "text/plain",
         test_data.clone(),
@@ -72,7 +79,9 @@ async fn download_original_file_works() {
             "http://127.0.0.1:{}/documents/{}/content",
             port, doc.id
         ))
-        .header("X-User-ID", "test_user")
+        .header("X-App-ID", TEST_APP_ID)
+        .header("X-Org-ID", TEST_ORG_ID)
+        .header("X-User-ID", TEST_USER_ID)
         .send()
         .await
         .expect("Failed to execute request");
@@ -120,7 +129,9 @@ async fn download_nonexistent_document_returns_404() {
             "http://127.0.0.1:{}/documents/{}/content",
             port, fake_id
         ))
-        .header("X-User-ID", "test_user")
+        .header("X-App-ID", TEST_APP_ID)
+        .header("X-Org-ID", TEST_ORG_ID)
+        .header("X-User-ID", TEST_USER_ID)
         .send()
         .await
         .expect("Failed to execute request");
@@ -158,14 +169,14 @@ async fn download_without_user_id_or_signature_fails() {
     let doc = upload_document(
         &client,
         port,
-        "test_user",
+        TEST_USER_ID,
         "test.txt",
         "text/plain",
         test_data.clone(),
     )
     .await;
 
-    // 3. Try to download without user ID or signature
+    // 3. Try to download without tenant headers - should be unauthorized
     let response = client
         .get(format!(
             "http://127.0.0.1:{}/documents/{}/content",
@@ -208,7 +219,7 @@ async fn signed_url_works() {
     let doc = upload_document(
         &client,
         port,
-        "test_user",
+        TEST_USER_ID,
         "test.txt",
         "text/plain",
         test_data.clone(),
@@ -269,7 +280,7 @@ async fn expired_signed_url_fails() {
     let doc = upload_document(
         &client,
         port,
-        "test_user",
+        TEST_USER_ID,
         "test.txt",
         "text/plain",
         test_data.clone(),
@@ -328,7 +339,7 @@ async fn invalid_signature_fails() {
     let doc = upload_document(
         &client,
         port,
-        "test_user",
+        TEST_USER_ID,
         "test.txt",
         "text/plain",
         test_data.clone(),

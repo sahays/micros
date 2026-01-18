@@ -4,7 +4,10 @@ use crate::{
         RefreshRequest, RegisterRequest, RegisterResponse, VerifyResponse,
     },
     models::{AuditLog, RefreshToken, User, VerificationToken},
-    services::{EmailProvider, JwtService, MongoDb, ServiceError, TokenBlacklist, TokenResponse},
+    services::{
+        EmailProvider, JwtService, MongoDb, PolicyService, ServiceError, TokenBlacklist,
+        TokenResponse,
+    },
     utils::{hash_password, verify_password, Password, PasswordHashString},
 };
 use mongodb::bson::doc;
@@ -37,13 +40,30 @@ impl AuthService {
     pub async fn register(
         &self,
         req: RegisterRequest,
+        app_id: String,
+        org_id: String,
         ip_address: String,
         base_url: String,
     ) -> Result<RegisterResponse, ServiceError> {
-        // Check if user already exists
+        // Load organization and validate it exists and is enabled
+        let org = self
+            .db
+            .find_organization_in_app(&app_id, &org_id)
+            .await
+            .map_err(ServiceError::Database)?
+            .ok_or(ServiceError::OrganizationNotFound)?;
+
+        if !org.enabled {
+            return Err(ServiceError::OrganizationDisabled);
+        }
+
+        // Validate password against organization's auth policy
+        PolicyService::validate_password(&req.password, &org.auth_policy)?;
+
+        // Check if user already exists within this tenant
         if self
             .db
-            .find_user_by_email(&req.email)
+            .find_user_by_email_in_tenant(&app_id, &org_id, &req.email)
             .await
             .map_err(ServiceError::Database)?
             .is_some()
@@ -52,12 +72,18 @@ impl AuthService {
         }
 
         // Hash password
-        let password_hash = hash_password(&Password::new(req.password)).map_err(|e| {
+        let password_hash = hash_password(&Password::new(req.password.clone())).map_err(|e| {
             ServiceError::Internal(anyhow::anyhow!("Password hashing error: {}", e))
         })?;
 
-        // Create user
-        let user = User::new(req.email.clone(), password_hash.into_string(), req.name);
+        // Create user with tenant context
+        let user = User::new(
+            app_id,
+            org_id,
+            req.email.clone(),
+            password_hash.into_string(),
+            req.name,
+        );
 
         self.db
             .users()
@@ -162,6 +188,21 @@ impl AuthService {
             .map_err(ServiceError::Database)?
             .ok_or(ServiceError::InvalidCredentials)?;
 
+        // Verify the user's organization is still enabled
+        let org = self
+            .db
+            .find_organization_in_app(&user.app_id, &user.org_id)
+            .await
+            .map_err(ServiceError::Database)?
+            .ok_or(ServiceError::OrganizationNotFound)?;
+
+        if !org.enabled {
+            return Err(ServiceError::OrganizationDisabled);
+        }
+
+        // TODO(Story #279): Implement account lockout based on org.auth_policy.max_failed_attempts
+        // This would require tracking failed login attempts per user
+
         // Verify password
         verify_password(
             &Password::new(req.password),
@@ -179,10 +220,10 @@ impl AuthService {
         // Generate refresh token ID
         let refresh_token_id = uuid::Uuid::new_v4().to_string();
 
-        // Generate JWT tokens
+        // Generate JWT tokens with tenant context
         let access_token = self
             .jwt
-            .generate_access_token(&user.id, &user.email)
+            .generate_access_token(&user.id, &user.app_id, &user.org_id, &user.email)
             .map_err(ServiceError::Internal)?;
 
         let refresh_token_str = self
@@ -324,11 +365,11 @@ impl AuthService {
             ));
         }
 
-        // 3. Generate new tokens
+        // 3. Generate new tokens with tenant context
         let new_refresh_token_id = uuid::Uuid::new_v4().to_string();
         let access_token = self
             .jwt
-            .generate_access_token(&user.id, &user.email)
+            .generate_access_token(&user.id, &user.app_id, &user.org_id, &user.email)
             .map_err(ServiceError::Internal)?;
         let refresh_token_str = self
             .jwt
@@ -476,9 +517,28 @@ impl AuthService {
             return Err(ServiceError::TokenExpired);
         }
 
-        let password_hash = hash_password(&Password::new(req.new_password)).map_err(|e| {
-            ServiceError::Internal(anyhow::anyhow!("Password hashing error: {}", e))
-        })?;
+        // Load user to get their org context
+        let user = self
+            .db
+            .find_user_by_id(&verification_token.user_id)
+            .await
+            .map_err(ServiceError::Database)?
+            .ok_or(ServiceError::UserNotFound)?;
+
+        // Load organization and validate password against org's auth policy
+        let org = self
+            .db
+            .find_organization_in_app(&user.app_id, &user.org_id)
+            .await
+            .map_err(ServiceError::Database)?
+            .ok_or(ServiceError::OrganizationNotFound)?;
+
+        PolicyService::validate_password(&req.new_password, &org.auth_policy)?;
+
+        let password_hash =
+            hash_password(&Password::new(req.new_password.clone())).map_err(|e| {
+                ServiceError::Internal(anyhow::anyhow!("Password hashing error: {}", e))
+            })?;
 
         let session = self
             .db

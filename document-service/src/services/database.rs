@@ -27,7 +27,51 @@ impl MongoDb {
 
         let documents = self.documents();
 
-        // Index on owner_id for fast lookup
+        // Compound index on (app_id, org_id, owner_id) for tenant-scoped queries
+        let tenant_owner_index = IndexModel::builder()
+            .keys(doc! { "app_id": 1, "org_id": 1, "owner_id": 1 })
+            .options(
+                IndexOptions::builder()
+                    .name("tenant_owner_lookup".to_string())
+                    .build(),
+            )
+            .build();
+
+        documents
+            .create_index(tenant_owner_index, None)
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to create tenant_owner index on documents collection: {}",
+                    e
+                );
+                AppError::from(e)
+            })?;
+        tracing::info!("Created index on documents.(app_id, org_id, owner_id)");
+
+        // Compound index on (app_id, org_id) for tenant-level queries
+        let tenant_index = IndexModel::builder()
+            .keys(doc! { "app_id": 1, "org_id": 1 })
+            .options(
+                IndexOptions::builder()
+                    .name("tenant_lookup".to_string())
+                    .build(),
+            )
+            .build();
+
+        documents
+            .create_index(tenant_index, None)
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    "Failed to create tenant index on documents collection: {}",
+                    e
+                );
+                AppError::from(e)
+            })?;
+        tracing::info!("Created index on documents.(app_id, org_id)");
+
+        // Keep legacy owner_id index for backward compatibility during migration
         let owner_id_index = IndexModel::builder()
             .keys(doc! { "owner_id": 1 })
             .options(

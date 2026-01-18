@@ -1,7 +1,7 @@
 use auth_service::{
     build_router,
     config::AuthConfig,
-    services::{EmailService, JwtService, MockBlacklist, MongoDb},
+    services::{EmailService, JwtService, MockBlacklist, MongoDb, SecurityAuditService},
     AppState,
 };
 use axum::{
@@ -54,6 +54,8 @@ async fn test_jwks_endpoint() {
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
 
+    let security_audit = SecurityAuditService::new(db.clone());
+
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
@@ -68,6 +70,7 @@ async fn test_jwks_endpoint() {
         app_token_rate_limiter: ip_limiter.clone(),
         client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: ip_limiter,
+        security_audit,
     };
 
     // 2. Build Router

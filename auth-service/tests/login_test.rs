@@ -1,8 +1,8 @@
 use auth_service::{
     build_router,
     config::AuthConfig,
-    models::{RefreshToken, User},
-    services::{EmailService, JwtService, MockBlacklist, MongoDb},
+    models::{Organization, RefreshToken, User},
+    services::{EmailService, JwtService, MockBlacklist, MongoDb, SecurityAuditService},
     utils::{hash_password, Password},
     AppState,
 };
@@ -60,6 +60,7 @@ async fn test_login_creates_hashed_refresh_token() {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     let state = AppState {
         config: config.clone(),
@@ -68,6 +69,7 @@ async fn test_login_creates_hashed_refresh_token() {
         jwt,
         auth_service,
         admin_service,
+        security_audit,
         redis,
         login_rate_limiter: login_limiter,
         register_rate_limiter: register_limiter,
@@ -76,25 +78,36 @@ async fn test_login_creates_hashed_refresh_token() {
         client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: ip_limiter,
     };
-    // 3. Create Test User
+    // 3. Create Organization (required for login org check)
+    let app_id = "test-app-id".to_string();
+    let org_id = "test-org-id".to_string();
+    let org = Organization::new(app_id.clone(), "Test Org".to_string());
+    let org = Organization {
+        org_id: org_id.clone(),
+        ..org
+    };
+    db.organizations().insert_one(&org, None).await.unwrap();
+
+    // 4. Create Test User
     let password = "test_password_123";
     let password_hash = hash_password(&Password::new(password.to_string())).unwrap();
+    let user = User::new(
+        app_id.clone(),
+        org_id.clone(),
+        "test_login@example.com".to_string(),
+        password_hash.into_string(),
+        Some("Test User".to_string()),
+    );
     let user = User {
-        id: Uuid::new_v4().to_string(),
-        email: "test_login@example.com".to_string(),
-        password_hash: password_hash.into_string(),
-        name: Some("Test User".to_string()),
         verified: true,
-        google_id: None,
-        created_at: chrono::Utc::now(),
-        updated_at: chrono::Utc::now(),
+        ..user
     };
     db.users().insert_one(&user, None).await.unwrap();
 
-    // 4. Build Router
+    // 5. Build Router
     let app = build_router(state).await.expect("Failed to build router");
 
-    // 5. Perform Login
+    // 6. Perform Login
     let response = app
         .oneshot(
             Request::builder()

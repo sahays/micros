@@ -1,7 +1,11 @@
-use crate::models::{Transaction, TransactionStatus, PaymentMethod};
-use mongodb::{Database, Collection, bson::{doc, Uuid as BsonUuid}};
-use uuid::Uuid;
+use crate::models::{PaymentMethod, Transaction, TransactionStatus};
 use anyhow::Result;
+use mongodb::options::IndexOptions;
+use mongodb::{
+    bson::{doc, Uuid as BsonUuid},
+    Collection, Database, IndexModel,
+};
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct PaymentRepository {
@@ -17,8 +21,64 @@ impl PaymentRepository {
         }
     }
 
+    /// Initialize database indexes for tenant-scoped queries.
+    pub async fn init_indexes(&self) -> Result<()> {
+        // Compound index on (app_id, org_id, _id) for tenant-scoped transaction lookups
+        let tenant_tx_index = IndexModel::builder()
+            .keys(doc! { "app_id": 1, "org_id": 1, "_id": 1 })
+            .options(
+                IndexOptions::builder()
+                    .name("tenant_transaction_idx".to_string())
+                    .build(),
+            )
+            .build();
+
+        // Compound index on (app_id, org_id, user_id) for user-scoped queries
+        let user_tx_index = IndexModel::builder()
+            .keys(doc! { "app_id": 1, "org_id": 1, "user_id": 1 })
+            .options(
+                IndexOptions::builder()
+                    .name("tenant_user_transaction_idx".to_string())
+                    .build(),
+            )
+            .build();
+
+        // Compound index on (app_id, org_id, status) for tenant-scoped status queries
+        let status_tx_index = IndexModel::builder()
+            .keys(doc! { "app_id": 1, "org_id": 1, "status": 1 })
+            .options(
+                IndexOptions::builder()
+                    .name("tenant_status_transaction_idx".to_string())
+                    .build(),
+            )
+            .build();
+
+        self.transaction_collection
+            .create_indexes([tenant_tx_index, user_tx_index, status_tx_index], None)
+            .await?;
+
+        // Compound index on (app_id, org_id) for tenant-scoped payment method queries
+        let tenant_pm_index = IndexModel::builder()
+            .keys(doc! { "app_id": 1, "org_id": 1 })
+            .options(
+                IndexOptions::builder()
+                    .name("tenant_payment_method_idx".to_string())
+                    .build(),
+            )
+            .build();
+
+        self.payment_method_collection
+            .create_indexes([tenant_pm_index], None)
+            .await?;
+
+        tracing::info!("Payment service indexes initialized");
+        Ok(())
+    }
+
     pub async fn create_transaction(&self, transaction: Transaction) -> Result<()> {
-        self.transaction_collection.insert_one(transaction, None).await?;
+        self.transaction_collection
+            .insert_one(transaction, None)
+            .await?;
         Ok(())
     }
 
@@ -28,20 +88,69 @@ impl PaymentRepository {
         Ok(transaction)
     }
 
-    pub async fn update_transaction_status(&self, id: Uuid, status: TransactionStatus) -> Result<()> {
+    /// Get a transaction by ID within a specific tenant (app_id, org_id).
+    pub async fn get_transaction_in_tenant(
+        &self,
+        app_id: &str,
+        org_id: &str,
+        id: Uuid,
+    ) -> Result<Option<Transaction>> {
+        let filter = doc! {
+            "_id": BsonUuid::from_bytes(id.into_bytes()),
+            "app_id": app_id,
+            "org_id": org_id
+        };
+        let transaction = self.transaction_collection.find_one(filter, None).await?;
+        Ok(transaction)
+    }
+
+    pub async fn update_transaction_status(
+        &self,
+        id: Uuid,
+        status: TransactionStatus,
+    ) -> Result<()> {
         let filter = doc! { "_id": BsonUuid::from_bytes(id.into_bytes()) };
-        let update = doc! { 
-            "$set": { 
+        let update = doc! {
+            "$set": {
                 "status": mongodb::bson::to_bson(&status)?,
                 "updated_at": mongodb::bson::DateTime::now()
-            } 
+            }
         };
-        self.transaction_collection.update_one(filter, update, None).await?;
+        self.transaction_collection
+            .update_one(filter, update, None)
+            .await?;
+        Ok(())
+    }
+
+    /// Update transaction status within a specific tenant.
+    pub async fn update_transaction_status_in_tenant(
+        &self,
+        app_id: &str,
+        org_id: &str,
+        id: Uuid,
+        status: TransactionStatus,
+    ) -> Result<()> {
+        let filter = doc! {
+            "_id": BsonUuid::from_bytes(id.into_bytes()),
+            "app_id": app_id,
+            "org_id": org_id
+        };
+        let update = doc! {
+            "$set": {
+                "status": mongodb::bson::to_bson(&status)?,
+                "updated_at": mongodb::bson::DateTime::now()
+            }
+        };
+        self.transaction_collection
+            .update_one(filter, update, None)
+            .await?;
         Ok(())
     }
 
     pub async fn save_payment_method(&self, method: PaymentMethod) -> Result<()> {
-        self.payment_method_collection.insert_one(method, None).await?;
+        self.payment_method_collection
+            .insert_one(method, None)
+            .await?;
         Ok(())
     }
 }

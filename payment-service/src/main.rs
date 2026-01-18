@@ -6,7 +6,8 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::from_env().expect("Failed to load configuration");
 
     // Initialize tracing
-    let otlp_endpoint = std::env::var("OTLP_ENDPOINT").unwrap_or_else(|_| "http://tempo:4317".to_string());
+    let otlp_endpoint =
+        std::env::var("OTLP_ENDPOINT").unwrap_or_else(|_| "http://tempo:4317".to_string());
     init_tracing(&config.service_name, "info", &otlp_endpoint);
 
     // Initialize metrics

@@ -2,7 +2,9 @@ use auth_service::{
     config::AuthConfig,
     middleware::app_auth_middleware,
     models::{Client, ClientType},
-    services::{AppTokenClaims, EmailService, JwtService, MockBlacklist, MongoDb},
+    services::{
+        AppTokenClaims, EmailService, JwtService, MockBlacklist, MongoDb, SecurityAuditService,
+    },
     utils::{hash_password, Password},
     AppState,
 };
@@ -61,6 +63,7 @@ async fn test_client_rate_limiting() {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     let state = AppState {
         config: config.clone(),
@@ -76,6 +79,7 @@ async fn test_client_rate_limiting() {
         app_token_rate_limiter: ip_limiter.clone(),
         client_rate_limiter: create_client_rate_limiter(),
         ip_rate_limiter: ip_limiter,
+        security_audit,
     };
 
     // 2. Build App with Middlewares

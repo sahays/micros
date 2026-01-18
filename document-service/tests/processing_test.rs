@@ -7,7 +7,11 @@ use reqwest::multipart;
 use std::time::Duration;
 use uuid::Uuid;
 
-/// Helper function to upload a document
+// Test constants for tenant context
+const TEST_APP_ID: &str = "test-app-id";
+const TEST_ORG_ID: &str = "test-org-id";
+
+/// Helper function to upload a document with tenant headers
 async fn upload_document(
     client: &reqwest::Client,
     port: u16,
@@ -26,6 +30,8 @@ async fn upload_document(
 
     let response = client
         .post(format!("http://127.0.0.1:{}/documents", port))
+        .header("X-App-ID", TEST_APP_ID)
+        .header("X-Org-ID", TEST_ORG_ID)
         .header("X-User-ID", user_id)
         .multipart(form)
         .send()
@@ -36,7 +42,7 @@ async fn upload_document(
     response.json().await.expect("Failed to parse JSON")
 }
 
-/// Helper function to trigger document processing
+/// Helper function to trigger document processing with tenant headers
 async fn trigger_processing(
     client: &reqwest::Client,
     port: u16,
@@ -49,6 +55,8 @@ async fn trigger_processing(
             "http://127.0.0.1:{}/documents/{}/process",
             port, document_id
         ))
+        .header("X-App-ID", TEST_APP_ID)
+        .header("X-Org-ID", TEST_ORG_ID)
         .header("X-User-ID", user_id)
         .json(&options)
         .send()
@@ -58,7 +66,7 @@ async fn trigger_processing(
     response.status()
 }
 
-/// Helper function to get document status
+/// Helper function to get document status with tenant headers
 async fn get_document_status(
     client: &reqwest::Client,
     port: u16,
@@ -70,6 +78,8 @@ async fn get_document_status(
             "http://127.0.0.1:{}/documents/{}/status",
             port, document_id
         ))
+        .header("X-App-ID", TEST_APP_ID)
+        .header("X-Org-ID", TEST_ORG_ID)
         .header("X-User-ID", user_id)
         .send()
         .await
@@ -85,7 +95,7 @@ async fn get_document_status(
     (status, body)
 }
 
-/// Helper to wait for processing to complete
+/// Helper to wait for processing to complete with tenant headers
 async fn wait_for_processing(
     client: &reqwest::Client,
     port: u16,

@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DocumentResponse {
     pub id: String,
+    pub app_id: String,
+    pub org_id: String,
     pub owner_id: String,
     pub original_name: String,
     pub mime_type: String,
@@ -19,6 +21,8 @@ impl From<crate::models::Document> for DocumentResponse {
     fn from(doc: crate::models::Document) -> Self {
         Self {
             id: doc.id,
+            app_id: doc.app_id,
+            org_id: doc.org_id,
             owner_id: doc.owner_id,
             original_name: doc.original_name,
             mime_type: doc.mime_type,

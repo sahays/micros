@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use validator::Validate;
 
-use crate::models::ClientType;
+use crate::models::{AuthPolicy, ClientType, OrgSettings, SanitizedOrganization};
 
 #[derive(Debug, Deserialize, Validate, ToSchema)]
 pub struct CreateClientRequest {
@@ -73,4 +73,64 @@ pub struct RotateServiceKeyResponse {
     pub new_api_key: String,
     #[schema(value_type = String, format = "date-time")]
     pub previous_key_expiry: chrono::DateTime<chrono::Utc>,
+}
+
+// ============================================================================
+// Organization Admin DTOs
+// ============================================================================
+
+/// Request to create a new organization under the calling app.
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+pub struct CreateOrganizationRequest {
+    /// Display name for the organization
+    #[validate(length(min = 1, max = 100, message = "Name must be 1-100 characters"))]
+    #[schema(example = "Acme Corporation")]
+    pub name: String,
+
+    /// Optional organization settings
+    pub settings: Option<OrgSettings>,
+
+    /// Optional custom auth policies (defaults used if not provided)
+    pub auth_policy: Option<AuthPolicy>,
+}
+
+/// Response after creating an organization.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CreateOrganizationResponse {
+    #[schema(example = "550e8400-e29b-41d4-a716-446655440000")]
+    pub org_id: String,
+    #[schema(example = "770e8400-e29b-41d4-a716-446655440002")]
+    pub app_id: String,
+    #[schema(example = "Acme Corporation")]
+    pub name: String,
+    #[schema(value_type = String, format = "date-time")]
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Request to update an organization.
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+pub struct UpdateOrganizationRequest {
+    /// New display name (optional)
+    #[validate(length(min = 1, max = 100, message = "Name must be 1-100 characters"))]
+    #[schema(example = "Acme Corp Updated")]
+    pub name: Option<String>,
+
+    /// Updated settings (optional)
+    pub settings: Option<OrgSettings>,
+
+    /// Enable/disable the organization
+    pub enabled: Option<bool>,
+}
+
+/// Response listing organizations for an app.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ListOrganizationsResponse {
+    pub organizations: Vec<SanitizedOrganization>,
+    pub total: usize,
+}
+
+/// Request to update auth policies for an organization.
+#[derive(Debug, Deserialize, Validate, ToSchema)]
+pub struct UpdateAuthPolicyRequest {
+    pub auth_policy: AuthPolicy,
 }

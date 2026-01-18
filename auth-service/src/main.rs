@@ -1,7 +1,7 @@
 use auth_service::{
     build_router,
     config::AuthConfig,
-    services::{EmailService, JwtService, MongoDb, RedisService},
+    services::{EmailService, JwtService, MongoDb, RedisService, SecurityAuditService},
     AppState,
 };
 use service_core::middleware::rate_limit::{create_client_rate_limiter, create_ip_rate_limiter};
@@ -96,6 +96,7 @@ async fn main() -> Result<(), service_core::error::AppError> {
         redis.clone(),
     );
     let admin_service = auth_service::services::admin::AdminService::new(db.clone(), redis.clone());
+    let security_audit = SecurityAuditService::new(db.clone());
 
     // Create application state
     let state = AppState {
@@ -105,6 +106,7 @@ async fn main() -> Result<(), service_core::error::AppError> {
         jwt,
         auth_service,
         admin_service,
+        security_audit,
         redis,
         login_rate_limiter,
         register_rate_limiter,

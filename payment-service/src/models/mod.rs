@@ -6,6 +6,12 @@ use uuid::Uuid;
 pub struct Transaction {
     #[serde(rename = "_id")]
     pub id: Uuid,
+    /// Application ID (maps to registered client in auth-service)
+    pub app_id: String,
+    /// Organization ID within the application
+    pub org_id: String,
+    /// User who initiated this transaction (if applicable)
+    pub user_id: Option<String>,
     pub amount: f64,
     pub currency: String,
     pub status: TransactionStatus,
@@ -28,6 +34,10 @@ pub enum TransactionStatus {
 pub struct PaymentMethod {
     #[serde(rename = "_id")]
     pub id: Uuid,
+    /// Application ID (maps to registered client in auth-service)
+    pub app_id: String,
+    /// Organization ID within the application
+    pub org_id: String,
     pub name: String,
     pub provider: String,
     pub is_active: bool,
