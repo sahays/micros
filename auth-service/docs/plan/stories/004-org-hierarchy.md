@@ -1,8 +1,8 @@
 # Story: Org Node Hierarchy
 
-Status: completed
-Epic: [001-auth-service-v2](../epics/001-auth-service-v2.md)
-Priority: P0
+- [x] **Status: Completed**
+- **Epic:** [001-auth-service-v2](../epics/001-auth-service-v2.md)
+- **Priority:** P0
 
 ## Summary
 
