@@ -95,6 +95,7 @@ struct OAuthState {
 /// Initiate Google OAuth flow.
 ///
 /// GET /auth/google
+#[tracing::instrument(skip(state), fields(tenant_id = %query.tenant_id))]
 pub async fn google_oauth_redirect(
     State(state): State<AppState>,
     Query(query): Query<GoogleOAuthQuery>,
@@ -138,6 +139,7 @@ pub async fn google_oauth_redirect(
 /// Handle Google OAuth callback.
 ///
 /// GET /auth/google/callback
+#[tracing::instrument(skip_all)]
 pub async fn google_oauth_callback(
     State(state): State<AppState>,
     Query(query): Query<GoogleCallbackQuery>,
@@ -217,6 +219,7 @@ pub async fn google_oauth_callback(
 /// Exchange Google ID token directly for auth tokens.
 ///
 /// POST /auth/google/token
+#[tracing::instrument(skip(state, req), fields(tenant_id = %req.tenant_id))]
 pub async fn google_token_exchange(
     State(state): State<AppState>,
     Json(req): Json<GoogleTokenRequest>,

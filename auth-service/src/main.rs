@@ -1,6 +1,9 @@
 //! Auth Service v2 - Main entry point.
 
 use auth_service::{build_router, config::AuthConfig, db, services, AppState};
+use opentelemetry::KeyValue;
+use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::{runtime, trace as sdktrace, Resource};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -12,24 +15,17 @@ async fn main() -> anyhow::Result<()> {
     // Load environment variables
     dotenvy::dotenv().ok();
 
-    // Initialize tracing
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "auth_service=debug,tower_http=debug".into()),
-        )
-        .init();
-
-    tracing::info!("Starting auth-service v2...");
-
-    // Load configuration
+    // Load configuration first (before tracing init)
     let config = AuthConfig::from_env()?;
+
+    // Initialize tracing with JSON format for PLG stack
+    init_tracing(&config);
+
     tracing::info!(
         service = %config.service_name,
         version = %config.service_version,
         environment = ?config.environment,
-        "Configuration loaded"
+        "Starting auth-service v2"
     );
 
     // Create PostgreSQL connection pool
@@ -112,4 +108,68 @@ async fn shutdown_signal() {
             tracing::info!("Received SIGTERM, starting graceful shutdown");
         },
     }
+}
+
+/// Initialize tracing with JSON format for PLG stack.
+///
+/// When OTLP_ENDPOINT is configured, traces are exported to Tempo.
+/// Logs are always output as JSON to stdout for Promtail collection.
+fn init_tracing(config: &AuthConfig) {
+    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&config.log_level));
+
+    // Try to set up OpenTelemetry if OTLP endpoint is configured
+    if let Some(ref otlp_endpoint) = config.otlp_endpoint {
+        let otlp_exporter = opentelemetry_otlp::new_exporter()
+            .tonic()
+            .with_endpoint(otlp_endpoint);
+
+        match opentelemetry_otlp::new_pipeline()
+            .tracing()
+            .with_exporter(otlp_exporter)
+            .with_trace_config(
+                sdktrace::Config::default().with_resource(Resource::new(vec![
+                    KeyValue::new("service.name", config.service_name.clone()),
+                    KeyValue::new("service.version", config.service_version.clone()),
+                ])),
+            )
+            .install_batch(runtime::Tokio)
+        {
+            Ok(tracer) => {
+                let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+                tracing_subscriber::registry()
+                    .with(env_filter)
+                    .with(telemetry)
+                    .with(
+                        tracing_subscriber::fmt::layer()
+                            .with_file(true)
+                            .with_line_number(true)
+                            .with_target(true)
+                            .json()
+                            .flatten_event(true),
+                    )
+                    .init();
+                return;
+            }
+            Err(e) => {
+                eprintln!(
+                    "Failed to initialize OTLP tracer (endpoint: {}): {}. Falling back to JSON-only logging.",
+                    otlp_endpoint, e
+                );
+            }
+        }
+    }
+
+    // Fallback: JSON logging without OpenTelemetry
+    tracing_subscriber::registry()
+        .with(env_filter)
+        .with(
+            tracing_subscriber::fmt::layer()
+                .with_file(true)
+                .with_line_number(true)
+                .with_target(true)
+                .json()
+                .flatten_event(true),
+        )
+        .init();
 }

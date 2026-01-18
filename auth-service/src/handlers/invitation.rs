@@ -74,6 +74,10 @@ const DEFAULT_EXPIRY_HOURS: i64 = 168; // 7 days
 /// Create a new invitation.
 ///
 /// POST /invitations
+#[tracing::instrument(
+    skip(state),
+    fields(tenant_id = %req.tenant_id, org_node_id = %req.org_node_id, role_id = %req.role_id)
+)]
 pub async fn create_invitation(
     State(state): State<AppState>,
     Json(req): Json<CreateInvitationRequest>,
@@ -183,6 +187,7 @@ pub async fn create_invitation(
 /// Get invitation details by token.
 ///
 /// GET /invitations/{token}
+#[tracing::instrument(skip_all)]
 pub async fn get_invitation(
     State(state): State<AppState>,
     Path(token): Path<String>,
@@ -247,6 +252,7 @@ pub async fn get_invitation(
 /// Accept an invitation.
 ///
 /// POST /invitations/{token}/accept
+#[tracing::instrument(skip_all)]
 pub async fn accept_invitation(
     State(state): State<AppState>,
     Path(token): Path<String>,

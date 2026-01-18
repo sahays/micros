@@ -58,6 +58,16 @@ pub struct AuditEventsResponse {
 /// List audit events with filtering and pagination.
 ///
 /// GET /audit/events
+#[tracing::instrument(
+    skip(state),
+    fields(
+        tenant_id = %query.tenant_id,
+        action_key = ?query.action_key,
+        entity_kind = ?query.entity_kind,
+        limit = query.limit,
+        offset = query.offset
+    )
+)]
 pub async fn list_audit_events(
     State(state): State<AppState>,
     Query(query): Query<ListAuditEventsQuery>,

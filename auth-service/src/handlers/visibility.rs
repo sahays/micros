@@ -44,6 +44,14 @@ pub struct CreateGrantResponse {
 /// Create a new visibility grant.
 ///
 /// POST /visibility-grants
+#[tracing::instrument(
+    skip(state),
+    fields(
+        tenant_id = %req.tenant_id,
+        user_id = %req.user_id,
+        org_node_id = %req.org_node_id
+    )
+)]
 pub async fn create_visibility_grant(
     State(state): State<AppState>,
     Json(req): Json<CreateVisibilityGrantRequest>,
@@ -125,6 +133,7 @@ pub async fn create_visibility_grant(
 /// Revoke a visibility grant.
 ///
 /// POST /visibility-grants/{grant_id}/revoke
+#[tracing::instrument(skip(state), fields(grant_id = %grant_id))]
 pub async fn revoke_visibility_grant(
     State(state): State<AppState>,
     Path(grant_id): Path<Uuid>,
@@ -159,6 +168,7 @@ pub async fn revoke_visibility_grant(
 /// List visibility grants for a user.
 ///
 /// GET /users/{user_id}/visibility-grants
+#[tracing::instrument(skip(state), fields(user_id = %user_id, active_only = ?query.active))]
 pub async fn list_user_visibility_grants(
     State(state): State<AppState>,
     Path(user_id): Path<Uuid>,

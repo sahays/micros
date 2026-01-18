@@ -11,6 +11,7 @@ pub struct AuthConfig {
     pub service_name: String,
     pub service_version: String,
     pub log_level: String,
+    pub otlp_endpoint: Option<String>,
     pub database: DatabaseConfig,
     pub redis: RedisConfig,
     pub jwt: JwtConfig,
@@ -116,6 +117,7 @@ impl AuthConfig {
             service_name: get_env("SERVICE_NAME", Some("auth-service"), is_prod)?,
             service_version: get_env("SERVICE_VERSION", Some(env!("CARGO_PKG_VERSION")), is_prod)?,
             log_level: get_env("LOG_LEVEL", Some("info"), is_prod)?,
+            otlp_endpoint: env::var("OTLP_ENDPOINT").ok(),
             database: DatabaseConfig {
                 url: get_env("DATABASE_URL", None, is_prod)?,
                 max_connections: get_env("DATABASE_MAX_CONNECTIONS", Some("10"), is_prod)?

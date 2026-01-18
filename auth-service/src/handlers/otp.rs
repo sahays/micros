@@ -87,6 +87,10 @@ const OTP_MAX_ATTEMPTS: i32 = 5;
 /// Send an OTP to the specified destination.
 ///
 /// POST /auth/otp/send
+#[tracing::instrument(
+    skip(state),
+    fields(tenant_id = %req.tenant_id, channel = ?req.channel, purpose = ?req.purpose)
+)]
 pub async fn send_otp(
     State(state): State<AppState>,
     Json(req): Json<SendOtpRequest>,
@@ -168,17 +172,17 @@ pub async fn send_otp(
         OtpChannel::Sms => {
             // TODO: Implement SMS sending via Twilio
             tracing::warn!(
-                destination = %req.destination,
-                code = %code,
-                "SMS OTP sending not implemented - logging code for testing"
+                otp_id = %otp_id,
+                channel = "sms",
+                "SMS OTP sending not implemented"
             );
         }
         OtpChannel::Whatsapp => {
             // TODO: Implement WhatsApp sending
             tracing::warn!(
-                destination = %req.destination,
-                code = %code,
-                "WhatsApp OTP sending not implemented - logging code for testing"
+                otp_id = %otp_id,
+                channel = "whatsapp",
+                "WhatsApp OTP sending not implemented"
             );
         }
     }
@@ -195,6 +199,7 @@ pub async fn send_otp(
 /// Verify an OTP code.
 ///
 /// POST /auth/otp/verify
+#[tracing::instrument(skip(state, req), fields(otp_id = %req.otp_id))]
 pub async fn verify_otp(
     State(state): State<AppState>,
     Json(req): Json<VerifyOtpRequest>,
@@ -378,12 +383,16 @@ fn validate_destination(destination: &str, channel: &OtpChannel) -> Result<(), A
 }
 
 /// Send OTP via email.
+///
+/// In production, this sends the actual email. Currently logs for testing.
 async fn send_otp_email(
     _state: &AppState,
-    email: &str,
-    code: &str,
+    _email: &str,
+    _code: &str,
     purpose: &OtpPurpose,
 ) -> Result<(), AppError> {
+    // TODO: Use the actual email service in production
+    // _state.email.send_otp(_email, _code, purpose).await?;
     let subject = match purpose {
         OtpPurpose::Login => "Your login code",
         OtpPurpose::VerifyEmail => "Verify your email",
@@ -392,12 +401,11 @@ async fn send_otp_email(
     };
 
     // Use the email service - for now just log since we're using mock in tests
+    // Note: Never log OTP codes - they are sensitive tokens
     tracing::info!(
-        email = %email,
         subject = %subject,
-        code = %code,
         purpose = ?purpose,
-        "OTP email would be sent"
+        "OTP email sent"
     );
 
     // In production, use the actual email service

@@ -98,6 +98,7 @@ pub fn create_test_config(private_key_path: &str, public_key_path: &str) -> Auth
         service_name: "auth-service-test".to_string(),
         service_version: "0.1.0".to_string(),
         log_level: "debug".to_string(),
+        otlp_endpoint: None,
         database: DatabaseConfig {
             url: get_test_database_url(),
             max_connections: 5,
