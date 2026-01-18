@@ -21,7 +21,9 @@ use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
 use crate::config::AuthConfig;
-use crate::handlers::{assignment, auth, authz, context, org, role, service};
+use crate::handlers::{
+    assignment, audit, auth, authz, context, invitation, oauth, org, otp, role, service, visibility,
+};
 use crate::services::{Database, EmailProvider, JwtService, TokenBlacklist};
 use service_core::error::AppError;
 
@@ -44,7 +46,12 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
         .route("/refresh", post(auth::refresh))
         .route("/logout", post(auth::logout))
         .route("/context", get(context::get_auth_context))
-        .route("/check", get(context::check_capability));
+        .route("/check", get(context::check_capability))
+        .route("/otp/send", post(otp::send_otp))
+        .route("/otp/verify", post(otp::verify_otp))
+        .route("/google", get(oauth::google_oauth_redirect))
+        .route("/google/callback", get(oauth::google_oauth_callback))
+        .route("/google/token", post(oauth::google_token_exchange));
 
     // Org routes
     let org_routes = Router::new()
@@ -83,6 +90,27 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
     // User assignment routes
     let user_assignment_routes = Router::new().route("/", get(assignment::list_user_assignments));
 
+    // Visibility grant routes
+    let visibility_grant_routes = Router::new()
+        .route("/", post(visibility::create_visibility_grant))
+        .route(
+            "/{grant_id}/revoke",
+            post(visibility::revoke_visibility_grant),
+        );
+
+    // User visibility grant routes
+    let user_visibility_routes =
+        Router::new().route("/", get(visibility::list_user_visibility_grants));
+
+    // Invitation routes
+    let invitation_routes = Router::new()
+        .route("/", post(invitation::create_invitation))
+        .route("/{token}", get(invitation::get_invitation))
+        .route("/{token}/accept", post(invitation::accept_invitation));
+
+    // Audit routes
+    let audit_routes = Router::new().route("/events", get(audit::list_audit_events));
+
     // AuthZ routes
     let authz_routes = Router::new()
         .route("/evaluate", post(authz::evaluate))
@@ -110,6 +138,10 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
         .nest("/capabilities", capability_routes)
         .nest("/assignments", assignment_routes)
         .nest("/users/{user_id}/assignments", user_assignment_routes)
+        .nest("/users/{user_id}/visibility-grants", user_visibility_routes)
+        .nest("/visibility-grants", visibility_grant_routes)
+        .nest("/invitations", invitation_routes)
+        .nest("/audit", audit_routes)
         .nest("/authz", authz_routes)
         .nest("/services", service_routes)
         .with_state(state.clone())

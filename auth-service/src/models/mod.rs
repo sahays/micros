@@ -33,7 +33,7 @@ pub use org_assignment::{
 pub use org_node::{
     CreateOrgNodeRequest, OrgNode, OrgNodePath, OrgNodeResponse, OrgTreeNode, UpdateOrgNodeRequest,
 };
-pub use otp_code::{OtpCode, OtpPurpose, SendOtpRequest, VerifyOtpRequest};
+pub use otp_code::{OtpChannel, OtpCode, OtpPurpose};
 pub use refresh_session::RefreshSession;
 pub use role::{
     AssignCapabilityRequest, CreateRoleRequest, Role, RoleCapability, RoleResponse,
@@ -50,5 +50,5 @@ pub use user::{
 };
 pub use user_identity::{IdentProvider, UserIdentity};
 pub use visibility_grant::{
-    CreateVisibilityGrantRequest, VisibilityGrant, VisibilityGrantResponse,
+    AccessScope, CreateVisibilityGrantRequest, VisibilityGrant, VisibilityGrantResponse,
 };

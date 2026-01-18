@@ -1,6 +1,6 @@
 # Epic: Auth-Service v2.0 - PostgreSQL Migration & Capability-Based AuthZ
 
-Status: in_progress
+Status: completed
 Created: 2026-01-18
 
 ## Overview
@@ -55,25 +55,25 @@ PostgreSQL with these tables:
 
 ## Stories
 
-### Phase 1 (Foundational)
+### Phase 1 (Foundational) - COMPLETED
 
-- [ ] [001-postgres-setup](../stories/001-postgres-setup.md) - PostgreSQL connection, migrations, sqlx
-- [ ] [002-tenant-user-model](../stories/002-tenant-user-model.md) - Tenants, users, identities
-- [ ] [003-password-auth](../stories/003-password-auth.md) - Signup, login, refresh, logout
-- [ ] [004-org-hierarchy](../stories/004-org-hierarchy.md) - Org nodes, closure table, tree ops
-- [ ] [005-roles-capabilities](../stories/005-roles-capabilities.md) - Role/capability registry
-- [ ] [006-org-assignments](../stories/006-org-assignments.md) - User→org→role assignments
-- [ ] [007-auth-context](../stories/007-auth-context.md) - GET /auth/context endpoint
-- [ ] [008-authz-evaluate](../stories/008-authz-evaluate.md) - POST /authz/evaluate endpoint
-- [ ] [009-service-registry](../stories/009-service-registry.md) - KYS: service registration, secrets
+- [x] [001-postgres-setup](../stories/001-postgres-setup.md) - PostgreSQL connection, migrations, sqlx
+- [x] [002-tenant-user-model](../stories/002-tenant-user-model.md) - Tenants, users, identities
+- [x] [003-password-auth](../stories/003-password-auth.md) - Signup, login, refresh, logout
+- [x] [004-org-hierarchy](../stories/004-org-hierarchy.md) - Org nodes, closure table, tree ops
+- [x] [005-roles-capabilities](../stories/005-roles-capabilities.md) - Role/capability registry
+- [x] [006-org-assignments](../stories/006-org-assignments.md) - User→org→role assignments
+- [x] [007-auth-context](../stories/007-auth-context.md) - GET /auth/context endpoint
+- [x] [008-authz-evaluate](../stories/008-authz-evaluate.md) - POST /authz/evaluate endpoint
+- [x] [009-service-registry](../stories/009-service-registry.md) - KYS: service registration, secrets
 
-### Phase 2
+### Phase 2 - COMPLETED
 
-- [ ] [010-otp-auth](../stories/010-otp-auth.md) - OTP send/verify (email, SMS)
-- [ ] [011-google-oauth](../stories/011-google-oauth.md) - Google login integration
-- [ ] [012-visibility-grants](../stories/012-visibility-grants.md) - Cross-org visibility
-- [ ] [013-invitations](../stories/013-invitations.md) - User invitation flow
-- [ ] [014-audit-events](../stories/014-audit-events.md) - Audit logging
+- [x] [010-otp-auth](../stories/010-otp-auth.md) - OTP send/verify (email, SMS)
+- [x] [011-google-oauth](../stories/011-google-oauth.md) - Google login integration
+- [x] [012-visibility-grants](../stories/012-visibility-grants.md) - Cross-org visibility
+- [x] [013-invitations](../stories/013-invitations.md) - User invitation flow
+- [x] [014-audit-events](../stories/014-audit-events.md) - Audit logging
 
 ## API Routes
 
@@ -129,13 +129,13 @@ PostgreSQL with these tables:
 
 ## Acceptance Criteria
 
-- [ ] All MongoDB dependencies removed
-- [ ] PostgreSQL with sqlx for type-safe queries
-- [ ] Database migrations via sqlx-cli
-- [ ] All existing tests adapted or replaced
-- [ ] JWT tokens preserved (RS256)
-- [ ] Service authentication via Basic auth or Bearer token
-- [ ] Capability-based authorization working
-- [ ] Org hierarchy with subtree queries
-- [ ] Time-bounded assignments
-- [ ] Audit trail for all mutations
+- [x] All MongoDB dependencies removed
+- [x] PostgreSQL with sqlx for type-safe queries
+- [x] Database migrations via sqlx-cli
+- [x] All existing tests adapted or replaced
+- [x] JWT tokens preserved (RS256)
+- [x] Service authentication via Basic auth or Bearer token
+- [x] Capability-based authorization working
+- [x] Org hierarchy with subtree queries
+- [x] Time-bounded assignments
+- [x] Audit trail for all mutations

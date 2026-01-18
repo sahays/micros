@@ -7,8 +7,8 @@ use sqlx::postgres::PgPool;
 use uuid::Uuid;
 
 use crate::models::{
-    AuditEvent, Capability, Invitation, OrgAssignment, OrgNode, OtpCode, RefreshSession, Role,
-    Service, ServiceSecret, Tenant, User, UserIdentity, VisibilityGrant,
+    AuditEvent, Capability, IdentProvider, Invitation, OrgAssignment, OrgNode, OtpCode,
+    RefreshSession, Role, Service, ServiceSecret, Tenant, User, UserIdentity, VisibilityGrant,
 };
 
 /// PostgreSQL database wrapper.
@@ -180,6 +180,28 @@ impl Database {
         Ok(())
     }
 
+    /// Find user identity by provider subject (e.g., Google sub) within a tenant.
+    pub async fn find_user_identity_by_subject(
+        &self,
+        tenant_id: Uuid,
+        provider: &IdentProvider,
+        subject: &str,
+    ) -> Result<Option<UserIdentity>, AppError> {
+        sqlx::query_as::<_, UserIdentity>(
+            r#"
+            SELECT ui.* FROM user_identities ui
+            JOIN users u ON ui.user_id = u.user_id
+            WHERE u.tenant_id = $1 AND ui.ident_provider_code = $2 AND ui.ident_hash = $3
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(provider.as_str())
+        .bind(subject)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))
+    }
+
     /// Update user identity hash (for password changes).
     pub async fn update_user_identity_hash(
         &self,
@@ -254,60 +276,6 @@ impl Database {
         .execute(&self.pool)
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
-        Ok(())
-    }
-
-    // ==================== OTP Code Operations ====================
-
-    /// Find valid OTP code.
-    pub async fn find_valid_otp(
-        &self,
-        user_id: Uuid,
-        purpose: &str,
-    ) -> Result<Option<OtpCode>, AppError> {
-        sqlx::query_as::<_, OtpCode>(
-            r#"
-            SELECT * FROM otp_codes
-            WHERE user_id = $1 AND purpose_code = $2 AND used_utc IS NULL AND expiry_utc > NOW()
-            ORDER BY created_utc DESC
-            LIMIT 1
-            "#,
-        )
-        .bind(user_id)
-        .bind(purpose)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))
-    }
-
-    /// Insert a new OTP code.
-    pub async fn insert_otp_code(&self, otp: &OtpCode) -> Result<(), AppError> {
-        sqlx::query(
-            r#"
-            INSERT INTO otp_codes (otp_id, user_id, purpose_code, otp_hash, expiry_utc, used_utc, created_utc)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            "#,
-        )
-        .bind(otp.otp_id)
-        .bind(otp.user_id)
-        .bind(&otp.purpose_code)
-        .bind(&otp.otp_hash)
-        .bind(otp.expiry_utc)
-        .bind(otp.used_utc)
-        .bind(otp.created_utc)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
-        Ok(())
-    }
-
-    /// Mark OTP as used.
-    pub async fn mark_otp_used(&self, otp_id: Uuid) -> Result<(), AppError> {
-        sqlx::query("UPDATE otp_codes SET used_utc = NOW() WHERE otp_id = $1")
-            .bind(otp_id)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
         Ok(())
     }
 
@@ -735,6 +703,117 @@ impl Database {
         Ok(())
     }
 
+    /// Find audit events with filtering and pagination.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn find_audit_events(
+        &self,
+        tenant_id: Uuid,
+        actor_user_id: Option<Uuid>,
+        action_key: Option<&str>,
+        entity_kind: Option<&str>,
+        entity_id: Option<Uuid>,
+        from_utc: Option<chrono::DateTime<chrono::Utc>>,
+        to_utc: Option<chrono::DateTime<chrono::Utc>>,
+        limit: i64,
+        offset: i64,
+    ) -> Result<(Vec<AuditEvent>, i64), AppError> {
+        // Build dynamic WHERE clause
+        let mut conditions = vec!["tenant_id = $1".to_string()];
+        let mut param_idx = 2;
+
+        if actor_user_id.is_some() {
+            conditions.push(format!("actor_user_id = ${}", param_idx));
+            param_idx += 1;
+        }
+        if action_key.is_some() {
+            conditions.push(format!("event_type_code = ${}", param_idx));
+            param_idx += 1;
+        }
+        if entity_kind.is_some() {
+            conditions.push(format!("target_type = ${}", param_idx));
+            param_idx += 1;
+        }
+        if entity_id.is_some() {
+            conditions.push(format!("target_id = ${}", param_idx));
+            param_idx += 1;
+        }
+        if from_utc.is_some() {
+            conditions.push(format!("created_utc >= ${}", param_idx));
+            param_idx += 1;
+        }
+        if to_utc.is_some() {
+            conditions.push(format!("created_utc <= ${}", param_idx));
+            param_idx += 1;
+        }
+
+        let where_clause = conditions.join(" AND ");
+
+        // Count query
+        let count_query = format!("SELECT COUNT(*) FROM audit_events WHERE {}", where_clause);
+
+        // Data query
+        let data_query =
+            format!(
+            "SELECT * FROM audit_events WHERE {} ORDER BY created_utc DESC LIMIT ${} OFFSET ${}",
+            where_clause, param_idx, param_idx + 1
+        );
+
+        // Build and execute count query
+        let mut count_q = sqlx::query_as::<_, (i64,)>(&count_query).bind(tenant_id);
+        if let Some(user_id) = actor_user_id {
+            count_q = count_q.bind(user_id);
+        }
+        if let Some(action) = action_key {
+            count_q = count_q.bind(action);
+        }
+        if let Some(kind) = entity_kind {
+            count_q = count_q.bind(kind);
+        }
+        if let Some(eid) = entity_id {
+            count_q = count_q.bind(eid);
+        }
+        if let Some(from) = from_utc {
+            count_q = count_q.bind(from);
+        }
+        if let Some(to) = to_utc {
+            count_q = count_q.bind(to);
+        }
+
+        let (total,) = count_q
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
+
+        // Build and execute data query
+        let mut data_q = sqlx::query_as::<_, AuditEvent>(&data_query).bind(tenant_id);
+        if let Some(user_id) = actor_user_id {
+            data_q = data_q.bind(user_id);
+        }
+        if let Some(action) = action_key {
+            data_q = data_q.bind(action);
+        }
+        if let Some(kind) = entity_kind {
+            data_q = data_q.bind(kind);
+        }
+        if let Some(eid) = entity_id {
+            data_q = data_q.bind(eid);
+        }
+        if let Some(from) = from_utc {
+            data_q = data_q.bind(from);
+        }
+        if let Some(to) = to_utc {
+            data_q = data_q.bind(to);
+        }
+        data_q = data_q.bind(limit).bind(offset);
+
+        let events = data_q
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
+
+        Ok((events, total))
+    }
+
     // ==================== Invitation Operations ====================
 
     /// Find invitation by token hash.
@@ -802,19 +881,159 @@ impl Database {
             .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))
     }
 
+    /// Find active visibility grants for a user (within time bounds).
+    pub async fn find_active_visibility_grants_for_user(
+        &self,
+        user_id: Uuid,
+    ) -> Result<Vec<VisibilityGrant>, AppError> {
+        sqlx::query_as::<_, VisibilityGrant>(
+            r#"
+            SELECT * FROM visibility_grants
+            WHERE user_id = $1
+              AND start_utc <= NOW()
+              AND (end_utc IS NULL OR end_utc > NOW())
+            "#,
+        )
+        .bind(user_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))
+    }
+
+    /// Find visibility grant by ID.
+    pub async fn find_visibility_grant_by_id(
+        &self,
+        grant_id: Uuid,
+    ) -> Result<Option<VisibilityGrant>, AppError> {
+        sqlx::query_as::<_, VisibilityGrant>("SELECT * FROM visibility_grants WHERE grant_id = $1")
+            .bind(grant_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))
+    }
+
     /// Insert a visibility grant.
     pub async fn insert_visibility_grant(&self, grant: &VisibilityGrant) -> Result<(), AppError> {
         sqlx::query(
             r#"
-            INSERT INTO visibility_grants (grant_id, tenant_id, user_id, org_node_id, created_utc)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO visibility_grants (grant_id, tenant_id, user_id, org_node_id, access_scope_code, start_utc, end_utc)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
         )
         .bind(grant.grant_id)
         .bind(grant.tenant_id)
         .bind(grant.user_id)
         .bind(grant.org_node_id)
-        .bind(grant.created_utc)
+        .bind(&grant.access_scope_code)
+        .bind(grant.start_utc)
+        .bind(grant.end_utc)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
+        Ok(())
+    }
+
+    /// Revoke a visibility grant by setting end_utc to now.
+    pub async fn revoke_visibility_grant(&self, grant_id: Uuid) -> Result<(), AppError> {
+        sqlx::query("UPDATE visibility_grants SET end_utc = NOW() WHERE grant_id = $1 AND (end_utc IS NULL OR end_utc > NOW())")
+            .bind(grant_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
+        Ok(())
+    }
+
+    // ==================== OTP Code Operations ====================
+
+    /// Insert an OTP code.
+    pub async fn insert_otp_code(&self, otp: &OtpCode) -> Result<(), AppError> {
+        sqlx::query(
+            r#"
+            INSERT INTO otp_codes (otp_id, tenant_id, destination_text, channel_code, purpose_code, code_hash_text, expiry_utc, consumed_utc, attempt_count, attempt_max, created_utc)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            "#,
+        )
+        .bind(otp.otp_id)
+        .bind(otp.tenant_id)
+        .bind(&otp.destination_text)
+        .bind(&otp.channel_code)
+        .bind(&otp.purpose_code)
+        .bind(&otp.code_hash_text)
+        .bind(otp.expiry_utc)
+        .bind(otp.consumed_utc)
+        .bind(otp.attempt_count)
+        .bind(otp.attempt_max)
+        .bind(otp.created_utc)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
+        Ok(())
+    }
+
+    /// Find OTP by ID.
+    pub async fn find_otp_by_id(&self, otp_id: Uuid) -> Result<Option<OtpCode>, AppError> {
+        sqlx::query_as::<_, OtpCode>("SELECT * FROM otp_codes WHERE otp_id = $1")
+            .bind(otp_id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))
+    }
+
+    /// Count recent OTPs for a destination (rate limiting).
+    pub async fn count_recent_otps(
+        &self,
+        destination: &str,
+        seconds: i64,
+    ) -> Result<i64, AppError> {
+        let row: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM otp_codes WHERE destination_text = $1 AND created_utc > NOW() - INTERVAL '1 second' * $2",
+        )
+        .bind(destination)
+        .bind(seconds)
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
+        Ok(row.0)
+    }
+
+    /// Increment OTP attempt count.
+    pub async fn increment_otp_attempts(&self, otp_id: Uuid) -> Result<(), AppError> {
+        sqlx::query("UPDATE otp_codes SET attempt_count = attempt_count + 1 WHERE otp_id = $1")
+            .bind(otp_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
+        Ok(())
+    }
+
+    /// Mark OTP as consumed.
+    pub async fn consume_otp(&self, otp_id: Uuid) -> Result<(), AppError> {
+        sqlx::query("UPDATE otp_codes SET consumed_utc = NOW() WHERE otp_id = $1")
+            .bind(otp_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
+        Ok(())
+    }
+
+    /// Mark email as verified for a user.
+    pub async fn mark_email_verified(&self, user_id: Uuid) -> Result<(), AppError> {
+        sqlx::query(
+            "UPDATE user_identities SET email_verified_flag = true WHERE user_id = $1 AND ident_provider_code = 'password'",
+        )
+        .bind(user_id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
+        Ok(())
+    }
+
+    /// Mark phone as verified for a user.
+    pub async fn mark_phone_verified(&self, user_id: Uuid) -> Result<(), AppError> {
+        sqlx::query(
+            "UPDATE user_identities SET phone_verified_flag = true WHERE user_id = $1 AND ident_provider_code = 'password'",
+        )
+        .bind(user_id)
         .execute(&self.pool)
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
