@@ -1,263 +1,233 @@
-# Auth Service
+# Auth Service v2
 
-A high-performance, secure authentication microservice built with Axum and MongoDB.
+Multi-tenant authentication and authorization service with capability-based access control.
 
 ## Features
 
-- **Multi-tenant Auth**: Support for Web, Mobile, and Service-to-Service clients.
-- **Secure Storage**: Argon2 password hashing and encrypted secrets.
-- **JWT Lifecycle**: RS256 token issuance with rotation, revocation, and blacklisting.
-- **Social Login**: Google OAuth 2.0 integration with PKCE.
-- **BFF Support**: HMAC-based request signing for tamper-proof communication.
-- **Observability**: Structured JSON logging, health checks, and audit trails.
-- **Documentation**: Automatic OpenAPI 3.0 generation and interactive Swagger UI.
+- **Multi-tenant**: Isolated tenants with org node hierarchies (closure table)
+- **Capability-based AuthZ**: Fine-grained permissions, never authorize by role label
+- **Time-bounded assignments**: Immutable role assignments with start/end dates
+- **Multiple auth methods**: Email/password, OTP (email/SMS), Google OAuth
+- **Cross-org visibility**: Grants for users to see outside their subtree
+- **Know-Your-Service (KYS)**: Service registry with scoped permissions
+- **BFF support**: HMAC request signing for secure frontend communication
+- **Observability**: JSON logging, OpenTelemetry traces, Prometheus metrics
 
 ## Tech Stack
 
-- **Language:** Rust (2021 Edition)
-- **Web Framework:** [Axum 0.7](https://github.com/tokio-rs/axum) - Ergonomic and modular web framework.
-- **Runtime:** [Tokio](https://tokio.rs/) - Asynchronous runtime.
-- **Database:** [MongoDB](https://www.mongodb.com/) - Primary data store for users and logs.
-- **Caching/State:** [Redis](https://redis.io/) - Used for token blacklisting and rate limiting state.
-- **Authentication:**
-  - `jsonwebtoken` for RS256 JWT handling.
-  - `argon2` for secure password hashing.
-  - `oauth2` / `reqwest` for Social Login flows.
-- **Documentation:** `utoipa` - Code-first OpenAPI/Swagger generation.
-- **Infrastructure:** Docker (Multistage builds based on `debian:bookworm-slim`).
-
-## Architecture
-
-The service follows a **Layered Architecture** to ensure separation of concerns and testability:
-
-1.  **Transport Layer (Handlers):**
-    - Defines HTTP endpoints using Axum.
-    - Handles request deserialization and response serialization.
-    - Performs initial input validation.
-2.  **Middleware Layer:**
-    - **Security:** Request signing verification, Headers (CORS, HSTS).
-    - **Traffic Control:** Distributed rate limiting via Redis (Governor).
-    - **Observability:** Request tracing and ID propagation.
-3.  **Service Layer:**
-    - Contains business logic (e.g., `JwtService`, `EmailService`).
-    - Orchestrates operations between data access and external providers.
-4.  **Data Access Layer (Models/DB):**
-    - Type-safe interactions with MongoDB.
-    - Defines data models (Users, Clients, Tokens).
-    - Handles Redis interactions for ephemeral state.
-
-**State Management:** Configuration and database connections are encapsulated in a thread-safe `AppState` struct,
-injected into handlers via Axum's `State` extractor.
-
-## Security-First Architecture
-
-The service is built on a "Zero Trust" and "Defense in Depth" philosophy.
-
-### 1. The BFF Pattern (Backend-for-Frontend)
-
-Instead of exposing the Auth Service directly to browsers, we encourage using a **BFF**.
-
-- **Isolation:** The BFF acts as a trusted proxy.
-- **Request Signing:** The BFF signs requests using a shared secret (`signing_secret`), ensuring that no malicious actor
-  can bypass the frontend logic or replay requests.
-- **Client Registry:** Only registered BFFs (Known Clients) can interact with the system, enforced via `client_id`
-  checks.
-
-### 2. Service Accounts & Scopes
-
-Internal communication follows **Least Privilege**:
-
-- **No Implicit Trust:** Being on the internal network is not enough.
-- **Scoped Access:** A "Billing Service" can be restricted to `user:read` but denied `user:write`.
-- **Audit Trails:** Every service-to-service call is cryptographically tied to a Service ID and logged for compliance.
+- **Framework**: Axum 0.7 + Tokio
+- **Database**: PostgreSQL (sqlx with compile-time checked queries)
+- **Cache**: Redis (token blacklist, rate limiting)
+- **Auth**: RS256 JWTs, Argon2 passwords, Google OAuth 2.0
+- **Observability**: tracing + OpenTelemetry → Tempo, JSON logs → Loki
 
 ## Quick Start
 
-**Prerequisites:** MongoDB and Redis running on host machine (port 27017 and 6379).
-
 ```bash
-# From repository root:
-./scripts/dev-up.sh              # Start dev stack
-./scripts/dev-down.sh            # Stop dev stack
-./scripts/dev-up.sh --rebuild    # Rebuild and start
+# Prerequisites: PostgreSQL and Redis running locally
+
+# Generate JWT keys
+mkdir -p keys
+openssl genrsa -out keys/private.pem 2048
+openssl rsa -in keys/private.pem -pubout -out keys/public.pem
+
+# Set environment
+export DATABASE_URL="postgresql://user:pass@localhost/auth_db"
+export REDIS_URL="redis://localhost:6379"
+export JWT_PRIVATE_KEY_PATH="keys/private.pem"
+export JWT_PUBLIC_KEY_PATH="keys/public.pem"
+
+# Run
+cargo run -p auth-service
 ```
 
-**Access Points (Dev):**
+**Dev Stack**: `./scripts/dev-up.sh` (port 9005)
+**Prod Stack**: `./scripts/prod-up.sh` (port 10005)
 
-- Auth Service: http://localhost:9005
-- Swagger UI: http://localhost:9005/docs
-- Grafana: http://localhost:9002 (admin/admin)
-- Prometheus: http://localhost:9000
+## API Overview
 
-**Production Stack:**
+| Endpoint | Description |
+|----------|-------------|
+| `POST /auth/register` | Register user with email/password |
+| `POST /auth/login` | Login, returns JWT pair |
+| `POST /auth/refresh` | Refresh access token |
+| `POST /auth/logout` | Revoke refresh token |
+| `POST /auth/otp/send` | Send OTP via email/SMS/WhatsApp |
+| `POST /auth/otp/verify` | Verify OTP, returns JWT pair |
+| `GET /auth/google` | Initiate Google OAuth |
+| `POST /auth/google/token` | Exchange Google ID token |
+| `GET /auth/context` | Get user's auth context (roles, capabilities) |
+| `POST /authz/evaluate` | Evaluate capability check |
+| `POST /orgs` | Create org node |
+| `POST /roles` | Create role with capabilities |
+| `POST /assignments` | Assign user to role at org node |
+| `POST /visibility-grants` | Grant cross-org visibility |
+| `POST /invitations` | Invite user with pre-assigned role |
+| `GET /audit/events` | Query audit log |
+| `POST /services` | Register service (KYS) |
 
-```bash
-./scripts/prod-up.sh             # Everything containerized (ports 10000-10009)
-./scripts/prod-down.sh
-```
+## BFF Integration
 
-## Usage Workflows
-
-### 1. User Registration & Login
-
-```bash
-# Register new user
-curl -X POST http://localhost:9005/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com",
-    "password": "SecurePass123!",
-    "name": "John Doe"
-  }'
-
-# Login (returns access_token and refresh_token)
-curl -X POST http://localhost:9005/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com",
-    "password": "SecurePass123!"
-  }'
-
-# Access protected endpoint
-curl -X GET http://localhost:9005/users/me \
-  -H "Authorization: Bearer <access_token>"
-
-# Refresh tokens before expiry
-curl -X POST http://localhost:9005/auth/refresh \
-  -H "Content-Type: application/json" \
-  -d '{"refresh_token": "<refresh_token>"}'
-
-# Logout (blacklist tokens)
-curl -X POST http://localhost:9005/auth/logout \
-  -H "Content-Type: application/json" \
-  -d '{"refresh_token": "<refresh_token>"}'
-```
-
-### 2. Register BFF/Frontend Client
+### 1. Register Your BFF
 
 ```bash
-# Register secure-frontend as a service client (unlimited rate limits)
 curl -X POST http://localhost:9005/auth/admin/clients \
-  -H "X-Admin-Api-Key: <ADMIN_API_KEY>" \
+  -H "X-Admin-Api-Key: $ADMIN_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "app_name": "secure-frontend",
+    "app_name": "my-frontend",
     "app_type": "service",
-    "rate_limit_per_min": 0,
-    "allowed_origins": ["http://localhost:9006"]
+    "rate_limit_per_min": 0
   }'
-
-# Returns:
-# {
-#   "client_id": "619d53e2-...",
-#   "client_secret": "A7PguDQJ...",      # NOT used by BFF
-#   "signing_secret": "aqFN9XiO...",     # Used for HMAC signing
-#   "app_name": "secure-frontend",
-#   "app_type": "service"
-# }
-
-# Save to .env.dev (BFF uses HMAC signing, NOT client_secret):
-# APP_AUTH_SERVICE__CLIENT_ID=619d53e2-...
-# APP_AUTH_SERVICE__SIGNING_SECRET=aqFN9XiO...
-#
-# Store client_secret securely for future use, but BFF doesn't need it
+# Save: client_id and signing_secret
 ```
 
-**Authentication Patterns:**
+### 2. Sign Requests (Rust Example)
 
-- **BFF Pattern** (secure-frontend): Uses `signing_secret` for HMAC request signing
-  - Each request signed with X-Signature header
-  - No long-lived tokens, request-level authentication
-- **OAuth Client Credentials** (backend services): Uses `client_secret` for app tokens
-  - Exchange `client_id` + `client_secret` for JWT at `/auth/app-token`
-  - Used by services that need bearer tokens
+```rust
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
 
-### 3. Service-to-Service Authentication
+fn sign_request(
+    method: &str,
+    path: &str,
+    body: &str,
+    client_id: &str,
+    signing_secret: &str,
+) -> (String, String, String) {
+    let timestamp = chrono::Utc::now().timestamp().to_string();
+    let nonce = uuid::Uuid::new_v4().to_string();
 
-```bash
-# Get app token using client credentials
-curl -X POST http://localhost:9005/auth/app-token \
-  -H "Content-Type: application/json" \
-  -d '{
-    "client_id": "<client_id>",
-    "client_secret": "<client_secret>"
-  }'
+    let string_to_sign = format!("{method}{path}{timestamp}{nonce}{body}");
 
-# Verify token validity
-curl -X POST http://localhost:9005/auth/introspect \
-  -H "Content-Type: application/json" \
-  -d '{"token": "<access_token>"}'
+    let mut mac = Hmac::<Sha256>::new_from_slice(signing_secret.as_bytes()).unwrap();
+    mac.update(string_to_sign.as_bytes());
+    let signature = hex::encode(mac.finalize().into_bytes());
+
+    (timestamp, nonce, signature)
+}
+
+// Usage with reqwest
+async fn call_auth_service(client: &reqwest::Client) -> Result<Response, Error> {
+    let body = r#"{"email":"user@example.com","password":"secret"}"#;
+    let (ts, nonce, sig) = sign_request("POST", "/auth/login", body, CLIENT_ID, SIGNING_SECRET);
+
+    client.post("http://auth-service:3000/auth/login")
+        .header("Content-Type", "application/json")
+        .header("X-Client-ID", CLIENT_ID)
+        .header("X-Timestamp", ts)
+        .header("X-Nonce", nonce)
+        .header("X-Signature", sig)
+        .body(body)
+        .send()
+        .await
+}
 ```
 
-### 4. Password Reset Flow
+### 3. TypeScript/Node.js Example
 
-```bash
-# Request password reset (sends email)
-curl -X POST http://localhost:9005/auth/password-reset/request \
-  -H "Content-Type: application/json" \
-  -d '{"email": "user@example.com"}'
+```typescript
+import crypto from 'crypto';
 
-# Confirm reset with token from email
-curl -X POST http://localhost:9005/auth/password-reset/confirm \
-  -H "Content-Type: application/json" \
-  -d '{
-    "token": "<reset_token>",
-    "new_password": "NewSecurePass123!"
-  }'
+function signRequest(
+  method: string,
+  path: string,
+  body: string,
+  clientId: string,
+  signingSecret: string
+): { timestamp: string; nonce: string; signature: string } {
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const nonce = crypto.randomUUID();
+
+  const stringToSign = `${method}${path}${timestamp}${nonce}${body}`;
+  const signature = crypto
+    .createHmac('sha256', signingSecret)
+    .update(stringToSign)
+    .digest('hex');
+
+  return { timestamp, nonce, signature };
+}
+
+// Usage with fetch
+async function login(email: string, password: string) {
+  const body = JSON.stringify({ email, password });
+  const { timestamp, nonce, signature } = signRequest(
+    'POST', '/auth/login', body, CLIENT_ID, SIGNING_SECRET
+  );
+
+  return fetch('http://auth-service:3000/auth/login', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Client-ID': CLIENT_ID,
+      'X-Timestamp': timestamp,
+      'X-Nonce': nonce,
+      'X-Signature': signature,
+    },
+    body,
+  });
+}
 ```
 
-## API Documentation
+### 4. Common BFF Flows
 
-Interactive Swagger UI (auto-generated from code):
+```typescript
+// Login flow
+const loginResponse = await login(email, password);
+const { access_token, refresh_token } = await loginResponse.json();
+// Store tokens in HTTP-only cookies (BFF pattern)
 
-- **Dev**: http://localhost:9005/docs
-- **Prod**: http://localhost:10005/docs (disabled by default)
-- **OpenAPI Spec**: http://localhost:9005/.well-known/openapi.json
+// Get auth context for UI
+const context = await callAuthService('GET', '/auth/context', '', access_token);
+// Returns: { user_id, tenant_id, assignments: [{ org_node_id, role_label, capabilities }] }
 
-**Adding New Endpoints:**
+// Check capability before action
+const canApprove = await callAuthService('POST', '/authz/evaluate', JSON.stringify({
+  user_id: userId,
+  capability_key: 'invoice:approve',
+  org_node_id: targetOrgId,
+}));
 
-1. Add `#[utoipa::path]` annotation to handler
-2. Register in `ApiDoc` struct (src/lib.rs:31-96)
-3. Rebuild - spec updates automatically
-
-## Detailed Documentation
-
-- [Email/Password Auth Guide](docs/email-password-auth.md): Registration, login, and password management flows.
-- [Security Controls & Defenses](docs/security-controls.md): Rate limiting, bot protection, and client registries.
-- [BFF Request Signing Guide](docs/bff-request-signing.md): Implementation details for securing Frontend-to-Backend
-  communication.
-- [Service Integration Guide](docs/service-integration.md): How to authenticate other microservices with Auth Service.
-- [Social Login Guide](docs/social-login.md): Google OAuth 2.0 integration details.
-- [Audit Logging](docs/audit-logging.md): Events, schema, and admin access.
-- [Observability & PLG Stack](docs/observability.md): Structured logging, tracing, and PLG integration.
-
-## Development Workflow
-
-```bash
-# Make code changes
-vim src/handlers/auth/session.rs
-
-# Run tests
-cargo test -p auth-service
-
-# Rebuild and restart
-./scripts/dev-up.sh --rebuild
-
-# View logs
-docker-compose -f docker-compose.dev.yml logs -f auth-service
-
-# Test endpoint
-curl http://localhost:9005/health
+// OTP login (passwordless)
+await callAuthService('POST', '/auth/otp/send', JSON.stringify({
+  tenant_id: tenantId,
+  destination: email,
+  channel: 'email',
+  purpose: 'login',
+}));
+// User receives code, then:
+const otpResponse = await callAuthService('POST', '/auth/otp/verify', JSON.stringify({
+  otp_id: otpId,
+  code: userEnteredCode,
+}));
 ```
 
-**Pre-commit Hooks:**
+## Environment Variables
 
-- Runs `cargo fmt`, `cargo clippy`, and tests automatically
-- Install: `ln -s ../../scripts/pre-commit.sh .git/hooks/pre-commit`
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DATABASE_URL` | PostgreSQL connection string | required |
+| `REDIS_URL` | Redis connection string | required |
+| `JWT_PRIVATE_KEY_PATH` | RS256 private key | required |
+| `JWT_PUBLIC_KEY_PATH` | RS256 public key | required |
+| `OTLP_ENDPOINT` | Tempo endpoint for traces | optional |
+| `LOG_LEVEL` | Logging level | `info` |
+| `ADMIN_API_KEY` | Admin API key | required |
 
-## Deployment
+## Observability
 
-**Development:** `./scripts/dev-up.sh` (MongoDB/Redis on host, services in Docker) **Production:**
-`./scripts/prod-up.sh` (everything containerized)
+- **Logs**: JSON to stdout, collected by Promtail → Loki
+- **Traces**: OTLP to Tempo (set `OTLP_ENDPOINT`)
+- **Metrics**: `/metrics` endpoint for Prometheus
+- **Health**: `GET /health` (checks PostgreSQL + Redis)
 
-Deployment scripts include health checks and graceful shutdown handling.
+Query logs in Grafana:
+```
+{container=~".*auth-service"} | json | level="error"
+```
+
+## Documentation
+
+- [BFF Request Signing](docs/bff-request-signing.md)
+- [Security Controls](docs/security-controls.md)
+- [Observability](docs/observability.md)
