@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "auth-service", "document-service",
+    "notification-service",
     "secure-frontend",
     "service-core",
     "payment-service",
