@@ -2,10 +2,9 @@ use crate::models::{PaymentMethod, Transaction, TransactionStatus};
 use anyhow::Result;
 use mongodb::options::IndexOptions;
 use mongodb::{
-    bson::{doc, Uuid as BsonUuid},
+    bson::doc,
     Collection, Database, IndexModel,
 };
-use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct PaymentRepository {
@@ -82,8 +81,8 @@ impl PaymentRepository {
         Ok(())
     }
 
-    pub async fn get_transaction(&self, id: Uuid) -> Result<Option<Transaction>> {
-        let filter = doc! { "_id": BsonUuid::from_bytes(id.into_bytes()) };
+    pub async fn get_transaction(&self, id: &str) -> Result<Option<Transaction>> {
+        let filter = doc! { "_id": id };
         let transaction = self.transaction_collection.find_one(filter, None).await?;
         Ok(transaction)
     }
@@ -93,10 +92,10 @@ impl PaymentRepository {
         &self,
         app_id: &str,
         org_id: &str,
-        id: Uuid,
+        id: &str,
     ) -> Result<Option<Transaction>> {
         let filter = doc! {
-            "_id": BsonUuid::from_bytes(id.into_bytes()),
+            "_id": id,
             "app_id": app_id,
             "org_id": org_id
         };
@@ -106,10 +105,10 @@ impl PaymentRepository {
 
     pub async fn update_transaction_status(
         &self,
-        id: Uuid,
+        id: &str,
         status: TransactionStatus,
     ) -> Result<()> {
-        let filter = doc! { "_id": BsonUuid::from_bytes(id.into_bytes()) };
+        let filter = doc! { "_id": id };
         let update = doc! {
             "$set": {
                 "status": mongodb::bson::to_bson(&status)?,
@@ -127,11 +126,11 @@ impl PaymentRepository {
         &self,
         app_id: &str,
         org_id: &str,
-        id: Uuid,
+        id: &str,
         status: TransactionStatus,
     ) -> Result<()> {
         let filter = doc! {
-            "_id": BsonUuid::from_bytes(id.into_bytes()),
+            "_id": id,
             "app_id": app_id,
             "org_id": org_id
         };

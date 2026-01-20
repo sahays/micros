@@ -36,14 +36,20 @@ pub mod proto {
 }
 
 pub use auth_client::{AuthClient, AuthClientConfig};
-pub use document_client::{DocumentClient, DocumentClientConfig};
+pub use document_client::{
+    DocumentClient, DocumentClientConfig, DocumentProto, DocumentStatusProto,
+    ProcessingMetadataProto, ProcessingOptionsProto, ProcessorTypeProto,
+};
 pub use error::{GrpcResult, IntoStatus};
 pub use health::{HealthComponents, HealthReporter, HealthStatus, create_health_service};
 pub use interceptors::{
     extract_request_id, extract_traceparent, inject_trace_context,
     inject_trace_context_with_request_id, trace_context_interceptor,
 };
-pub use notification_client::{NotificationClient, NotificationClientConfig};
+pub use notification_client::{
+    BatchNotification, BatchNotificationResult, NotificationChannelProto, NotificationClient,
+    NotificationClientConfig, NotificationProto, NotificationStatusProto, PushPlatformProto,
+};
 pub use payment_client::{PaymentClient, PaymentClientConfig};
 pub use server::{GrpcServerBuilder, create_reflection_service, start_http_health_server};
 

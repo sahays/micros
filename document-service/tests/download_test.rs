@@ -1,420 +1,242 @@
-use axum::http::StatusCode;
-use document_service::config::DocumentConfig;
-use document_service::dtos::DocumentResponse;
-use document_service::startup::Application;
-use reqwest::multipart;
+mod common;
+
+use common::{TestApp, TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID};
 use uuid::Uuid;
 
-// Test constants for tenant context
-const TEST_APP_ID: &str = "test-app-id";
-const TEST_ORG_ID: &str = "test-org-id";
-const TEST_USER_ID: &str = "test_user";
-
-/// Helper function to upload a document with tenant headers
-async fn upload_document(
-    client: &reqwest::Client,
-    port: u16,
-    user_id: &str,
+/// Helper to upload a document for testing
+async fn upload_test_document(
+    client: &mut service_core::grpc::DocumentClient,
     filename: &str,
     mime_type: &str,
     data: Vec<u8>,
-) -> DocumentResponse {
-    let form = multipart::Form::new().part(
-        "file",
-        multipart::Part::bytes(data)
-            .file_name(filename.to_string())
-            .mime_str(mime_type)
-            .unwrap(),
-    );
-
+) -> String {
     let response = client
-        .post(format!("http://127.0.0.1:{}/documents", port))
-        .header("X-App-ID", TEST_APP_ID)
-        .header("X-Org-ID", TEST_ORG_ID)
-        .header("X-User-ID", user_id)
-        .multipart(form)
-        .send()
+        .upload_document(
+            TEST_APP_ID,
+            TEST_ORG_ID,
+            TEST_USER_ID,
+            filename.to_string(),
+            mime_type.to_string(),
+            data,
+        )
         .await
-        .expect("Failed to execute request");
+        .expect("Failed to upload document");
 
-    assert_eq!(StatusCode::CREATED, response.status());
-    response.json().await.expect("Failed to parse JSON")
+    response.document.expect("Missing document").id
 }
 
 #[tokio::test]
-async fn download_original_file_works() {
-    // 1. Setup
-    std::env::set_var("MONGODB_URI", "mongodb://localhost:27017");
-    let mut config = DocumentConfig::load().expect("Failed to load configuration");
-    config.common.port = 0;
-    config.storage.local_path = format!("target/test-storage-{}", Uuid::new_v4());
+async fn download_document_works() {
+    let app = TestApp::spawn().await;
+    let mut client = app.grpc_client().await;
 
-    let db_name = format!("test_download_original_{}", Uuid::new_v4());
-    config.mongodb.database = db_name.clone();
+    // Upload a document
+    let test_data = b"Hello, World! Download test.".to_vec();
+    let doc_id =
+        upload_test_document(&mut client, "test.txt", "text/plain", test_data.clone()).await;
 
-    let app = Application::build(config.clone())
+    // Download the document
+    let (filename, content_type, downloaded_data) = client
+        .download_document(TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID, doc_id)
         .await
-        .expect("Failed to build application");
-    let port = app.port();
-    let db = app.db().clone();
+        .expect("Failed to download document");
 
-    tokio::spawn(app.run_until_stopped());
+    // Verify
+    assert_eq!(filename, "test.txt");
+    assert_eq!(content_type, "text/plain");
+    assert_eq!(downloaded_data, test_data);
 
-    // 2. Upload a document
-    let client = reqwest::Client::new();
-    let test_data = b"Hello, World!".to_vec();
-    let doc = upload_document(
-        &client,
-        port,
-        TEST_USER_ID,
-        "test.txt",
-        "text/plain",
-        test_data.clone(),
-    )
-    .await;
-
-    // 3. Download the document
-    let response = client
-        .get(format!(
-            "http://127.0.0.1:{}/documents/{}/content",
-            port, doc.id
-        ))
-        .header("X-App-ID", TEST_APP_ID)
-        .header("X-Org-ID", TEST_ORG_ID)
-        .header("X-User-ID", TEST_USER_ID)
-        .send()
-        .await
-        .expect("Failed to execute request");
-
-    // 4. Assert
-    assert_eq!(StatusCode::OK, response.status());
-    assert_eq!(
-        response.headers().get("content-type").unwrap(),
-        "text/plain"
-    );
-
-    let downloaded_data = response.bytes().await.expect("Failed to read response");
-    assert_eq!(downloaded_data.to_vec(), test_data);
-
-    // Cleanup
-    let _ = db.client().database(&db_name).drop(None).await;
-    let _ = tokio::fs::remove_dir_all(&config.storage.local_path).await;
+    app.cleanup().await;
 }
 
 #[tokio::test]
-async fn download_nonexistent_document_returns_404() {
-    // 1. Setup
-    std::env::set_var("MONGODB_URI", "mongodb://localhost:27017");
-    let mut config = DocumentConfig::load().expect("Failed to load configuration");
-    config.common.port = 0;
-    config.storage.local_path = format!("target/test-storage-{}", Uuid::new_v4());
+async fn download_nonexistent_document_returns_not_found() {
+    let app = TestApp::spawn().await;
+    let mut client = app.grpc_client().await;
 
-    let db_name = format!("test_download_404_{}", Uuid::new_v4());
-    config.mongodb.database = db_name.clone();
-
-    let app = Application::build(config.clone())
-        .await
-        .expect("Failed to build application");
-    let port = app.port();
-    let db = app.db().clone();
-
-    tokio::spawn(app.run_until_stopped());
-
-    // 2. Try to download a non-existent document
-    let client = reqwest::Client::new();
     let fake_id = Uuid::new_v4().to_string();
 
+    let result = client
+        .download_document(TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID, fake_id)
+        .await;
+
+    assert!(result.is_err());
+    let status = result.unwrap_err();
+    assert_eq!(status.code(), tonic::Code::NotFound);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+async fn get_document_metadata_works() {
+    let app = TestApp::spawn().await;
+    let mut client = app.grpc_client().await;
+
+    // Upload a document
+    let test_data = vec![0u8; 1024];
+    let doc_id =
+        upload_test_document(&mut client, "metadata.txt", "text/plain", test_data.clone()).await;
+
+    // Get metadata
     let response = client
-        .get(format!(
-            "http://127.0.0.1:{}/documents/{}/content",
-            port, fake_id
-        ))
-        .header("X-App-ID", TEST_APP_ID)
-        .header("X-Org-ID", TEST_ORG_ID)
-        .header("X-User-ID", TEST_USER_ID)
-        .send()
+        .get_document(TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID, doc_id.clone())
         .await
-        .expect("Failed to execute request");
+        .expect("Failed to get document");
 
-    // 3. Assert
-    assert_eq!(StatusCode::NOT_FOUND, response.status());
+    let document = response.document.expect("Missing document");
+    assert_eq!(document.id, doc_id);
+    assert_eq!(document.original_name, "metadata.txt");
+    assert_eq!(document.mime_type, "text/plain");
+    assert_eq!(document.size, test_data.len() as i64);
 
-    // Cleanup
-    let _ = db.client().database(&db_name).drop(None).await;
-    let _ = tokio::fs::remove_dir_all(&config.storage.local_path).await;
+    app.cleanup().await;
 }
 
 #[tokio::test]
-async fn download_without_user_id_or_signature_fails() {
-    // 1. Setup
-    std::env::set_var("MONGODB_URI", "mongodb://localhost:27017");
-    let mut config = DocumentConfig::load().expect("Failed to load configuration");
-    config.common.port = 0;
-    config.storage.local_path = format!("target/test-storage-{}", Uuid::new_v4());
+async fn list_documents_works() {
+    let app = TestApp::spawn().await;
+    let mut client = app.grpc_client().await;
 
-    let db_name = format!("test_download_unauth_{}", Uuid::new_v4());
-    config.mongodb.database = db_name.clone();
+    // Upload multiple documents
+    for i in 0..5 {
+        upload_test_document(
+            &mut client,
+            &format!("doc{}.txt", i),
+            "text/plain",
+            vec![0; 100],
+        )
+        .await;
+    }
 
-    let app = Application::build(config.clone())
-        .await
-        .expect("Failed to build application");
-    let port = app.port();
-    let db = app.db().clone();
-
-    tokio::spawn(app.run_until_stopped());
-
-    // 2. Upload a document
-    let client = reqwest::Client::new();
-    let test_data = b"Hello, World!".to_vec();
-    let doc = upload_document(
-        &client,
-        port,
-        TEST_USER_ID,
-        "test.txt",
-        "text/plain",
-        test_data.clone(),
-    )
-    .await;
-
-    // 3. Try to download without tenant headers - should be unauthorized
+    // List documents
     let response = client
-        .get(format!(
-            "http://127.0.0.1:{}/documents/{}/content",
-            port, doc.id
-        ))
-        .send()
+        .list_documents(
+            TEST_APP_ID,
+            TEST_ORG_ID,
+            TEST_USER_ID,
+            None,
+            None,
+            Some(1),
+            Some(10),
+        )
         .await
-        .expect("Failed to execute request");
+        .expect("Failed to list documents");
 
-    // 4. Assert - should be unauthorized
-    assert_eq!(StatusCode::UNAUTHORIZED, response.status());
+    assert_eq!(response.documents.len(), 5);
+    assert_eq!(response.total, 5);
 
-    // Cleanup
-    let _ = db.client().database(&db_name).drop(None).await;
-    let _ = tokio::fs::remove_dir_all(&config.storage.local_path).await;
+    app.cleanup().await;
 }
 
 #[tokio::test]
-async fn signed_url_works() {
-    // 1. Setup
-    std::env::set_var("MONGODB_URI", "mongodb://localhost:27017");
-    let mut config = DocumentConfig::load().expect("Failed to load configuration");
-    config.common.port = 0;
-    config.storage.local_path = format!("target/test-storage-{}", Uuid::new_v4());
+async fn list_documents_with_pagination() {
+    let app = TestApp::spawn().await;
+    let mut client = app.grpc_client().await;
 
-    let db_name = format!("test_signed_url_{}", Uuid::new_v4());
-    config.mongodb.database = db_name.clone();
+    // Upload 10 documents
+    for i in 0..10 {
+        upload_test_document(
+            &mut client,
+            &format!("page{}.txt", i),
+            "text/plain",
+            vec![0; 50],
+        )
+        .await;
+    }
 
-    let app = Application::build(config.clone())
+    // Get first page
+    let page1 = client
+        .list_documents(
+            TEST_APP_ID,
+            TEST_ORG_ID,
+            TEST_USER_ID,
+            None,
+            None,
+            Some(1),
+            Some(5),
+        )
         .await
-        .expect("Failed to build application");
-    let port = app.port();
-    let db = app.db().clone();
+        .expect("Failed to list page 1");
 
-    tokio::spawn(app.run_until_stopped());
+    assert_eq!(page1.documents.len(), 5);
+    assert_eq!(page1.page, 1);
+    assert_eq!(page1.page_size, 5);
+    assert_eq!(page1.total, 10);
+    assert_eq!(page1.total_pages, 2);
 
-    // 2. Upload a document
-    let client = reqwest::Client::new();
-    let test_data = b"Hello, World!".to_vec();
-    let doc = upload_document(
-        &client,
-        port,
-        TEST_USER_ID,
-        "test.txt",
-        "text/plain",
-        test_data.clone(),
-    )
-    .await;
+    // Get second page
+    let page2 = client
+        .list_documents(
+            TEST_APP_ID,
+            TEST_ORG_ID,
+            TEST_USER_ID,
+            None,
+            None,
+            Some(2),
+            Some(5),
+        )
+        .await
+        .expect("Failed to list page 2");
 
-    // 3. Generate a signed URL
-    let expires = chrono::Utc::now().timestamp() + 300; // 5 minutes from now
-    let signature = service_core::utils::signature::generate_document_signature(
-        &doc.id,
-        expires,
-        &config.signature.signing_secret,
-    )
-    .expect("Failed to generate signature");
+    assert_eq!(page2.documents.len(), 5);
+    assert_eq!(page2.page, 2);
 
-    // 4. Download using signed URL (no X-User-ID header)
+    app.cleanup().await;
+}
+
+#[tokio::test]
+async fn delete_document_works() {
+    let app = TestApp::spawn().await;
+    let mut client = app.grpc_client().await;
+
+    // Upload a document
+    let doc_id =
+        upload_test_document(&mut client, "to_delete.txt", "text/plain", vec![0; 100]).await;
+
+    // Verify it exists
+    let _ = client
+        .get_document(TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID, doc_id.clone())
+        .await
+        .expect("Document should exist");
+
+    // Delete the document
     let response = client
-        .get(format!(
-            "http://127.0.0.1:{}/documents/{}/content?signature={}&expires={}",
-            port, doc.id, signature, expires
-        ))
-        .send()
+        .delete_document(TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID, doc_id.clone())
         .await
-        .expect("Failed to execute request");
+        .expect("Failed to delete document");
 
-    // 5. Assert
-    assert_eq!(StatusCode::OK, response.status());
-    let downloaded_data = response.bytes().await.expect("Failed to read response");
-    assert_eq!(downloaded_data.to_vec(), test_data);
+    assert!(response.success);
 
-    // Cleanup
-    let _ = db.client().database(&db_name).drop(None).await;
-    let _ = tokio::fs::remove_dir_all(&config.storage.local_path).await;
+    // Verify it's gone
+    let result = client
+        .get_document(TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID, doc_id)
+        .await;
+
+    assert!(result.is_err());
+    assert_eq!(result.unwrap_err().code(), tonic::Code::NotFound);
+
+    app.cleanup().await;
 }
 
 #[tokio::test]
-async fn expired_signed_url_fails() {
-    // 1. Setup
-    std::env::set_var("MONGODB_URI", "mongodb://localhost:27017");
-    let mut config = DocumentConfig::load().expect("Failed to load configuration");
-    config.common.port = 0;
-    config.storage.local_path = format!("target/test-storage-{}", Uuid::new_v4());
+async fn signed_url_generation_works() {
+    let app = TestApp::spawn().await;
+    let mut client = app.grpc_client().await;
 
-    let db_name = format!("test_expired_url_{}", Uuid::new_v4());
-    config.mongodb.database = db_name.clone();
+    // Upload a document
+    let doc_id = upload_test_document(&mut client, "signed.txt", "text/plain", vec![0; 100]).await;
 
-    let app = Application::build(config.clone())
-        .await
-        .expect("Failed to build application");
-    let port = app.port();
-    let db = app.db().clone();
-
-    tokio::spawn(app.run_until_stopped());
-
-    // 2. Upload a document
-    let client = reqwest::Client::new();
-    let test_data = b"Hello, World!".to_vec();
-    let doc = upload_document(
-        &client,
-        port,
-        TEST_USER_ID,
-        "test.txt",
-        "text/plain",
-        test_data.clone(),
-    )
-    .await;
-
-    // 3. Generate a signed URL with past expiration
-    let expires = chrono::Utc::now().timestamp() - 300; // 5 minutes ago
-    let signature = service_core::utils::signature::generate_document_signature(
-        &doc.id,
-        expires,
-        &config.signature.signing_secret,
-    )
-    .expect("Failed to generate signature");
-
-    // 4. Try to download using expired signed URL
+    // Generate signed URL
     let response = client
-        .get(format!(
-            "http://127.0.0.1:{}/documents/{}/content?signature={}&expires={}",
-            port, doc.id, signature, expires
-        ))
-        .send()
+        .generate_signed_url(TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID, doc_id.clone(), 3600)
         .await
-        .expect("Failed to execute request");
+        .expect("Failed to generate signed URL");
 
-    // 5. Assert - should be unauthorized
-    assert_eq!(StatusCode::UNAUTHORIZED, response.status());
+    // Verify URL contains document ID and signature
+    assert!(response.url.contains(&doc_id));
+    assert!(response.url.contains("signature="));
+    assert!(response.url.contains("expires="));
+    assert!(response.expires_at.is_some());
 
-    // Cleanup
-    let _ = db.client().database(&db_name).drop(None).await;
-    let _ = tokio::fs::remove_dir_all(&config.storage.local_path).await;
+    app.cleanup().await;
 }
-
-#[tokio::test]
-async fn invalid_signature_fails() {
-    // 1. Setup
-    std::env::set_var("MONGODB_URI", "mongodb://localhost:27017");
-    let mut config = DocumentConfig::load().expect("Failed to load configuration");
-    config.common.port = 0;
-    config.storage.local_path = format!("target/test-storage-{}", Uuid::new_v4());
-
-    let db_name = format!("test_invalid_sig_{}", Uuid::new_v4());
-    config.mongodb.database = db_name.clone();
-
-    let app = Application::build(config.clone())
-        .await
-        .expect("Failed to build application");
-    let port = app.port();
-    let db = app.db().clone();
-
-    tokio::spawn(app.run_until_stopped());
-
-    // 2. Upload a document
-    let client = reqwest::Client::new();
-    let test_data = b"Hello, World!".to_vec();
-    let doc = upload_document(
-        &client,
-        port,
-        TEST_USER_ID,
-        "test.txt",
-        "text/plain",
-        test_data.clone(),
-    )
-    .await;
-
-    // 3. Use an invalid signature
-    let expires = chrono::Utc::now().timestamp() + 300;
-    let invalid_signature = "invalid_signature_12345";
-
-    // 4. Try to download using invalid signature
-    let response = client
-        .get(format!(
-            "http://127.0.0.1:{}/documents/{}/content?signature={}&expires={}",
-            port, doc.id, invalid_signature, expires
-        ))
-        .send()
-        .await
-        .expect("Failed to execute request");
-
-    // 5. Assert - should be unauthorized
-    assert_eq!(StatusCode::UNAUTHORIZED, response.status());
-
-    // Cleanup
-    let _ = db.client().database(&db_name).drop(None).await;
-    let _ = tokio::fs::remove_dir_all(&config.storage.local_path).await;
-}
-
-// Note: The following tests for processed files would require actual ffmpeg/imagemagick
-// installations and are more suitable for integration testing in a full environment.
-// They are commented out but provided as templates for future testing.
-
-/*
-#[tokio::test]
-async fn download_processed_image_works() {
-    // This test requires imagemagick to be installed
-    // 1. Setup test environment
-    // 2. Upload an image file
-    // 3. Trigger processing with webp conversion
-    // 4. Wait for processing to complete
-    // 5. Download the processed file
-    // 6. Verify content-type is image/webp
-    // 7. Verify file size is different (optimized)
-}
-
-#[tokio::test]
-async fn download_compressed_video_works() {
-    // This test requires ffmpeg to be installed
-    // 1. Setup test environment
-    // 2. Upload a video file
-    // 3. Trigger processing with 720p resolution
-    // 4. Wait for processing to complete (may take time)
-    // 5. Download the compressed video
-    // 6. Verify content-type is video/mp4
-    // 7. Verify resolution metadata in status
-}
-
-#[tokio::test]
-async fn download_chunked_video_returns_json() {
-    // This test requires ffmpeg and a large video file >1GB after compression
-    // 1. Setup test environment
-    // 2. Upload a large video file
-    // 3. Trigger processing with 720p resolution
-    // 4. Wait for processing to complete
-    // 5. Download request should return JSON with chunk metadata
-    // 6. Verify JSON structure: type, chunks array, chunk_count
-}
-
-#[tokio::test]
-async fn download_video_chunk_works() {
-    // This test requires ffmpeg and a large video file
-    // 1. Setup and process a large video (chunked)
-    // 2. Get chunk metadata from download endpoint
-    // 3. Download individual chunks by index
-    // 4. Verify each chunk returns video/mp4 content
-    // 5. Verify chunk sizes match metadata
-}
-*/

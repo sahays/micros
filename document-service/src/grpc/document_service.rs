@@ -39,6 +39,7 @@ impl DocumentGrpcService {
     }
 
     /// Extract tenant context from gRPC metadata.
+    #[allow(clippy::result_large_err)]
     fn extract_tenant_context(
         request: &Request<impl std::any::Any>,
     ) -> Result<TenantContext, Status> {
@@ -70,6 +71,7 @@ impl DocumentGrpcService {
     }
 
     /// Extract tenant context from streaming request metadata.
+    #[allow(clippy::result_large_err)]
     fn extract_tenant_context_from_streaming<T>(
         request: &Request<Streaming<T>>,
     ) -> Result<TenantContext, Status> {
@@ -804,7 +806,7 @@ impl DocumentService for DocumentGrpcService {
             .map_err(|e| Status::internal(format!("Database error: {}", e)))?
             .ok_or_else(|| Status::not_found("Document not found"))?;
 
-        let expires_in = req.expires_in_seconds.max(60).min(86400); // 1 min to 24 hours
+        let expires_in = req.expires_in_seconds.clamp(60, 86400); // 1 min to 24 hours
         let expires_at = chrono::Utc::now() + chrono::Duration::seconds(expires_in);
         let expires_timestamp = expires_at.timestamp();
 

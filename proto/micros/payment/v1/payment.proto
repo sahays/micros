@@ -37,6 +37,11 @@ service PaymentService {
 
   // Generate a UPI QR code for payment.
   rpc GenerateUpiQr(GenerateUpiQrRequest) returns (GenerateUpiQrResponse);
+
+  // Webhook handling (called by BFF to proxy external webhooks)
+
+  // Handle a Razorpay webhook event proxied from BFF.
+  rpc HandleRazorpayWebhook(HandleRazorpayWebhookRequest) returns (HandleRazorpayWebhookResponse);
 }
 
 // CreateRazorpayOrderRequest to create a Razorpay order.
@@ -127,4 +132,25 @@ message GenerateUpiQrResponse {
 
   // Base64-encoded QR code image (optional, may not be generated).
   optional string qr_image_base64 = 2;
+}
+
+// HandleRazorpayWebhookRequest contains the raw webhook data from BFF.
+message HandleRazorpayWebhookRequest {
+  // Raw webhook body (JSON string).
+  string body = 1;
+
+  // X-Razorpay-Signature header value for verification.
+  string signature = 2;
+}
+
+// HandleRazorpayWebhookResponse after processing the webhook.
+message HandleRazorpayWebhookResponse {
+  // Whether the webhook was processed successfully.
+  bool success = 1;
+
+  // Event type that was processed (e.g., "payment.captured").
+  string event_type = 2;
+
+  // Optional message with processing details.
+  optional string message = 3;
 }

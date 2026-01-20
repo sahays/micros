@@ -1,12 +1,11 @@
 use crate::models::{Transaction, TransactionStatus};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 #[derive(Deserialize)]
 pub struct QrGenerateRequest {
     pub amount: f64,
     pub description: Option<String>,
-    pub transaction_id: Option<Uuid>,
+    pub transaction_id: Option<String>,
     pub vpa: Option<String>,
     pub merchant_name: Option<String>,
 }
@@ -27,7 +26,7 @@ pub struct CreateTransactionRequest {
 /// Response for a transaction.
 #[derive(Serialize)]
 pub struct TransactionResponse {
-    pub id: Uuid,
+    pub id: String,
     pub app_id: String,
     pub org_id: String,
     pub user_id: Option<String>,
@@ -42,7 +41,7 @@ pub struct TransactionResponse {
 impl From<Transaction> for TransactionResponse {
     fn from(t: Transaction) -> Self {
         Self {
-            id: t.id,
+            id: t.id.clone(),
             app_id: t.app_id,
             org_id: t.org_id,
             user_id: t.user_id,

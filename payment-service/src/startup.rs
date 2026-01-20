@@ -1,67 +1,50 @@
 //! Application startup and lifecycle management.
 //!
 //! This module provides the minimal HTTP server (health/metrics) and gRPC server
-//! for the document service. All business logic is exposed via gRPC.
+//! for the payment service. All business logic is exposed via gRPC.
 
-use crate::config::DocumentConfig;
+use crate::config::Config;
 use crate::grpc::{
-    proto::{document_service_server::DocumentServiceServer, FILE_DESCRIPTOR_SET},
-    DocumentGrpcService,
+    proto::{payment_service_server::PaymentServiceServer, FILE_DESCRIPTOR_SET},
+    PaymentGrpcService,
 };
-use crate::services::{LocalStorage, MongoDb, Storage};
-use crate::workers::{ProcessingJob, WorkerOrchestrator};
-use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::get, Json, Router};
+use crate::services::{PaymentRepository, RazorpayClient};
+use axum::{http::StatusCode, response::IntoResponse, routing::get, Json, Router};
+use mongodb::{options::ClientOptions, Client};
+use secrecy::ExposeSecret;
 use serde_json::json;
 use service_core::error::AppError;
+use service_core::middleware::signature::SignatureConfig;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use tokio::net::TcpListener;
-use tokio::sync::mpsc;
 use tonic::transport::Server as GrpcServer;
 
 /// Shared application state.
 #[derive(Clone)]
 pub struct AppState {
-    pub config: DocumentConfig,
-    pub db: MongoDb,
-    pub storage: Arc<dyn Storage>,
-    pub job_tx: Option<mpsc::Sender<ProcessingJob>>,
-}
-
-/// State for health check endpoints.
-#[derive(Clone)]
-struct HealthState {
-    db: MongoDb,
+    pub db: mongodb::Database,
+    pub redis: redis::Client,
+    pub config: Config,
+    pub signature_config: SignatureConfig,
+    pub repository: PaymentRepository,
+    pub razorpay: RazorpayClient,
 }
 
 /// Health check endpoint for Docker/K8s liveness probes.
-async fn health_check(State(state): State<HealthState>) -> impl IntoResponse {
-    match state.db.health_check().await {
-        Ok(_) => (
-            StatusCode::OK,
-            Json(json!({
-                "status": "ok",
-                "service": "document-service",
-                "version": env!("CARGO_PKG_VERSION")
-            })),
-        ),
-        Err(e) => (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(json!({
-                "status": "unhealthy",
-                "service": "document-service",
-                "error": e.to_string()
-            })),
-        ),
-    }
+async fn health_check() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        Json(json!({
+            "status": "ok",
+            "service": "payment-service",
+            "version": env!("CARGO_PKG_VERSION")
+        })),
+    )
 }
 
 /// Readiness check endpoint for K8s readiness probes.
-async fn readiness_check(State(state): State<HealthState>) -> impl IntoResponse {
-    match state.db.health_check().await {
-        Ok(_) => StatusCode::OK,
-        Err(_) => StatusCode::SERVICE_UNAVAILABLE,
-    }
+async fn readiness_check() -> impl IntoResponse {
+    (StatusCode::OK, Json(json!({ "status": "ready" })))
 }
 
 /// Application container for managing server lifecycle.
@@ -75,52 +58,65 @@ pub struct Application {
 
 impl Application {
     /// Build the application with the given configuration.
-    pub async fn build(config: DocumentConfig) -> Result<Self, AppError> {
-        // Connect to database
-        let db = MongoDb::connect(&config.mongodb.uri, &config.mongodb.database)
+    pub async fn build(config: Config) -> Result<Self, AppError> {
+        // Connect to MongoDB
+        let mut client_options = ClientOptions::parse(config.database.url.expose_secret())
             .await
             .map_err(|e| {
-                tracing::error!("Failed to connect to MongoDB: {}", e);
-                e
+                tracing::error!("Failed to parse MongoDB connection string: {}", e);
+                AppError::DatabaseError(e.into())
             })?;
+        client_options.app_name = Some("payment-service".to_string());
 
-        db.initialize_indexes().await.map_err(|e| {
-            tracing::error!("Failed to initialize database indexes: {}", e);
-            e
+        let client = Client::with_options(client_options).map_err(|e| {
+            tracing::error!("Failed to create MongoDB client: {}", e);
+            AppError::DatabaseError(e.into())
+        })?;
+        let db = client.database(&config.database.db_name);
+
+        // Connect to Redis
+        let redis = redis::Client::open(config.redis.url.expose_secret().as_str()).map_err(|e| {
+            tracing::error!("Failed to connect to Redis: {}", e);
+            AppError::InternalError(e.into())
         })?;
 
-        // Initialize storage
-        let storage: Arc<dyn Storage> = Arc::new(
-            LocalStorage::new(&config.storage.local_path)
-                .await
-                .map_err(|e| {
-                    tracing::error!(
-                        "Failed to initialize local storage at {}: {}",
-                        config.storage.local_path,
-                        e
-                    );
-                    e
-                })?,
-        );
+        let signature_config = SignatureConfig {
+            require_signatures: config.signature.enabled,
+            excluded_paths: vec![
+                "/health".to_string(),
+                "/ready".to_string(),
+            ],
+        };
 
-        // Initialize worker orchestrator
-        let (orchestrator, job_tx) =
-            WorkerOrchestrator::new(config.worker.clone(), db.clone(), storage.clone());
+        let repository = PaymentRepository::new(&db);
 
-        // Start worker pool
-        tokio::spawn(async move {
-            orchestrator.start().await;
-        });
+        // Initialize indexes for tenant-scoped queries
+        repository.init_indexes().await.map_err(|e| {
+            tracing::error!("Failed to initialize database indexes: {}", e);
+            AppError::DatabaseError(e.into())
+        })?;
+
+        // Initialize Razorpay client
+        let razorpay = RazorpayClient::new(config.razorpay.clone());
+        if razorpay.is_configured() {
+            tracing::info!("Razorpay client initialized");
+        } else {
+            tracing::warn!(
+                "Razorpay credentials not configured - payment features will be limited"
+            );
+        }
 
         let state = AppState {
+            db,
+            redis,
             config: config.clone(),
-            db: db.clone(),
-            storage,
-            job_tx: Some(job_tx),
+            signature_config,
+            repository,
+            razorpay,
         };
 
         // Bind HTTP listener (port 0 = random port for testing)
-        let http_addr = SocketAddr::from(([0, 0, 0, 0], config.common.port));
+        let http_addr = SocketAddr::from(([0, 0, 0, 0], config.server.port));
         let http_listener = TcpListener::bind(http_addr).await.map_err(|e| {
             tracing::error!("Failed to bind HTTP listener to {}: {}", http_addr, e);
             AppError::from(e)
@@ -135,7 +131,7 @@ impl Application {
         let grpc_port = grpc_listener.local_addr()?.port();
 
         tracing::info!(
-            "Document service: HTTP on port {}, gRPC on port {}",
+            "Payment service: HTTP on port {}, gRPC on port {}",
             http_port,
             grpc_port
         );
@@ -160,46 +156,44 @@ impl Application {
     }
 
     /// Get a reference to the database.
-    pub fn db(&self) -> &MongoDb {
+    pub fn db(&self) -> &mongodb::Database {
         &self.state.db
+    }
+
+    /// Get the application state for sharing with gRPC service.
+    pub fn state(&self) -> AppState {
+        self.state.clone()
     }
 
     /// Run the application until stopped.
     ///
     /// This starts both the HTTP health server and the gRPC server concurrently.
     pub async fn run_until_stopped(self) -> std::io::Result<()> {
-        // Build minimal HTTP router (health + metrics only)
-        let health_state = HealthState {
-            db: self.state.db.clone(),
-        };
-
+        // Build minimal HTTP router (health only)
         let http_router = Router::new()
             .route("/health", get(health_check))
-            .route("/ready", get(readiness_check))
-            .with_state(health_state);
+            .route("/ready", get(readiness_check));
 
         // Build gRPC server
-        let document_service = DocumentGrpcService::new(self.state);
+        let payment_service = PaymentGrpcService::new(self.state);
 
         // gRPC health service
         let (mut health_reporter, grpc_health_service) = tonic_health::server::health_reporter();
         health_reporter
-            .set_serving::<DocumentServiceServer<DocumentGrpcService>>()
+            .set_serving::<PaymentServiceServer<PaymentGrpcService>>()
             .await;
 
         // Reflection service for debugging
         let reflection_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
             .build_v1()
-            .map_err(|e| {
-                std::io::Error::other(format!("Failed to build reflection service: {}", e))
-            })?;
+            .map_err(|e| std::io::Error::other(format!("Failed to build reflection service: {}", e)))?;
 
         let incoming = tokio_stream::wrappers::TcpListenerStream::new(self.grpc_listener);
         let grpc_server = GrpcServer::builder()
             .add_service(grpc_health_service)
             .add_service(reflection_service)
-            .add_service(DocumentServiceServer::new(document_service))
+            .add_service(PaymentServiceServer::new(payment_service))
             .serve_with_incoming(incoming);
 
         // Run both servers concurrently

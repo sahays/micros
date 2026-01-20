@@ -1,231 +1,186 @@
-use axum::http::StatusCode;
-use document_service::config::DocumentConfig;
-use document_service::dtos::{DocumentResponse, ProcessingOptions, ProcessingStatusResponse};
-use document_service::models::DocumentStatus;
-use document_service::startup::Application;
-use reqwest::multipart;
-use std::time::Duration;
+mod common;
+
+use common::{TestApp, TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID};
+use service_core::grpc::DocumentStatusProto;
 use uuid::Uuid;
 
-// Test constants for tenant context
-const TEST_APP_ID: &str = "test-app-id";
-const TEST_ORG_ID: &str = "test-org-id";
-
-/// Helper function to upload a document with tenant headers
-async fn upload_document(
-    client: &reqwest::Client,
-    port: u16,
-    user_id: &str,
+/// Helper to upload a document for testing
+async fn upload_test_document(
+    client: &mut service_core::grpc::DocumentClient,
     filename: &str,
     mime_type: &str,
     data: Vec<u8>,
-) -> DocumentResponse {
-    let form = multipart::Form::new().part(
-        "file",
-        multipart::Part::bytes(data)
-            .file_name(filename.to_string())
-            .mime_str(mime_type)
-            .unwrap(),
-    );
-
+) -> String {
     let response = client
-        .post(format!("http://127.0.0.1:{}/documents", port))
-        .header("X-App-ID", TEST_APP_ID)
-        .header("X-Org-ID", TEST_ORG_ID)
-        .header("X-User-ID", user_id)
-        .multipart(form)
-        .send()
+        .upload_document(
+            TEST_APP_ID,
+            TEST_ORG_ID,
+            TEST_USER_ID,
+            filename.to_string(),
+            mime_type.to_string(),
+            data,
+        )
         .await
-        .expect("Failed to execute request");
+        .expect("Failed to upload document");
 
-    assert_eq!(StatusCode::CREATED, response.status());
-    response.json().await.expect("Failed to parse JSON")
-}
-
-/// Helper function to trigger document processing with tenant headers
-async fn trigger_processing(
-    client: &reqwest::Client,
-    port: u16,
-    user_id: &str,
-    document_id: &str,
-    options: ProcessingOptions,
-) -> StatusCode {
-    let response = client
-        .post(format!(
-            "http://127.0.0.1:{}/documents/{}/process",
-            port, document_id
-        ))
-        .header("X-App-ID", TEST_APP_ID)
-        .header("X-Org-ID", TEST_ORG_ID)
-        .header("X-User-ID", user_id)
-        .json(&options)
-        .send()
-        .await
-        .expect("Failed to execute request");
-
-    response.status()
-}
-
-/// Helper function to get document status with tenant headers
-async fn get_document_status(
-    client: &reqwest::Client,
-    port: u16,
-    user_id: &str,
-    document_id: &str,
-) -> (StatusCode, Option<ProcessingStatusResponse>) {
-    let response = client
-        .get(format!(
-            "http://127.0.0.1:{}/documents/{}/status",
-            port, document_id
-        ))
-        .header("X-App-ID", TEST_APP_ID)
-        .header("X-Org-ID", TEST_ORG_ID)
-        .header("X-User-ID", user_id)
-        .send()
-        .await
-        .expect("Failed to execute request");
-
-    let status = response.status();
-    let body = if status.is_success() {
-        Some(response.json().await.expect("Failed to parse JSON"))
-    } else {
-        None
-    };
-
-    (status, body)
-}
-
-/// Helper to wait for processing to complete with tenant headers
-async fn wait_for_processing(
-    client: &reqwest::Client,
-    port: u16,
-    user_id: &str,
-    document_id: &str,
-    timeout: Duration,
-) -> ProcessingStatusResponse {
-    let start = std::time::Instant::now();
-
-    loop {
-        let (status, response) = get_document_status(client, port, user_id, document_id).await;
-        assert_eq!(StatusCode::OK, status);
-
-        let status_response = response.unwrap();
-
-        // Check if processing is complete (either ready or failed)
-        if !matches!(status_response.status, DocumentStatus::Processing) {
-            return status_response;
-        }
-
-        if start.elapsed() > timeout {
-            panic!("Processing timed out after {:?}", timeout);
-        }
-
-        tokio::time::sleep(Duration::from_millis(500)).await;
-    }
+    response.document.expect("Missing document").id
 }
 
 #[tokio::test]
 async fn manual_processing_trigger_works() {
-    // 1. Setup
-    std::env::set_var("MONGODB_URI", "mongodb://localhost:27017");
-    let mut config = DocumentConfig::load().expect("Failed to load configuration");
-    config.common.port = 0; // Random port
-    config.storage.local_path = format!("target/test-storage-{}", Uuid::new_v4());
+    let app = TestApp::spawn().await;
+    let mut client = app.grpc_client().await;
 
-    let db_name = format!("test_manual_processing_{}", Uuid::new_v4());
-    config.mongodb.database = db_name.clone();
+    // Upload a document
+    let doc_id = upload_test_document(&mut client, "test.txt", "text/plain", vec![0; 100]).await;
 
-    let app = Application::build(config.clone())
+    // Verify it starts in Ready state (no automatic processing)
+    let get_response = client
+        .get_document(TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID, doc_id.clone())
         .await
-        .expect("Failed to build application");
-    let port = app.port();
-    let db = app.db().clone();
+        .expect("Failed to get document");
 
-    tokio::spawn(app.run_until_stopped());
+    let document = get_response.document.expect("Missing document");
+    assert_eq!(document.status, DocumentStatusProto::Ready as i32);
 
-    let client = reqwest::Client::new();
-    let user_id = "test_user_123";
+    // Trigger processing with default options
+    let process_response = client
+        .process_document(TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID, doc_id.clone(), None)
+        .await
+        .expect("Failed to trigger processing");
 
-    // 2. Upload a document
-    let doc = upload_document(
-        &client,
-        port,
-        user_id,
-        "test.txt",
-        "text/plain",
-        vec![0; 100],
-    )
-    .await;
+    assert!(process_response.queued);
+    assert_eq!(
+        process_response.status,
+        DocumentStatusProto::Processing as i32
+    );
 
-    // Document should be in Ready state (no automatic processing)
-    assert_eq!(doc.status, DocumentStatus::Ready);
+    // Check status - should be Processing
+    let status_response = client
+        .get_processing_status(TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID, doc_id.clone())
+        .await
+        .expect("Failed to get processing status");
 
-    // 3. Trigger processing with default options
-    let options = ProcessingOptions::default();
-    let status = trigger_processing(&client, port, user_id, &doc.id, options).await;
-    assert_eq!(StatusCode::ACCEPTED, status);
+    assert_eq!(status_response.document_id, doc_id);
+    assert_eq!(
+        status_response.status,
+        DocumentStatusProto::Processing as i32
+    );
 
-    // 4. Check status immediately - should be Processing
-    let (status, response) = get_document_status(&client, port, user_id, &doc.id).await;
-    assert_eq!(StatusCode::OK, status);
-    let status_response = response.unwrap();
-    assert_eq!(status_response.status, DocumentStatus::Processing);
-
-    // Cleanup
-    let _ = db.client().database(&db_name).drop(None).await;
-    let _ = tokio::fs::remove_dir_all(&config.storage.local_path).await;
+    app.cleanup().await;
 }
 
 #[tokio::test]
 async fn processing_with_custom_options_works() {
-    // 1. Setup
-    std::env::set_var("MONGODB_URI", "mongodb://localhost:27017");
-    let mut config = DocumentConfig::load().expect("Failed to load configuration");
-    config.common.port = 0;
-    config.storage.local_path = format!("target/test-storage-{}", Uuid::new_v4());
+    let app = TestApp::spawn().await;
+    let mut client = app.grpc_client().await;
 
-    let db_name = format!("test_custom_options_{}", Uuid::new_v4());
-    config.mongodb.database = db_name.clone();
+    // Upload an image document
+    let doc_id = upload_test_document(&mut client, "image.jpg", "image/jpeg", vec![0; 200]).await;
 
-    let app = Application::build(config.clone())
-        .await
-        .expect("Failed to build application");
-    let port = app.port();
-    let db = app.db().clone();
+    // Trigger processing with custom image options
+    use service_core::grpc::proto::document::{ImageOptions, ProcessingOptions};
 
-    tokio::spawn(app.run_until_stopped());
-
-    let client = reqwest::Client::new();
-    let user_id = "test_user_456";
-
-    // 2. Upload document
-    let doc = upload_document(
-        &client,
-        port,
-        user_id,
-        "image.jpg",
-        "image/jpeg",
-        vec![0; 200],
-    )
-    .await;
-
-    // 3. Trigger processing with custom image options
     let options = ProcessingOptions {
-        processors: None,
+        processors: vec![],
         pdf_options: None,
-        image_options: Some(document_service::dtos::ImageOptions {
+        image_options: Some(ImageOptions {
             format: "webp".to_string(),
             quality: 90,
         }),
         video_options: None,
     };
 
-    let status = trigger_processing(&client, port, user_id, &doc.id, options).await;
-    assert_eq!(StatusCode::ACCEPTED, status);
+    let process_response = client
+        .process_document(
+            TEST_APP_ID,
+            TEST_ORG_ID,
+            TEST_USER_ID,
+            doc_id.clone(),
+            Some(options),
+        )
+        .await
+        .expect("Failed to trigger processing");
 
-    // Cleanup
-    let _ = db.client().database(&db_name).drop(None).await;
-    let _ = tokio::fs::remove_dir_all(&config.storage.local_path).await;
+    assert!(process_response.queued);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+async fn cannot_process_already_processing_document() {
+    let app = TestApp::spawn().await;
+    let mut client = app.grpc_client().await;
+
+    // Upload a document
+    let doc_id = upload_test_document(&mut client, "test.txt", "text/plain", vec![0; 100]).await;
+
+    // Trigger processing (first time - should succeed)
+    let first_result = client
+        .process_document(TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID, doc_id.clone(), None)
+        .await;
+
+    assert!(first_result.is_ok());
+
+    // Try to trigger processing again immediately (should fail)
+    let second_result = client
+        .process_document(TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID, doc_id.clone(), None)
+        .await;
+
+    assert!(second_result.is_err());
+    let status = second_result.unwrap_err();
+    assert_eq!(status.code(), tonic::Code::FailedPrecondition);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+async fn status_endpoint_returns_correct_information() {
+    let app = TestApp::spawn().await;
+    let mut client = app.grpc_client().await;
+
+    // Upload a document
+    let doc_id = upload_test_document(&mut client, "status.txt", "text/plain", vec![0; 75]).await;
+
+    // Get processing status (should be Ready, 0 attempts)
+    let status_response = client
+        .get_processing_status(TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID, doc_id.clone())
+        .await
+        .expect("Failed to get processing status");
+
+    assert_eq!(status_response.document_id, doc_id);
+    assert_eq!(status_response.status, DocumentStatusProto::Ready as i32);
+    assert_eq!(status_response.processing_attempts, 0);
+    assert!(status_response.metadata.is_none());
+    assert!(status_response.error_message.is_none());
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+async fn processing_nonexistent_document_returns_not_found() {
+    let app = TestApp::spawn().await;
+    let mut client = app.grpc_client().await;
+
+    let fake_id = Uuid::new_v4().to_string();
+
+    // Try to get status of non-existent document
+    let status_result = client
+        .get_processing_status(TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID, fake_id.clone())
+        .await;
+
+    assert!(status_result.is_err());
+    assert_eq!(status_result.unwrap_err().code(), tonic::Code::NotFound);
+
+    // Try to trigger processing on non-existent document
+    let process_result = client
+        .process_document(TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID, fake_id, None)
+        .await;
+
+    assert!(process_result.is_err());
+    assert_eq!(process_result.unwrap_err().code(), tonic::Code::NotFound);
+
+    app.cleanup().await;
 }
 
 #[tokio::test]
@@ -233,181 +188,46 @@ async fn any_authenticated_caller_can_process_document() {
     // Test that document-service trusts the BFF to handle authorization
     // The service should process any valid document ID without ownership checks
 
-    // 1. Setup
-    std::env::set_var("MONGODB_URI", "mongodb://localhost:27017");
-    let mut config = DocumentConfig::load().expect("Failed to load configuration");
-    config.common.port = 0;
-    config.storage.local_path = format!("target/test-storage-{}", Uuid::new_v4());
+    let app = TestApp::spawn().await;
+    let mut client = app.grpc_client().await;
 
-    let db_name = format!("test_bff_trust_{}", Uuid::new_v4());
-    config.mongodb.database = db_name.clone();
+    let user_id_owner = "user_owner";
+    let user_id_service = "service_caller";
 
-    let app = Application::build(config.clone())
+    // Upload document as user_owner
+    let response = client
+        .upload_document(
+            TEST_APP_ID,
+            TEST_ORG_ID,
+            user_id_owner,
+            "shared.txt".to_string(),
+            "text/plain".to_string(),
+            vec![0; 50],
+        )
         .await
-        .expect("Failed to build application");
-    let port = app.port();
-    let db = app.db().clone();
+        .expect("Failed to upload");
 
-    tokio::spawn(app.run_until_stopped());
+    let doc_id = response.document.expect("Missing document").id;
 
-    let client = reqwest::Client::new();
-    let user_id_1 = "user_owner";
-    let user_id_2 = "service_caller"; // Could be BFF or another service
+    // Any authenticated caller can trigger processing
+    let process_result = client
+        .process_document(
+            TEST_APP_ID,
+            TEST_ORG_ID,
+            user_id_service,
+            doc_id.clone(),
+            None,
+        )
+        .await;
 
-    // 2. Upload document as user_1
-    let doc = upload_document(
-        &client,
-        port,
-        user_id_1,
-        "shared.txt",
-        "text/plain",
-        vec![0; 50],
-    )
-    .await;
+    assert!(process_result.is_ok()); // Should succeed - trusts caller
 
-    // 3. Any authenticated caller can trigger processing (BFF's job to check ownership)
-    let options = ProcessingOptions::default();
-    let status = trigger_processing(&client, port, user_id_2, &doc.id, options).await;
-    assert_eq!(StatusCode::ACCEPTED, status); // Should succeed - trusts caller
+    // Any authenticated caller can get status
+    let status_result = client
+        .get_processing_status(TEST_APP_ID, TEST_ORG_ID, user_id_service, doc_id)
+        .await;
 
-    // 4. Any authenticated caller can get status
-    let (status, _) = get_document_status(&client, port, user_id_2, &doc.id).await;
-    assert_eq!(StatusCode::OK, status); // Should succeed - trusts caller
+    assert!(status_result.is_ok()); // Should succeed - trusts caller
 
-    // Cleanup
-    let _ = db.client().database(&db_name).drop(None).await;
-    let _ = tokio::fs::remove_dir_all(&config.storage.local_path).await;
-}
-
-#[tokio::test]
-async fn cannot_process_already_processing_document() {
-    // 1. Setup
-    std::env::set_var("MONGODB_URI", "mongodb://localhost:27017");
-    let mut config = DocumentConfig::load().expect("Failed to load configuration");
-    config.common.port = 0;
-    config.storage.local_path = format!("target/test-storage-{}", Uuid::new_v4());
-
-    let db_name = format!("test_duplicate_processing_{}", Uuid::new_v4());
-    config.mongodb.database = db_name.clone();
-
-    let app = Application::build(config.clone())
-        .await
-        .expect("Failed to build application");
-    let port = app.port();
-    let db = app.db().clone();
-
-    tokio::spawn(app.run_until_stopped());
-
-    let client = reqwest::Client::new();
-    let user_id = "test_user_789";
-
-    // 2. Upload document
-    let doc = upload_document(
-        &client,
-        port,
-        user_id,
-        "test.txt",
-        "text/plain",
-        vec![0; 100],
-    )
-    .await;
-
-    // 3. Trigger processing (first time - should succeed)
-    let options = ProcessingOptions::default();
-    let status = trigger_processing(&client, port, user_id, &doc.id, options.clone()).await;
-    assert_eq!(StatusCode::ACCEPTED, status);
-
-    // 4. Try to trigger processing again immediately (should fail)
-    let status = trigger_processing(&client, port, user_id, &doc.id, options).await;
-    assert_eq!(StatusCode::BAD_REQUEST, status);
-
-    // Cleanup
-    let _ = db.client().database(&db_name).drop(None).await;
-    let _ = tokio::fs::remove_dir_all(&config.storage.local_path).await;
-}
-
-#[tokio::test]
-async fn status_endpoint_returns_correct_information() {
-    // 1. Setup
-    std::env::set_var("MONGODB_URI", "mongodb://localhost:27017");
-    let mut config = DocumentConfig::load().expect("Failed to load configuration");
-    config.common.port = 0;
-    config.storage.local_path = format!("target/test-storage-{}", Uuid::new_v4());
-
-    let db_name = format!("test_status_endpoint_{}", Uuid::new_v4());
-    config.mongodb.database = db_name.clone();
-
-    let app = Application::build(config.clone())
-        .await
-        .expect("Failed to build application");
-    let port = app.port();
-    let db = app.db().clone();
-
-    tokio::spawn(app.run_until_stopped());
-
-    let client = reqwest::Client::new();
-    let user_id = "test_user_status";
-
-    // 2. Upload document
-    let doc = upload_document(
-        &client,
-        port,
-        user_id,
-        "status.txt",
-        "text/plain",
-        vec![0; 75],
-    )
-    .await;
-
-    // 3. Get status (should be Ready)
-    let (status, response) = get_document_status(&client, port, user_id, &doc.id).await;
-    assert_eq!(StatusCode::OK, status);
-
-    let status_response = response.unwrap();
-    assert_eq!(status_response.document_id, doc.id);
-    assert_eq!(status_response.status, DocumentStatus::Ready);
-    assert_eq!(status_response.processing_attempts, 0);
-    assert!(status_response.processing_metadata.is_none());
-    assert!(status_response.error_message.is_none());
-
-    // Cleanup
-    let _ = db.client().database(&db_name).drop(None).await;
-    let _ = tokio::fs::remove_dir_all(&config.storage.local_path).await;
-}
-
-#[tokio::test]
-async fn document_not_found_returns_404() {
-    // 1. Setup
-    std::env::set_var("MONGODB_URI", "mongodb://localhost:27017");
-    let mut config = DocumentConfig::load().expect("Failed to load configuration");
-    config.common.port = 0;
-    config.storage.local_path = format!("target/test-storage-{}", Uuid::new_v4());
-
-    let db_name = format!("test_not_found_{}", Uuid::new_v4());
-    config.mongodb.database = db_name.clone();
-
-    let app = Application::build(config.clone())
-        .await
-        .expect("Failed to build application");
-    let port = app.port();
-    let db = app.db().clone();
-
-    tokio::spawn(app.run_until_stopped());
-
-    let client = reqwest::Client::new();
-    let user_id = "test_user_404";
-
-    // 2. Try to get status of non-existent document
-    let fake_id = Uuid::new_v4().to_string();
-    let (status, _) = get_document_status(&client, port, user_id, &fake_id).await;
-    assert_eq!(StatusCode::NOT_FOUND, status);
-
-    // 3. Try to trigger processing on non-existent document
-    let options = ProcessingOptions::default();
-    let status = trigger_processing(&client, port, user_id, &fake_id, options).await;
-    assert_eq!(StatusCode::NOT_FOUND, status);
-
-    // Cleanup
-    let _ = db.client().database(&db_name).drop(None).await;
-    let _ = tokio::fs::remove_dir_all(&config.storage.local_path).await;
+    app.cleanup().await;
 }

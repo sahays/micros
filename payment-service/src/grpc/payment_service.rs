@@ -4,14 +4,16 @@ use crate::grpc::proto::{
     payment_service_server::PaymentService, CreateRazorpayOrderRequest,
     CreateRazorpayOrderResponse, CreateTransactionRequest, CreateTransactionResponse,
     GenerateUpiQrRequest, GenerateUpiQrResponse, GetTransactionRequest, GetTransactionResponse,
-    ListTransactionsRequest, ListTransactionsResponse, Transaction as ProtoTransaction,
+    HandleRazorpayWebhookRequest, HandleRazorpayWebhookResponse, ListTransactionsRequest,
+    ListTransactionsResponse, Transaction as ProtoTransaction,
     TransactionStatus as ProtoTransactionStatus, UpdateTransactionStatusRequest,
     UpdateTransactionStatusResponse, VerifyRazorpayPaymentRequest, VerifyRazorpayPaymentResponse,
 };
 use crate::middleware::TenantContext;
-use crate::models::{Transaction, TransactionStatus};
+use crate::models::Transaction;
+use crate::models::TransactionStatus;
 use crate::services::razorpay::PaymentVerification;
-use crate::AppState;
+use crate::startup::AppState;
 use mongodb::bson::DateTime;
 use prost_types::Timestamp;
 use tonic::{Request, Response, Status};
@@ -50,6 +52,37 @@ impl PaymentGrpcService {
             .map(String::from);
 
         Ok(TenantContext::new(app_id, org_id, user_id))
+    }
+
+    /// Helper to update transaction by Razorpay order ID.
+    async fn update_transaction_by_order_id(
+        &self,
+        order_id: &str,
+        status: TransactionStatus,
+    ) -> anyhow::Result<()> {
+        use mongodb::bson::doc;
+
+        let filter = doc! { "provider_order_id": order_id };
+        let update = doc! {
+            "$set": {
+                "status": mongodb::bson::to_bson(&status)?,
+                "updated_at": mongodb::bson::DateTime::now()
+            }
+        };
+
+        self.state
+            .db
+            .collection::<Transaction>("transactions")
+            .update_one(filter, update, None)
+            .await?;
+
+        tracing::info!(
+            order_id = %order_id,
+            status = ?status,
+            "Transaction updated via webhook"
+        );
+
+        Ok(())
     }
 }
 
@@ -111,8 +144,9 @@ impl PaymentService for PaymentGrpcService {
         let req = request.into_inner();
 
         let now = DateTime::now();
+        let transaction_id = Uuid::new_v4().to_string();
         let transaction = Transaction {
-            id: Uuid::new_v4(),
+            id: transaction_id.clone(),
             app_id: tenant.app_id.clone(),
             org_id: tenant.org_id.clone(),
             user_id: tenant.user_id.clone(),
@@ -125,7 +159,7 @@ impl PaymentService for PaymentGrpcService {
         };
 
         tracing::info!(
-            transaction_id = %transaction.id,
+            transaction_id = %transaction_id,
             app_id = %tenant.app_id,
             org_id = %tenant.org_id,
             amount = req.amount,
@@ -153,11 +187,12 @@ impl PaymentService for PaymentGrpcService {
         let tenant = Self::extract_tenant_context(&request)?;
         let req = request.into_inner();
 
-        let transaction_id = Uuid::parse_str(&req.transaction_id)
+        // Validate UUID format
+        let _uuid = Uuid::parse_str(&req.transaction_id)
             .map_err(|_| Status::invalid_argument("Invalid transaction ID"))?;
 
         tracing::info!(
-            transaction_id = %transaction_id,
+            transaction_id = %req.transaction_id,
             app_id = %tenant.app_id,
             org_id = %tenant.org_id,
             "Fetching transaction via gRPC"
@@ -166,7 +201,7 @@ impl PaymentService for PaymentGrpcService {
         let transaction = self
             .state
             .repository
-            .get_transaction_in_tenant(&tenant.app_id, &tenant.org_id, transaction_id)
+            .get_transaction_in_tenant(&tenant.app_id, &tenant.org_id, &req.transaction_id)
             .await
             .map_err(|e| {
                 tracing::error!(error = %e, "Failed to fetch transaction");
@@ -186,14 +221,15 @@ impl PaymentService for PaymentGrpcService {
         let tenant = Self::extract_tenant_context(&request)?;
         let req = request.into_inner();
 
-        let transaction_id = Uuid::parse_str(&req.transaction_id)
+        // Validate UUID format
+        let _uuid = Uuid::parse_str(&req.transaction_id)
             .map_err(|_| Status::invalid_argument("Invalid transaction ID"))?;
 
         let new_status =
             proto_to_status(req.status).ok_or_else(|| Status::invalid_argument("Invalid status"))?;
 
         tracing::info!(
-            transaction_id = %transaction_id,
+            transaction_id = %req.transaction_id,
             app_id = %tenant.app_id,
             org_id = %tenant.org_id,
             new_status = ?new_status,
@@ -204,7 +240,7 @@ impl PaymentService for PaymentGrpcService {
         let _transaction = self
             .state
             .repository
-            .get_transaction_in_tenant(&tenant.app_id, &tenant.org_id, transaction_id)
+            .get_transaction_in_tenant(&tenant.app_id, &tenant.org_id, &req.transaction_id)
             .await
             .map_err(|e| {
                 tracing::error!(error = %e, "Failed to fetch transaction");
@@ -217,7 +253,7 @@ impl PaymentService for PaymentGrpcService {
             .update_transaction_status_in_tenant(
                 &tenant.app_id,
                 &tenant.org_id,
-                transaction_id,
+                &req.transaction_id,
                 new_status,
             )
             .await
@@ -316,8 +352,9 @@ impl PaymentService for PaymentGrpcService {
 
         // Create local transaction record
         let now = DateTime::now();
+        let transaction_id = Uuid::new_v4().to_string();
         let transaction = Transaction {
-            id: Uuid::new_v4(),
+            id: transaction_id.clone(),
             app_id: tenant.app_id.clone(),
             org_id: tenant.org_id.clone(),
             user_id: tenant.user_id.clone(),
@@ -360,11 +397,12 @@ impl PaymentService for PaymentGrpcService {
         let tenant = Self::extract_tenant_context(&request)?;
         let req = request.into_inner();
 
-        let transaction_id = Uuid::parse_str(&req.transaction_id)
+        // Validate UUID format
+        let _uuid = Uuid::parse_str(&req.transaction_id)
             .map_err(|_| Status::invalid_argument("Invalid transaction ID"))?;
 
         tracing::info!(
-            transaction_id = %transaction_id,
+            transaction_id = %req.transaction_id,
             razorpay_order_id = %req.razorpay_order_id,
             razorpay_payment_id = %req.razorpay_payment_id,
             app_id = %tenant.app_id,
@@ -376,7 +414,7 @@ impl PaymentService for PaymentGrpcService {
         let transaction = self
             .state
             .repository
-            .get_transaction_in_tenant(&tenant.app_id, &tenant.org_id, transaction_id)
+            .get_transaction_in_tenant(&tenant.app_id, &tenant.org_id, &req.transaction_id)
             .await
             .map_err(|e| {
                 tracing::error!(error = %e, "Failed to fetch transaction");
@@ -387,7 +425,7 @@ impl PaymentService for PaymentGrpcService {
         // Verify the order ID matches
         if transaction.provider_order_id.as_deref() != Some(&req.razorpay_order_id) {
             tracing::warn!(
-                transaction_id = %transaction_id,
+                transaction_id = %req.transaction_id,
                 expected_order_id = ?transaction.provider_order_id,
                 received_order_id = %req.razorpay_order_id,
                 "Order ID mismatch"
@@ -431,7 +469,7 @@ impl PaymentService for PaymentGrpcService {
             .update_transaction_status_in_tenant(
                 &tenant.app_id,
                 &tenant.org_id,
-                transaction_id,
+                &req.transaction_id,
                 new_status.clone(),
             )
             .await
@@ -441,13 +479,13 @@ impl PaymentService for PaymentGrpcService {
             })?;
 
         tracing::info!(
-            transaction_id = %transaction_id,
+            transaction_id = %req.transaction_id,
             status = ?new_status,
             "Payment verification completed via gRPC"
         );
 
         Ok(Response::new(VerifyRazorpayPaymentResponse {
-            transaction_id: transaction_id.to_string(),
+            transaction_id: req.transaction_id.clone(),
             status: status_to_proto(new_status).into(),
             razorpay_payment_id: req.razorpay_payment_id,
             message,
@@ -504,6 +542,131 @@ impl PaymentService for PaymentGrpcService {
         Ok(Response::new(GenerateUpiQrResponse {
             upi_link,
             qr_image_base64,
+        }))
+    }
+
+    async fn handle_razorpay_webhook(
+        &self,
+        request: Request<HandleRazorpayWebhookRequest>,
+    ) -> Result<Response<HandleRazorpayWebhookResponse>, Status> {
+        let req = request.into_inner();
+
+        tracing::debug!(signature = %req.signature, "Received Razorpay webhook via gRPC");
+
+        // Verify webhook signature
+        let is_valid = self
+            .state
+            .razorpay
+            .verify_webhook_signature(&req.body, &req.signature)
+            .map_err(|e| {
+                tracing::error!(error = %e, "Webhook signature verification error");
+                Status::internal("Webhook verification failed")
+            })?;
+
+        if !is_valid {
+            tracing::warn!("Invalid webhook signature");
+            return Err(Status::unauthenticated("Invalid webhook signature"));
+        }
+
+        // Parse the webhook event
+        let event = self.state.razorpay.parse_webhook_event(&req.body).map_err(|e| {
+            tracing::error!(error = %e, "Failed to parse webhook event");
+            Status::invalid_argument("Invalid webhook payload")
+        })?;
+
+        tracing::info!(
+            event_type = %event.event,
+            account_id = %event.account_id,
+            "Processing Razorpay webhook via gRPC"
+        );
+
+        let event_type = event.event.clone();
+
+        // Handle different event types
+        match event.event.as_str() {
+            "payment.captured" => {
+                if let Some(ref payment_entity) = event.payload.payment {
+                    let payment = &payment_entity.entity;
+                    tracing::info!(
+                        payment_id = %payment.id,
+                        order_id = ?payment.order_id,
+                        amount = payment.amount,
+                        status = %payment.status,
+                        "Payment captured webhook received"
+                    );
+
+                    // Update transaction status if we have an order_id
+                    if let Some(ref order_id) = payment.order_id {
+                        if let Err(e) = self
+                            .update_transaction_by_order_id(order_id, TransactionStatus::Completed)
+                            .await
+                        {
+                            tracing::error!(
+                                order_id = %order_id,
+                                error = %e,
+                                "Failed to update transaction from webhook"
+                            );
+                        }
+                    }
+                }
+            }
+            "payment.failed" => {
+                if let Some(ref payment_entity) = event.payload.payment {
+                    let payment = &payment_entity.entity;
+                    tracing::info!(
+                        payment_id = %payment.id,
+                        order_id = ?payment.order_id,
+                        "Payment failed webhook received"
+                    );
+
+                    if let Some(ref order_id) = payment.order_id {
+                        if let Err(e) = self
+                            .update_transaction_by_order_id(order_id, TransactionStatus::Failed)
+                            .await
+                        {
+                            tracing::error!(
+                                order_id = %order_id,
+                                error = %e,
+                                "Failed to update transaction from webhook"
+                            );
+                        }
+                    }
+                }
+            }
+            "order.paid" => {
+                if let Some(ref order_entity) = event.payload.order {
+                    let order = &order_entity.entity;
+                    tracing::info!(
+                        order_id = %order.id,
+                        amount = order.amount,
+                        "Order paid webhook received"
+                    );
+
+                    if let Err(e) = self
+                        .update_transaction_by_order_id(&order.id, TransactionStatus::Completed)
+                        .await
+                    {
+                        tracing::error!(
+                            order_id = %order.id,
+                            error = %e,
+                            "Failed to update transaction from webhook"
+                        );
+                    }
+                }
+            }
+            "refund.created" | "refund.processed" => {
+                tracing::info!(event_type = %event.event, "Refund webhook received");
+                // Handle refund events - would update transaction to Refunded status
+            }
+            _ => {
+                tracing::debug!(event_type = %event.event, "Unhandled webhook event type");
+            }
+        }
+
+        Ok(Response::new(HandleRazorpayWebhookResponse {
+            success: true,
+            event_type,
+            message: Some("Webhook processed successfully".to_string()),
         }))
     }
 }

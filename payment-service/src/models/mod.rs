@@ -1,11 +1,10 @@
 use mongodb::bson::DateTime;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Transaction {
     #[serde(rename = "_id")]
-    pub id: Uuid,
+    pub id: String,
     /// Application ID (maps to registered client in auth-service)
     pub app_id: String,
     /// Organization ID within the application
@@ -33,7 +32,7 @@ pub enum TransactionStatus {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PaymentMethod {
     #[serde(rename = "_id")]
-    pub id: Uuid,
+    pub id: String,
     /// Application ID (maps to registered client in auth-service)
     pub app_id: String,
     /// Organization ID within the application

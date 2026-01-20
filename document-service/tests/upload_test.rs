@@ -1,84 +1,161 @@
-use axum::http::StatusCode;
-use document_service::config::DocumentConfig;
-use document_service::startup::Application;
-use mongodb::bson::doc;
-use reqwest::multipart;
-use uuid::Uuid;
+mod common;
 
-// Test constants for tenant context
-const TEST_APP_ID: &str = "test-app-id";
-const TEST_ORG_ID: &str = "test-org-id";
-const TEST_USER_ID: &str = "test_user_123";
+use common::{TestApp, TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID};
+use mongodb::bson::doc;
+use service_core::grpc::DocumentStatusProto;
 
 #[tokio::test]
 async fn upload_document_works() {
-    // 1. Setup
-    std::env::set_var("MONGODB_URI", "mongodb://localhost:27017");
-    let mut config = DocumentConfig::load().expect("Failed to load configuration");
-    config.common.port = 0; // Random port
-    config.storage.local_path = format!("target/test-storage-{}", Uuid::new_v4());
+    let app = TestApp::spawn().await;
+    let mut client = app.grpc_client().await;
 
-    // Unique DB for test
-    let db_name = format!("test_document_upload_{}", Uuid::new_v4());
-    config.mongodb.database = db_name.clone();
-
-    let app = Application::build(config.clone())
-        .await
-        .expect("Failed to build application");
-    let port = app.port();
-    let db = app.db().clone();
-
-    tokio::spawn(app.run_until_stopped());
-
-    // 2. Request
-    let client = reqwest::Client::new();
-    let form = multipart::Form::new().part(
-        "file",
-        multipart::Part::bytes(vec![0; 100])
-            .file_name("test.txt")
-            .mime_str("text/plain")
-            .unwrap(),
-    );
-
+    // Upload a document via gRPC
+    let test_data = b"Hello, World! This is test data.".to_vec();
     let response = client
-        .post(format!("http://127.0.0.1:{}/documents", port))
-        .header("X-App-ID", TEST_APP_ID)
-        .header("X-Org-ID", TEST_ORG_ID)
-        .header("X-User-ID", TEST_USER_ID) // User context from BFF
-        .multipart(form)
-        .send()
+        .upload_document(
+            TEST_APP_ID,
+            TEST_ORG_ID,
+            TEST_USER_ID,
+            "test.txt".to_string(),
+            "text/plain".to_string(),
+            test_data.clone(),
+        )
         .await
-        .expect("Failed to execute request.");
+        .expect("Failed to upload document");
 
-    // 3. Assert Response
-    assert_eq!(StatusCode::CREATED, response.status());
+    let document = response.document.expect("Missing document in response");
 
-    let body: serde_json::Value = response.json().await.expect("Failed to parse JSON");
-    assert_eq!(body["original_name"], "test.txt");
-    assert_eq!(body["mime_type"], "text/plain");
-    assert_eq!(body["size"], 100);
-    assert_eq!(body["status"], "ready"); // No automatic processing - must be triggered manually
+    // Verify response
+    assert!(!document.id.is_empty());
+    assert_eq!(document.original_name, "test.txt");
+    assert_eq!(document.mime_type, "text/plain");
+    assert_eq!(document.size, test_data.len() as i64);
+    assert_eq!(document.status, DocumentStatusProto::Ready as i32);
+    assert_eq!(document.owner_id, TEST_USER_ID);
+    assert_eq!(document.app_id, TEST_APP_ID);
+    assert_eq!(document.org_id, TEST_ORG_ID);
 
-    let doc_id = body["id"].as_str().unwrap();
-
-    // 4. Verify DB
-    let stored_doc = db
+    // Verify document exists in database
+    let stored_doc = app
+        .db
         .documents()
-        .find_one(doc! { "_id": doc_id }, None)
+        .find_one(doc! { "_id": &document.id }, None)
         .await
-        .unwrap()
+        .expect("DB query failed")
         .expect("Document not found in DB");
 
     assert_eq!(stored_doc.owner_id, TEST_USER_ID);
     assert_eq!(stored_doc.original_name, "test.txt");
-    assert_eq!(stored_doc.size, 100);
+    assert_eq!(stored_doc.size, test_data.len() as i64);
 
-    // 5. Verify Storage
-    let storage_path =
-        std::path::Path::new(&config.storage.local_path).join(&stored_doc.storage_key);
-    assert!(storage_path.exists());
+    app.cleanup().await;
+}
 
-    // Cleanup
-    let _ = db.client().database(&db_name).drop(None).await;
-    let _ = tokio::fs::remove_dir_all(&config.storage.local_path).await;
+#[tokio::test]
+async fn upload_document_with_different_mime_types() {
+    let app = TestApp::spawn().await;
+    let mut client = app.grpc_client().await;
+
+    // Test various mime types
+    let test_cases = vec![
+        ("image.png", "image/png"),
+        ("document.pdf", "application/pdf"),
+        ("data.json", "application/json"),
+        ("video.mp4", "video/mp4"),
+    ];
+
+    for (filename, mime_type) in test_cases {
+        let response = client
+            .upload_document(
+                TEST_APP_ID,
+                TEST_ORG_ID,
+                TEST_USER_ID,
+                filename.to_string(),
+                mime_type.to_string(),
+                vec![0; 100],
+            )
+            .await
+            .expect("Failed to upload document");
+
+        let document = response.document.expect("Missing document");
+        assert_eq!(document.original_name, filename);
+        assert_eq!(document.mime_type, mime_type);
+    }
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+async fn upload_document_requires_tenant_context() {
+    let app = TestApp::spawn().await;
+
+    // Try to connect and upload without proper tenant headers
+    // The gRPC client requires tenant context in metadata
+    // This test verifies the server rejects requests without proper metadata
+
+    use service_core::grpc::proto::document::{
+        document_service_client::DocumentServiceClient, upload_document_request::Data,
+        UploadDocumentRequest, UploadMetadata,
+    };
+    use std::collections::HashMap;
+    use tonic::transport::Channel;
+
+    let channel = Channel::from_shared(app.grpc_address.clone())
+        .unwrap()
+        .connect()
+        .await
+        .expect("Failed to connect");
+
+    let mut raw_client = DocumentServiceClient::new(channel);
+
+    // Create upload request WITHOUT tenant metadata
+    let metadata_msg = UploadDocumentRequest {
+        data: Some(Data::Metadata(UploadMetadata {
+            filename: "test.txt".to_string(),
+            mime_type: "text/plain".to_string(),
+            metadata: HashMap::new(),
+        })),
+    };
+
+    let chunk_msg = UploadDocumentRequest {
+        data: Some(Data::Chunk(vec![0; 100])),
+    };
+
+    let request = tonic::Request::new(futures::stream::iter(vec![metadata_msg, chunk_msg]));
+    // Note: No tenant metadata added
+
+    let result = raw_client.upload_document(request).await;
+
+    // Should fail with unauthenticated
+    assert!(result.is_err());
+    let status = result.unwrap_err();
+    assert_eq!(status.code(), tonic::Code::Unauthenticated);
+
+    app.cleanup().await;
+}
+
+#[tokio::test]
+async fn upload_large_document() {
+    let app = TestApp::spawn().await;
+    let mut client = app.grpc_client().await;
+
+    // Upload a 5MB document
+    let large_data = vec![0u8; 5 * 1024 * 1024];
+
+    let response = client
+        .upload_document(
+            TEST_APP_ID,
+            TEST_ORG_ID,
+            TEST_USER_ID,
+            "large_file.bin".to_string(),
+            "application/octet-stream".to_string(),
+            large_data.clone(),
+        )
+        .await
+        .expect("Failed to upload large document");
+
+    let document = response.document.expect("Missing document");
+    assert_eq!(document.size, large_data.len() as i64);
+
+    app.cleanup().await;
 }
