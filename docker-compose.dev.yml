@@ -254,45 +254,6 @@ services:
     networks:
       - micros-net
 
-  secure-frontend:
-    build:
-      context: .
-      dockerfile: secure-frontend/Dockerfile
-    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-secure-frontend
-    ports:
-      - "${SECURE_FRONTEND_PORT:-9006}:8080"
-    environment:
-      - APP_SERVER__HOST=${APP_SERVER__HOST:-0.0.0.0}
-      - APP_SERVER__PORT=${APP_SERVER__PORT:-8080}
-      - APP_SERVER__SESSION_SECRET=${APP_SERVER__SESSION_SECRET:-dev-session-secret}
-      # Auth Service (gRPC)
-      - APP_AUTH_SERVICE__URL=${APP_AUTH_SERVICE__URL:-http://auth-service:3000}
-      - APP_AUTH_SERVICE__GRPC_URL=${APP_AUTH_SERVICE__GRPC_URL:-http://auth-service:3001}
-      - APP_AUTH_SERVICE__PUBLIC_URL=${APP_AUTH_SERVICE__PUBLIC_URL:-http://localhost:9005}
-      - APP_AUTH_SERVICE__DEFAULT_TENANT_SLUG=${APP_AUTH_SERVICE__DEFAULT_TENANT_SLUG:-default}
-      # Document Service (gRPC)
-      - APP_DOCUMENT_SERVICE__URL=${APP_DOCUMENT_SERVICE__URL:-http://document-service:8080}
-      - APP_DOCUMENT_SERVICE__GRPC_URL=${APP_DOCUMENT_SERVICE__GRPC_URL:-http://document-service:8081}
-      - APP_DOCUMENT_SERVICE__DOCUMENT_SIGNING_SECRET=${APP_DOCUMENT_SERVICE__DOCUMENT_SIGNING_SECRET:-dev-signing-secret}
-      - APP_DOCUMENT_SERVICE__DEFAULT_APP_ID=${APP_DOCUMENT_SERVICE__DEFAULT_APP_ID:-secure-frontend}
-      - APP_DOCUMENT_SERVICE__DEFAULT_ORG_ID=${APP_DOCUMENT_SERVICE__DEFAULT_ORG_ID:-default}
-      - RUST_LOG=${LOG_LEVEL:-info}
-    labels:
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=8080"
-      - "prometheus.io/path=/metrics"
-    depends_on:
-      - auth-service
-      - document-service
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
-    networks:
-      - micros-net
-
 networks:
   micros-net:
     driver: bridge

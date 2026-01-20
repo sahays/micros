@@ -1,10 +1,10 @@
 [workspace]
 members = [
-    "auth-service", "document-service",
+    "auth-service",
+    "document-service",
     "notification-service",
-    "secure-frontend",
-    "service-core",
     "payment-service",
+    "service-core",
 ]
 
 [workspace.dependencies]

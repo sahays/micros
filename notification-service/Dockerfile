@@ -15,7 +15,6 @@ COPY auth-service ./auth-service
 COPY document-service ./document-service
 COPY notification-service ./notification-service
 COPY payment-service ./payment-service
-COPY secure-frontend ./secure-frontend
 COPY service-core ./service-core
 COPY proto ./proto
 RUN cargo chef prepare --recipe-path recipe.json --bin notification-service
@@ -31,7 +30,6 @@ COPY auth-service ./auth-service
 COPY document-service ./document-service
 COPY notification-service ./notification-service
 COPY payment-service ./payment-service
-COPY secure-frontend ./secure-frontend
 COPY service-core ./service-core
 COPY proto ./proto
 RUN cargo build --release --bin notification-service
