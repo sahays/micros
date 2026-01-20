@@ -493,15 +493,15 @@ proto/
 
 ## Success Criteria
 
-- [ ] All backend services expose gRPC-only interfaces
-- [ ] All external traffic routes through BFFs
-- [ ] Proto definitions pass buf lint with no warnings
-- [ ] No breaking changes detected by buf breaking
-- [ ] gRPC reflection enabled on all services
-- [ ] Trace context propagates through gRPC calls (visible in Tempo)
-- [ ] All existing tests pass (updated for gRPC)
-- [ ] gRPC endpoints have equivalent test coverage
-- [ ] Documentation updated
+- [x] All backend services expose gRPC-only interfaces
+- [x] All external traffic routes through BFFs
+- [x] Proto definitions pass buf lint with no warnings
+- [x] No breaking changes detected by buf breaking
+- [x] gRPC reflection enabled on all services
+- [x] Trace context propagates through gRPC calls (visible in Tempo)
+- [x] All existing tests pass (updated for gRPC)
+- [x] gRPC endpoints have equivalent test coverage
+- [x] Documentation updated
 
 ## Technical Decisions
 
