@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package micros.common;
+
+// Standard error details that can be included in gRPC status details.
+// Based on Google's error model: https://cloud.google.com/apis/design/errors
+message ErrorDetails {
+  // Machine-readable error code (e.g., "INVALID_EMAIL", "USER_NOT_FOUND")
+  string code = 1;
+
+  // Human-readable error message
+  string message = 2;
+
+  // Optional field-level errors for validation failures
+  repeated FieldViolation field_violations = 3;
+
+  // Optional request ID for correlation
+  string request_id = 4;
+
+  // Optional trace ID for distributed tracing
+  string trace_id = 5;
+}
+
+// Describes a single field validation error.
+message FieldViolation {
+  // Path to the field that caused the error (e.g., "user.email")
+  string field = 1;
+
+  // Description of why the field is invalid
+  string description = 2;
+}
+
+// Retry information for transient errors.
+message RetryInfo {
+  // Minimum delay before retrying, in seconds
+  int32 retry_delay_seconds = 1;
+}
+
+// Rate limit information when RESOURCE_EXHAUSTED is returned.
+message RateLimitInfo {
+  // Number of requests allowed per period
+  int32 limit = 1;
+
+  // Number of requests remaining in current period
+  int32 remaining = 2;
+
+  // Seconds until the rate limit resets
+  int32 reset_seconds = 3;
+}

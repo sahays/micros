@@ -1,0 +1,16 @@
+version: v2
+# Note: For Rust code generation, we use tonic-build in each service's build.rs
+# This file is kept for potential future use with buf generate for other languages
+#
+# Rust services should use tonic-build directly:
+#   tonic_build::configure()
+#       .build_server(true)
+#       .build_client(true)
+#       .compile_protos(&["../proto/micros/auth/v1/auth.proto"], &["../proto"])
+#
+# For now, we only use buf for:
+#   - buf lint: Linting proto files
+#   - buf breaking: Detecting breaking changes
+#   - buf format: Formatting proto files
+managed:
+  enabled: true

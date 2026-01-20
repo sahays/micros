@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package micros.common;
+
+import "google/protobuf/timestamp.proto";
+
+// Common timestamp fields for entities.
+message Timestamps {
+  // When the entity was created
+  google.protobuf.Timestamp created_at = 1;
+
+  // When the entity was last updated
+  google.protobuf.Timestamp updated_at = 2;
+
+  // When the entity was deleted (for soft deletes)
+  optional google.protobuf.Timestamp deleted_at = 3;
+}
+
+// Request context passed through gRPC metadata.
+// This is typically extracted from gRPC metadata headers, not passed in request body.
+message RequestContext {
+  // Unique request ID for correlation
+  string request_id = 1;
+
+  // W3C trace parent for distributed tracing
+  string trace_parent = 2;
+
+  // W3C trace state
+  string trace_state = 3;
+
+  // Authenticated user ID (if authenticated)
+  optional string user_id = 4;
+
+  // Tenant ID for multi-tenant operations
+  optional string tenant_id = 5;
+}
+
+// UUID wrapper for strongly-typed IDs.
+message UUID {
+  string value = 1;
+}

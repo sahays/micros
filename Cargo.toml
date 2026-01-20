@@ -57,6 +57,13 @@ subtle = "2.6"
 backoff = { version = "0.4", features = ["tokio"] }
 tokio-util = "0.7"
 
+# gRPC dependencies
+tonic = "0.12"
+tonic-health = "0.12"
+tonic-reflection = "0.12"
+prost = "0.13"
+prost-types = "0.13"
+
 # Optimize for faster builds and lower memory usage in dev
 [profile.dev]
 debug = 1

@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package micros.auth.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// TokenClaims represents the claims in a JWT token.
+message TokenClaims {
+  // Subject (user ID).
+  string sub = 1;
+
+  // Application/Tenant ID.
+  string app_id = 2;
+
+  // Organization ID.
+  string org_id = 3;
+
+  // User's email.
+  string email = 4;
+
+  // JWT ID (unique token identifier).
+  string jti = 5;
+
+  // Token type (access or refresh).
+  string token_type = 6;
+
+  // Issued at timestamp.
+  google.protobuf.Timestamp iat = 7;
+
+  // Expiry timestamp.
+  google.protobuf.Timestamp exp = 8;
+}
+
+// TokenPair contains both access and refresh tokens.
+message TokenPair {
+  // JWT access token.
+  string access_token = 1;
+
+  // Refresh token.
+  string refresh_token = 2;
+
+  // Token type (always "Bearer").
+  string token_type = 3;
+
+  // Access token expiry in seconds.
+  int64 expires_in = 4;
+}

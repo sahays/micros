@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+package micros.auth.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// UserInfo in authentication responses.
+message UserInfo {
+  // User's unique identifier.
+  string user_id = 1;
+
+  // User's email address.
+  string email = 2;
+
+  // User's display name.
+  optional string display_name = 3;
+
+  // Tenant ID the user belongs to.
+  string tenant_id = 4;
+}
+
+// User represents a full user record.
+message User {
+  // User's unique identifier.
+  string user_id = 1;
+
+  // Tenant ID the user belongs to.
+  string tenant_id = 2;
+
+  // User's email address.
+  string email = 3;
+
+  // User's display name.
+  optional string display_name = 4;
+
+  // Whether the user's email is verified.
+  bool email_verified = 5;
+
+  // User status.
+  UserStatus status = 6;
+
+  // When the user was created.
+  google.protobuf.Timestamp created_at = 7;
+
+  // When the user was last updated.
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+// UserStatus represents the user's account status.
+enum UserStatus {
+  USER_STATUS_UNSPECIFIED = 0;
+  USER_STATUS_ACTIVE = 1;
+  USER_STATUS_SUSPENDED = 2;
+  USER_STATUS_DELETED = 3;
+}
+
+// IdentityProvider types.
+enum IdentityProvider {
+  IDENTITY_PROVIDER_UNSPECIFIED = 0;
+  IDENTITY_PROVIDER_PASSWORD = 1;
+  IDENTITY_PROVIDER_GOOGLE = 2;
+  IDENTITY_PROVIDER_GITHUB = 3;
+  IDENTITY_PROVIDER_PHONE = 4;
+}
+
+// UserIdentity represents an authentication identity for a user.
+message UserIdentity {
+  // Identity unique identifier.
+  string identity_id = 1;
+
+  // User ID this identity belongs to.
+  string user_id = 2;
+
+  // Identity provider type.
+  IdentityProvider provider = 3;
+
+  // Provider-specific identifier (email, phone, OAuth subject).
+  string provider_id = 4;
+
+  // When the identity was created.
+  google.protobuf.Timestamp created_at = 5;
+
+  // When the identity was last used.
+  optional google.protobuf.Timestamp last_used_at = 6;
+}

@@ -1,0 +1,23 @@
+//! gRPC utilities for micros microservices.
+//!
+//! This module provides shared gRPC infrastructure including:
+//! - Error conversion between `AppError` and `tonic::Status`
+//! - Interceptors for trace context propagation
+//! - Health check service implementation
+//! - Server builder utilities
+
+pub mod error;
+pub mod health;
+pub mod interceptors;
+pub mod server;
+
+pub use error::{GrpcResult, IntoStatus};
+pub use health::{HealthComponents, HealthReporter, HealthStatus, create_health_service};
+pub use interceptors::{
+    extract_request_id, extract_traceparent, inject_trace_context,
+    inject_trace_context_with_request_id, trace_context_interceptor,
+};
+pub use server::{GrpcServerBuilder, create_reflection_service, start_http_health_server};
+
+// Re-export commonly used tonic types
+pub use tonic::{Code, Request, Response, Status};

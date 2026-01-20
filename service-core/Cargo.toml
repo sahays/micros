@@ -49,3 +49,10 @@ metrics = { workspace = true }
 http-body-util = { workspace = true }
 serde_urlencoded = { workspace = true }
 subtle = { workspace = true }
+
+# gRPC dependencies
+tonic = { workspace = true }
+tonic-health = { workspace = true }
+tonic-reflection = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }

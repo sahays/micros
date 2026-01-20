@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package micros.auth.v1;
+
+// AuthzService provides authorization context and capability checks.
+service AuthzService {
+  // Get auth context for the authenticated user.
+  rpc GetAuthContext(GetAuthContextRequest) returns (GetAuthContextResponse);
+
+  // Check if user has a specific capability at an org node.
+  rpc CheckCapability(CheckCapabilityRequest) returns (CheckCapabilityResponse);
+}
+
+// GetAuthContextRequest for retrieving user's authorization context.
+message GetAuthContextRequest {
+  // Optional org node to get context for (returns all if not specified).
+  optional string org_node_id = 1;
+}
+
+// GetAuthContextResponse with user's authorization context.
+message GetAuthContextResponse {
+  // User's unique identifier.
+  string user_id = 1;
+
+  // Tenant ID.
+  string tenant_id = 2;
+
+  // Org node ID if specified in request.
+  optional string org_node_id = 3;
+
+  // List of capabilities the user has.
+  repeated string capabilities = 4;
+
+  // List of role assignments.
+  repeated AssignmentSummary assignments = 5;
+}
+
+// AssignmentSummary represents a role assignment.
+message AssignmentSummary {
+  // Assignment unique identifier.
+  string assignment_id = 1;
+
+  // Org node where the role is assigned.
+  string org_node_id = 2;
+
+  // Role unique identifier.
+  string role_id = 3;
+
+  // Role label/name.
+  string role_label = 4;
+
+  // Capabilities granted by this role.
+  repeated string capabilities = 5;
+}
+
+// CheckCapabilityRequest for checking a specific capability.
+message CheckCapabilityRequest {
+  // Org node to check capability at.
+  string org_node_id = 1;
+
+  // Capability to check.
+  string capability = 2;
+}
+
+// CheckCapabilityResponse with capability check result.
+message CheckCapabilityResponse {
+  // Whether the capability is allowed.
+  bool allowed = 1;
+
+  // The capability that was checked.
+  string capability = 2;
+
+  // Org node where the check was performed.
+  string org_node_id = 3;
+
+  // Assignment that granted the capability (if allowed).
+  optional string matched_assignment_id = 4;
+}

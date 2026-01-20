@@ -134,6 +134,27 @@ if [ -n "$STAGED_RS_FILES" ]; then
     fi
 fi
 
+# Check staged proto files
+STAGED_PROTO_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.proto$' || true)
+
+if [ -n "$STAGED_PROTO_FILES" ]; then
+    echo "Staged proto files detected. Running buf lint..."
+
+    # Check if buf is installed
+    if command -v buf &> /dev/null; then
+        cd proto
+        if ! buf lint; then
+            echo -e "${RED}Proto lint check failed.${NC}"
+            exit 1
+        fi
+        cd ..
+        echo -e "${GREEN}Proto lint passed!${NC}"
+    else
+        echo -e "${RED}Warning: buf not installed. Skipping proto lint.${NC}"
+        echo "Install buf with: brew install bufbuild/buf/buf"
+    fi
+fi
+
 # Run frontend checks
 ./scripts/pre-commit-frontend.sh
 

@@ -1,0 +1,201 @@
+syntax = "proto3";
+
+package micros.auth.v1;
+
+import "google/protobuf/empty.proto";
+import "micros/auth/v1/user.proto";
+import "micros/auth/v1/token.proto";
+
+// AuthService provides authentication operations.
+service AuthService {
+  // Register a new user with email and password.
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+
+  // Login with email and password.
+  rpc Login(LoginRequest) returns (LoginResponse);
+
+  // Refresh access token using refresh token.
+  rpc Refresh(RefreshRequest) returns (RefreshResponse);
+
+  // Logout and revoke refresh token.
+  rpc Logout(LogoutRequest) returns (google.protobuf.Empty);
+
+  // Validate an access token and return claims.
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+
+  // Send OTP to email or phone.
+  rpc SendOtp(SendOtpRequest) returns (SendOtpResponse);
+
+  // Verify OTP code.
+  rpc VerifyOtp(VerifyOtpRequest) returns (VerifyOtpResponse);
+}
+
+// RegisterRequest for creating a new user account.
+message RegisterRequest {
+  // Tenant slug identifier.
+  string tenant_slug = 1;
+
+  // User's email address.
+  string email = 2;
+
+  // User's password (min 8 characters).
+  string password = 3;
+
+  // Optional display name.
+  optional string display_name = 4;
+}
+
+// RegisterResponse returned after successful registration.
+message RegisterResponse {
+  // JWT access token for API requests.
+  string access_token = 1;
+
+  // Refresh token for obtaining new access tokens.
+  string refresh_token = 2;
+
+  // Token type (always "Bearer").
+  string token_type = 3;
+
+  // Access token expiry in seconds.
+  int64 expires_in = 4;
+
+  // Authenticated user information.
+  UserInfo user = 5;
+}
+
+// LoginRequest for authenticating with email/password.
+message LoginRequest {
+  // Tenant slug identifier.
+  string tenant_slug = 1;
+
+  // User's email address.
+  string email = 2;
+
+  // User's password.
+  string password = 3;
+}
+
+// LoginResponse returned after successful login.
+message LoginResponse {
+  // JWT access token for API requests.
+  string access_token = 1;
+
+  // Refresh token for obtaining new access tokens.
+  string refresh_token = 2;
+
+  // Token type (always "Bearer").
+  string token_type = 3;
+
+  // Access token expiry in seconds.
+  int64 expires_in = 4;
+
+  // Authenticated user information.
+  UserInfo user = 5;
+}
+
+// RefreshRequest for refreshing access token.
+message RefreshRequest {
+  // The refresh token from previous auth response.
+  string refresh_token = 1;
+}
+
+// RefreshResponse returned after successful token refresh.
+message RefreshResponse {
+  // JWT access token for API requests.
+  string access_token = 1;
+
+  // Refresh token for obtaining new access tokens.
+  string refresh_token = 2;
+
+  // Token type (always "Bearer").
+  string token_type = 3;
+
+  // Access token expiry in seconds.
+  int64 expires_in = 4;
+
+  // Authenticated user information.
+  UserInfo user = 5;
+}
+
+// LogoutRequest for revoking refresh token.
+message LogoutRequest {
+  // The refresh token to revoke.
+  string refresh_token = 1;
+}
+
+// ValidateTokenRequest for token validation.
+message ValidateTokenRequest {
+  // The access token to validate.
+  string access_token = 1;
+}
+
+// ValidateTokenResponse with token claims.
+message ValidateTokenResponse {
+  // Whether the token is valid.
+  bool valid = 1;
+
+  // Token claims if valid.
+  TokenClaims claims = 2;
+}
+
+// OTP channel for delivery.
+enum OtpChannel {
+  OTP_CHANNEL_UNSPECIFIED = 0;
+  OTP_CHANNEL_EMAIL = 1;
+  OTP_CHANNEL_SMS = 2;
+  OTP_CHANNEL_WHATSAPP = 3;
+}
+
+// OTP purpose.
+enum OtpPurpose {
+  OTP_PURPOSE_UNSPECIFIED = 0;
+  OTP_PURPOSE_LOGIN = 1;
+  OTP_PURPOSE_VERIFY_EMAIL = 2;
+  OTP_PURPOSE_VERIFY_PHONE = 3;
+  OTP_PURPOSE_RESET_PASSWORD = 4;
+}
+
+// SendOtpRequest for requesting an OTP code.
+message SendOtpRequest {
+  // Tenant ID.
+  string tenant_id = 1;
+
+  // Destination (email or phone number in E.164 format).
+  string destination = 2;
+
+  // Channel for OTP delivery.
+  OtpChannel channel = 3;
+
+  // Purpose of the OTP.
+  OtpPurpose purpose = 4;
+}
+
+// SendOtpResponse after OTP is sent.
+message SendOtpResponse {
+  // OTP ID for verification.
+  string otp_id = 1;
+
+  // Expiry in seconds.
+  int64 expires_in = 2;
+}
+
+// VerifyOtpRequest for verifying an OTP code.
+message VerifyOtpRequest {
+  // OTP ID from SendOtpResponse.
+  string otp_id = 1;
+
+  // The OTP code entered by user.
+  string code = 2;
+}
+
+// VerifyOtpResponse after OTP verification.
+message VerifyOtpResponse {
+  // Whether verification was successful.
+  bool verified = 1;
+
+  // The purpose that was verified.
+  OtpPurpose purpose = 2;
+
+  // For login purpose, auth tokens are returned.
+  optional LoginResponse auth = 3;
+}
