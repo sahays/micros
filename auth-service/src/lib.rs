@@ -56,9 +56,9 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
     // Org routes
     let org_routes = Router::new()
         .route("/", post(org::create_org_node))
-        .route("/{org_node_id}", get(org::get_org_node))
+        .route("/:org_node_id", get(org::get_org_node))
         .route(
-            "/{org_node_id}/descendants",
+            "/:org_node_id/descendants",
             get(org::get_org_node_descendants),
         );
 
@@ -70,9 +70,9 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
     // Role routes
     let role_routes = Router::new()
         .route("/", post(role::create_role))
-        .route("/{role_id}", get(role::get_role))
-        .route("/{role_id}/capabilities", get(role::get_role_capabilities))
-        .route("/{role_id}/capabilities", post(role::assign_capability));
+        .route("/:role_id", get(role::get_role))
+        .route("/:role_id/capabilities", get(role::get_role_capabilities))
+        .route("/:role_id/capabilities", post(role::assign_capability));
 
     // Tenant-scoped role routes
     let tenant_role_routes = Router::new().route("/", get(role::list_tenant_roles));
@@ -80,12 +80,12 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
     // Capability routes
     let capability_routes = Router::new()
         .route("/", get(role::list_capabilities))
-        .route("/{cap_key}", get(role::get_capability));
+        .route("/:cap_key", get(role::get_capability));
 
     // Assignment routes
     let assignment_routes = Router::new()
         .route("/", post(assignment::create_assignment))
-        .route("/{assignment_id}/end", post(assignment::end_assignment));
+        .route("/:assignment_id/end", post(assignment::end_assignment));
 
     // User assignment routes
     let user_assignment_routes = Router::new().route("/", get(assignment::list_user_assignments));
@@ -94,7 +94,7 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
     let visibility_grant_routes = Router::new()
         .route("/", post(visibility::create_visibility_grant))
         .route(
-            "/{grant_id}/revoke",
+            "/:grant_id/revoke",
             post(visibility::revoke_visibility_grant),
         );
 
@@ -105,8 +105,8 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
     // Invitation routes
     let invitation_routes = Router::new()
         .route("/", post(invitation::create_invitation))
-        .route("/{token}", get(invitation::get_invitation))
-        .route("/{token}/accept", post(invitation::accept_invitation));
+        .route("/:token", get(invitation::get_invitation))
+        .route("/:token/accept", post(invitation::accept_invitation));
 
     // Audit routes
     let audit_routes = Router::new().route("/events", get(audit::list_audit_events));
@@ -120,25 +120,25 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
     let service_routes = Router::new()
         .route("/", post(service::register_service))
         .route("/token", post(service::get_service_token))
-        .route("/{svc_key}", get(service::get_service))
-        .route("/{svc_key}/rotate-secret", post(service::rotate_secret))
+        .route("/:svc_key", get(service::get_service))
+        .route("/:svc_key/rotate-secret", post(service::rotate_secret))
         .route(
-            "/{svc_key}/permissions",
+            "/:svc_key/permissions",
             get(service::get_service_permissions),
         )
-        .route("/{svc_key}/permissions", post(service::grant_permission));
+        .route("/:svc_key/permissions", post(service::grant_permission));
 
     let app = Router::new()
         .route("/health", get(health_check))
         .nest("/auth", auth_routes)
         .nest("/orgs", org_routes)
-        .nest("/tenants/{tenant_id}/orgs", tenant_org_routes)
+        .nest("/tenants/:tenant_id/orgs", tenant_org_routes)
         .nest("/roles", role_routes)
-        .nest("/tenants/{tenant_id}/roles", tenant_role_routes)
+        .nest("/tenants/:tenant_id/roles", tenant_role_routes)
         .nest("/capabilities", capability_routes)
         .nest("/assignments", assignment_routes)
-        .nest("/users/{user_id}/assignments", user_assignment_routes)
-        .nest("/users/{user_id}/visibility-grants", user_visibility_routes)
+        .nest("/users/:user_id/assignments", user_assignment_routes)
+        .nest("/users/:user_id/visibility-grants", user_visibility_routes)
         .nest("/visibility-grants", visibility_grant_routes)
         .nest("/invitations", invitation_routes)
         .nest("/audit", audit_routes)

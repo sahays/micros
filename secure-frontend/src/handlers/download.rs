@@ -168,7 +168,7 @@ pub async fn generate_signed_url(
         state
             .document_client
             .settings
-            .signing_secret
+            .document_signing_secret
             .expose_secret(),
     )
     .map_err(|e| {
@@ -223,7 +223,7 @@ pub async fn download_with_signature(
         state
             .document_client
             .settings
-            .signing_secret
+            .document_signing_secret
             .expose_secret(),
     )
     .map_err(|e| {

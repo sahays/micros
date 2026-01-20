@@ -8,7 +8,8 @@ use auth_service::{
     build_router,
     config::{
         AuthConfig, DatabaseConfig, Environment, GmailConfig, GoogleOAuthConfig, JwtConfig,
-        RateLimitConfig, RedisConfig, SecurityConfig, SwaggerConfig, SwaggerMode,
+        NotificationServiceConfig, RateLimitConfig, RedisConfig, SecurityConfig, SwaggerConfig,
+        SwaggerMode,
     },
     db, services, AppState,
 };
@@ -73,7 +74,7 @@ pub fn create_test_keys() -> anyhow::Result<(NamedTempFile, NamedTempFile)> {
 /// Get the database URL for testing from environment or use default
 pub fn get_test_database_url() -> String {
     std::env::var("TEST_DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/auth_test".to_string())
+        .unwrap_or_else(|_| "postgres://postgres:pass%40word1@localhost:5432/auth_test".to_string())
 }
 
 /// Create a test database pool
@@ -123,6 +124,11 @@ pub fn create_test_config(private_key_path: &str, public_key_path: &str) -> Auth
         gmail: GmailConfig {
             user: "test@gmail.com".to_string(),
             app_password: "test-password".to_string(),
+        },
+        notification: NotificationServiceConfig {
+            url: "http://localhost:8080".to_string(),
+            enabled: false,
+            timeout_seconds: 30,
         },
         security: SecurityConfig {
             allowed_origins: vec!["http://localhost:3000".to_string()],

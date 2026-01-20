@@ -43,13 +43,19 @@ mod tests {
     #[tokio::test]
     #[ignore] // Requires running PostgreSQL
     async fn test_create_pool() {
+        let url = std::env::var("TEST_DATABASE_URL").unwrap_or_else(|_| {
+            "postgres://postgres:pass%40word1@localhost:5432/auth_test".to_string()
+        });
         let config = DatabaseConfig {
-            url: "postgres://localhost/auth_test".to_string(),
+            url,
             max_connections: 5,
             min_connections: 1,
         };
 
         let result = create_pool(&config).await;
-        assert!(result.is_ok());
+        if let Err(ref e) = result {
+            eprintln!("Database pool creation failed: {:?}", e);
+        }
+        assert!(result.is_ok(), "Failed to create pool: {:?}", result.err());
     }
 }

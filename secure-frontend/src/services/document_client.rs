@@ -1,9 +1,7 @@
 use crate::config::DocumentServiceSettings;
-use crate::utils::crypto::{compute_body_hash, create_signature};
 use anyhow::Result;
 use reqwest::Client;
-use std::time::{SystemTime, UNIX_EPOCH};
-use uuid::Uuid;
+use service_core::observability::{inject_trace_context, TracedClientExt};
 
 pub struct DocumentClient {
     client: Client,
@@ -18,13 +16,10 @@ impl DocumentClient {
         }
     }
 
-    /// Upload a file to document-service with user context
+    /// Upload a file to document-service with user context.
     ///
-    /// Following rest-api-security skill guidance:
-    /// - HMAC signature for service-to-service auth
-    /// - Timestamp validation (60s window)
-    /// - Nonce for replay prevention
-    /// - X-User-ID header for user context propagation
+    /// Trace context (traceparent/tracestate) is automatically injected
+    /// for distributed tracing across services.
     pub async fn upload(
         &self,
         user_id: &str,
@@ -41,29 +36,14 @@ impl DocumentClient {
 
         let form = reqwest::multipart::Form::new().part("file", part);
 
-        // For multipart, we hash empty body as the form is built by reqwest
-        let body_hash = compute_body_hash(b"");
-
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-        let nonce = Uuid::new_v4().to_string();
-
-        // Create HMAC signature following rest-api-security pattern
-        let signature = create_signature(
-            &self.settings.signing_secret,
-            "POST",
-            "/documents",
-            timestamp,
-            &nonce,
-            &body_hash,
-        );
+        // Inject trace context manually for multipart requests
+        let mut headers = reqwest::header::HeaderMap::new();
+        inject_trace_context(&mut headers);
 
         let response = self
             .client
             .post(&url)
-            .header("X-Client-ID", &self.settings.client_id)
-            .header("X-Timestamp", timestamp)
-            .header("X-Nonce", nonce)
-            .header("X-Signature", signature)
+            .headers(headers)
             .header("X-User-ID", user_id) // User context for tracing and ownership
             .multipart(form)
             .send()
@@ -76,35 +56,17 @@ impl DocumentClient {
         Ok(response)
     }
 
-    /// Get document metadata
+    /// Get document metadata.
     pub async fn get_document(
         &self,
         user_id: &str,
         document_id: &str,
     ) -> Result<reqwest::Response> {
-        let path = format!("/documents/{}", document_id);
-        let url = format!("{}{}", self.settings.url, path);
-        let body_hash = compute_body_hash(b"");
-
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-        let nonce = Uuid::new_v4().to_string();
-
-        let signature = create_signature(
-            &self.settings.signing_secret,
-            "GET",
-            &path,
-            timestamp,
-            &nonce,
-            &body_hash,
-        );
+        let url = format!("{}/documents/{}", self.settings.url, document_id);
 
         let response = self
             .client
-            .get(&url)
-            .header("X-Client-ID", &self.settings.client_id)
-            .header("X-Timestamp", timestamp)
-            .header("X-Nonce", nonce)
-            .header("X-Signature", signature)
+            .traced_get(&url)
             .header("X-User-ID", user_id)
             .send()
             .await
@@ -116,7 +78,7 @@ impl DocumentClient {
         Ok(response)
     }
 
-    /// Download document content
+    /// Download document content.
     ///
     /// Downloads the file content from document-service.
     /// Returns original or processed file depending on processing status.
@@ -125,29 +87,11 @@ impl DocumentClient {
         user_id: &str,
         document_id: &str,
     ) -> Result<reqwest::Response> {
-        let path = format!("/documents/{}/content", document_id);
-        let url = format!("{}{}", self.settings.url, path);
-        let body_hash = compute_body_hash(b"");
-
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-        let nonce = Uuid::new_v4().to_string();
-
-        let signature = create_signature(
-            &self.settings.signing_secret,
-            "GET",
-            &path,
-            timestamp,
-            &nonce,
-            &body_hash,
-        );
+        let url = format!("{}/documents/{}/content", self.settings.url, document_id);
 
         let response = self
             .client
-            .get(&url)
-            .header("X-Client-ID", &self.settings.client_id)
-            .header("X-Timestamp", timestamp)
-            .header("X-Nonce", nonce)
-            .header("X-Signature", signature)
+            .traced_get(&url)
             .header("X-User-ID", user_id)
             .send()
             .await

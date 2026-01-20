@@ -5,9 +5,7 @@ server:
 auth_service:
   url: "http://localhost:9005"  # Auth service Docker port
   public_url: "http://localhost:9005"  # URL accessible from browser
-  client_id: "6936232e-6f95-4c18-a018-d1bdc1892b0b"
-  signing_secret: "MBeMHK3xW_ZqiAoNwZKmOE6osEaGsUcIm05mBuMNtuk"
 document_service:
   url: "http://localhost:9007"  # Document service Docker port
-  client_id: "secure-frontend"
-  signing_secret: "dev-secret-replace-in-production"
+  # Secret for generating time-limited signed URLs for shareable document downloads
+  document_signing_secret: "dev-document-signing-secret-replace-in-production"

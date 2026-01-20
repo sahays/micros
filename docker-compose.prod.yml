@@ -166,6 +166,10 @@ services:
       - RATE_LIMIT_GLOBAL_IP_WINDOW_SECONDS=${RATE_LIMIT_GLOBAL_IP_WINDOW_SECONDS:-60}
       - RATE_LIMIT_APP_TOKEN_LIMIT=${RATE_LIMIT_APP_TOKEN_LIMIT:-10}
       - RATE_LIMIT_APP_TOKEN_WINDOW_SECONDS=${RATE_LIMIT_APP_TOKEN_WINDOW_SECONDS:-60}
+      # Notification Service Integration
+      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-http://notification-service:8080}
+      - NOTIFICATION_SERVICE_ENABLED=${NOTIFICATION_SERVICE_ENABLED:-true}
+      - NOTIFICATION_SERVICE_TIMEOUT=${NOTIFICATION_SERVICE_TIMEOUT:-30}
     labels:
       - "prometheus.io/scrape=true"
       - "prometheus.io/port=3000"
@@ -175,6 +179,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      notification-service:
+        condition: service_started
     logging:
       driver: "json-file"
       options:
@@ -236,6 +242,52 @@ services:
       - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
       - STORAGE_LOCAL_PATH=${STORAGE_LOCAL_PATH:-./storage}
       - REQUIRE_SIGNATURES=${REQUIRE_SIGNATURES:-false}
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=8080"
+      - "prometheus.io/path=/metrics"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    networks:
+      - micros-net
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-notification-service
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT:-10008}:8080"
+    environment:
+      - APP__PORT=8080
+      - ENVIRONMENT=${ENVIRONMENT:-prod}
+      - MONGODB_URI=${NOTIFICATION_MONGODB_URI:-mongodb://mongo:27017}
+      - MONGODB_DATABASE=${NOTIFICATION_MONGODB_DATABASE:-notification_db}
+      - RUST_LOG=${LOG_LEVEL:-info}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      # SMTP Configuration
+      - SMTP_HOST=${NOTIFICATION_SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${NOTIFICATION_SMTP_PORT:-587}
+      - SMTP_USER=${NOTIFICATION_SMTP_USER}
+      - SMTP_PASSWORD=${NOTIFICATION_SMTP_PASSWORD}
+      - SMTP_FROM_EMAIL=${NOTIFICATION_SMTP_FROM_EMAIL:-noreply@example.com}
+      - SMTP_FROM_NAME=${NOTIFICATION_SMTP_FROM_NAME:-Notification Service}
+      - SMTP_ENABLED=${NOTIFICATION_SMTP_ENABLED:-false}
+      # Msg91 SMS Configuration
+      - MSG91_AUTH_KEY=${NOTIFICATION_MSG91_AUTH_KEY}
+      - MSG91_SENDER_ID=${NOTIFICATION_MSG91_SENDER_ID}
+      - MSG91_ENABLED=${NOTIFICATION_MSG91_ENABLED:-false}
+      # FCM Push Configuration
+      - FCM_PROJECT_ID=${NOTIFICATION_FCM_PROJECT_ID}
+      - FCM_SERVICE_ACCOUNT_KEY=${NOTIFICATION_FCM_SERVICE_ACCOUNT_KEY}
+      - FCM_ENABLED=${NOTIFICATION_FCM_ENABLED:-false}
     labels:
       - "prometheus.io/scrape=true"
       - "prometheus.io/port=8080"

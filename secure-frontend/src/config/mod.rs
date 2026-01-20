@@ -19,15 +19,14 @@ pub struct ServerSettings {
 pub struct AuthServiceSettings {
     pub url: String,
     pub public_url: String, // URL accessible from browser (e.g., localhost:9005)
-    pub client_id: String,
-    pub signing_secret: Secret<String>,
 }
 
 #[derive(Deserialize, Clone)]
 pub struct DocumentServiceSettings {
     pub url: String,
-    pub client_id: String,
-    pub signing_secret: Secret<String>,
+    /// Secret used for generating signed shareable URLs for documents.
+    /// This is NOT for KYS authentication - it's for time-limited public download links.
+    pub document_signing_secret: Secret<String>,
 }
 
 pub fn get_configuration() -> Result<Settings, config::ConfigError> {

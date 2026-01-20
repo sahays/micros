@@ -21,8 +21,8 @@ async fn create_org_node_succeeds() {
     let tenant_id = Uuid::new_v4();
     sqlx::query(
         r#"
-        INSERT INTO tenants (tenant_id, tenant_label, tenant_state_code, created_utc)
-        VALUES ($1, 'Test Tenant', 'active', now())
+        INSERT INTO tenants (tenant_id, tenant_slug, tenant_label, tenant_state_code, created_utc)
+        VALUES ($1, 'test-tenant-' || $1::text, 'Test Tenant', 'active', now())
         "#,
     )
     .bind(tenant_id)
@@ -68,8 +68,8 @@ async fn create_child_org_node_succeeds() {
     let tenant_id = Uuid::new_v4();
     sqlx::query(
         r#"
-        INSERT INTO tenants (tenant_id, tenant_label, tenant_state_code, created_utc)
-        VALUES ($1, 'Test Tenant', 'active', now())
+        INSERT INTO tenants (tenant_id, tenant_slug, tenant_label, tenant_state_code, created_utc)
+        VALUES ($1, 'test-tenant-' || $1::text, 'Test Tenant', 'active', now())
         "#,
     )
     .bind(tenant_id)
@@ -132,8 +132,8 @@ async fn get_org_node_returns_node() {
     let tenant_id = Uuid::new_v4();
     sqlx::query(
         r#"
-        INSERT INTO tenants (tenant_id, tenant_label, tenant_state_code, created_utc)
-        VALUES ($1, 'Test Tenant', 'active', now())
+        INSERT INTO tenants (tenant_id, tenant_slug, tenant_label, tenant_state_code, created_utc)
+        VALUES ($1, 'test-tenant-' || $1::text, 'Test Tenant', 'active', now())
         "#,
     )
     .bind(tenant_id)
@@ -188,8 +188,8 @@ async fn list_tenant_org_nodes_returns_all_nodes() {
     let tenant_id = Uuid::new_v4();
     sqlx::query(
         r#"
-        INSERT INTO tenants (tenant_id, tenant_label, tenant_state_code, created_utc)
-        VALUES ($1, 'Test Tenant', 'active', now())
+        INSERT INTO tenants (tenant_id, tenant_slug, tenant_label, tenant_state_code, created_utc)
+        VALUES ($1, 'test-tenant-' || $1::text, 'Test Tenant', 'active', now())
         "#,
     )
     .bind(tenant_id)
@@ -242,8 +242,8 @@ async fn get_org_descendants_returns_subtree() {
     let tenant_id = Uuid::new_v4();
     sqlx::query(
         r#"
-        INSERT INTO tenants (tenant_id, tenant_label, tenant_state_code, created_utc)
-        VALUES ($1, 'Test Tenant', 'active', now())
+        INSERT INTO tenants (tenant_id, tenant_slug, tenant_label, tenant_state_code, created_utc)
+        VALUES ($1, 'test-tenant-' || $1::text, 'Test Tenant', 'active', now())
         "#,
     )
     .bind(tenant_id)

@@ -8,21 +8,23 @@ use common::{cleanup_test_data, TestApp};
 use serde_json::json;
 use uuid::Uuid;
 
-/// Helper to create a test tenant
-async fn create_test_tenant(pool: &sqlx::PgPool, label: &str) -> Uuid {
+/// Helper to create a test tenant, returns (tenant_id, tenant_slug)
+async fn create_test_tenant(pool: &sqlx::PgPool, label: &str) -> (Uuid, String) {
     let tenant_id = Uuid::new_v4();
+    let slug = format!("test-tenant-{}", Uuid::new_v4());
     sqlx::query(
         r#"
-        INSERT INTO tenants (tenant_id, tenant_label, tenant_state_code, created_utc)
-        VALUES ($1, $2, 'active', now())
+        INSERT INTO tenants (tenant_id, tenant_slug, tenant_label, tenant_state_code, created_utc)
+        VALUES ($1, $2, $3, 'active', now())
         "#,
     )
     .bind(tenant_id)
+    .bind(&slug)
     .bind(label)
     .execute(pool)
     .await
     .expect("Failed to create test tenant");
-    tenant_id
+    (tenant_id, slug)
 }
 
 #[tokio::test]
@@ -34,15 +36,15 @@ async fn register_new_user_succeeds() {
         .await
         .expect("Failed to cleanup");
 
-    let tenant_id = create_test_tenant(&app.pool, "Test Tenant").await;
+    let (_tenant_id, tenant_slug) = create_test_tenant(&app.pool, "Test Tenant").await;
     let client = app.client();
 
     let email = format!("test-{}@example.com", Uuid::new_v4());
     let request_body = json!({
-        "tenant_id": tenant_id,
+        "tenant_slug": tenant_slug,
         "email": email,
         "password": "SecurePass123!",
-        "display_label": "Test User"
+        "display_name": "Test User"
     });
 
     // Act
@@ -57,9 +59,23 @@ async fn register_new_user_succeeds() {
     assert_eq!(response.status(), 201);
 
     let body: serde_json::Value = response.json().await.expect("Failed to parse response");
-    assert!(body.get("user_id").is_some());
-    assert!(body.get("access_token").is_some());
-    assert!(body.get("refresh_token").is_some());
+    assert!(
+        body.get("user").is_some(),
+        "Response missing 'user' field: {:?}",
+        body
+    );
+    assert!(
+        body["user"].get("user_id").is_some(),
+        "Response missing 'user.user_id' field"
+    );
+    assert!(
+        body.get("access_token").is_some(),
+        "Response missing 'access_token' field"
+    );
+    assert!(
+        body.get("refresh_token").is_some(),
+        "Response missing 'refresh_token' field"
+    );
 }
 
 #[tokio::test]
@@ -71,15 +87,15 @@ async fn register_duplicate_email_fails() {
         .await
         .expect("Failed to cleanup");
 
-    let tenant_id = create_test_tenant(&app.pool, "Test Tenant").await;
+    let (_tenant_id, tenant_slug) = create_test_tenant(&app.pool, "Test Tenant").await;
     let client = app.client();
 
     let email = format!("duplicate-{}@example.com", Uuid::new_v4());
     let request_body = json!({
-        "tenant_id": tenant_id,
+        "tenant_slug": tenant_slug,
         "email": email,
         "password": "SecurePass123!",
-        "display_label": "Test User"
+        "display_name": "Test User"
     });
 
     // Register first user
@@ -112,7 +128,7 @@ async fn login_with_valid_credentials_succeeds() {
         .await
         .expect("Failed to cleanup");
 
-    let tenant_id = create_test_tenant(&app.pool, "Test Tenant").await;
+    let (_tenant_id, tenant_slug) = create_test_tenant(&app.pool, "Test Tenant").await;
     let client = app.client();
 
     let email = format!("login-test-{}@example.com", Uuid::new_v4());
@@ -120,10 +136,10 @@ async fn login_with_valid_credentials_succeeds() {
 
     // Register user first
     let register_body = json!({
-        "tenant_id": tenant_id,
+        "tenant_slug": tenant_slug,
         "email": email,
         "password": password,
-        "display_label": "Test User"
+        "display_name": "Test User"
     });
 
     client
@@ -135,7 +151,7 @@ async fn login_with_valid_credentials_succeeds() {
 
     // Act - Login
     let login_body = json!({
-        "tenant_id": tenant_id,
+        "tenant_slug": tenant_slug,
         "email": email,
         "password": password
     });
@@ -165,17 +181,17 @@ async fn login_with_wrong_password_fails() {
         .await
         .expect("Failed to cleanup");
 
-    let tenant_id = create_test_tenant(&app.pool, "Test Tenant").await;
+    let (_tenant_id, tenant_slug) = create_test_tenant(&app.pool, "Test Tenant").await;
     let client = app.client();
 
     let email = format!("wrong-pass-{}@example.com", Uuid::new_v4());
 
     // Register user first
     let register_body = json!({
-        "tenant_id": tenant_id,
+        "tenant_slug": tenant_slug,
         "email": email,
         "password": "CorrectPassword123!",
-        "display_label": "Test User"
+        "display_name": "Test User"
     });
 
     client
@@ -187,7 +203,7 @@ async fn login_with_wrong_password_fails() {
 
     // Act - Login with wrong password
     let login_body = json!({
-        "tenant_id": tenant_id,
+        "tenant_slug": tenant_slug,
         "email": email,
         "password": "WrongPassword456!"
     });
@@ -212,12 +228,12 @@ async fn login_with_nonexistent_user_fails() {
         .await
         .expect("Failed to cleanup");
 
-    let tenant_id = create_test_tenant(&app.pool, "Test Tenant").await;
+    let (_tenant_id, tenant_slug) = create_test_tenant(&app.pool, "Test Tenant").await;
     let client = app.client();
 
     // Act - Login without registering
     let login_body = json!({
-        "tenant_id": tenant_id,
+        "tenant_slug": tenant_slug,
         "email": "nonexistent@example.com",
         "password": "SomePassword123!"
     });
@@ -242,7 +258,7 @@ async fn refresh_token_returns_new_tokens() {
         .await
         .expect("Failed to cleanup");
 
-    let tenant_id = create_test_tenant(&app.pool, "Test Tenant").await;
+    let (_tenant_id, tenant_slug) = create_test_tenant(&app.pool, "Test Tenant").await;
     let client = app.client();
 
     let email = format!("refresh-test-{}@example.com", Uuid::new_v4());
@@ -250,10 +266,10 @@ async fn refresh_token_returns_new_tokens() {
 
     // Register user
     let register_body = json!({
-        "tenant_id": tenant_id,
+        "tenant_slug": tenant_slug,
         "email": email,
         "password": password,
-        "display_label": "Test User"
+        "display_name": "Test User"
     });
 
     let register_response = client
@@ -300,7 +316,7 @@ async fn logout_invalidates_session() {
         .await
         .expect("Failed to cleanup");
 
-    let tenant_id = create_test_tenant(&app.pool, "Test Tenant").await;
+    let (_tenant_id, tenant_slug) = create_test_tenant(&app.pool, "Test Tenant").await;
     let client = app.client();
 
     let email = format!("logout-test-{}@example.com", Uuid::new_v4());
@@ -308,10 +324,10 @@ async fn logout_invalidates_session() {
 
     // Register user
     let register_body = json!({
-        "tenant_id": tenant_id,
+        "tenant_slug": tenant_slug,
         "email": email,
         "password": password,
-        "display_label": "Test User"
+        "display_name": "Test User"
     });
 
     let register_response = client

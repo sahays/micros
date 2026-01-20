@@ -75,6 +75,12 @@ impl From<std::io::Error> for AppError {
     }
 }
 
+impl From<mongodb::error::Error> for AppError {
+    fn from(err: mongodb::error::Error) -> Self {
+        AppError::DatabaseError(anyhow::Error::new(err))
+    }
+}
+
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         #[derive(Serialize)]

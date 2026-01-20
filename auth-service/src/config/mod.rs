@@ -17,9 +17,17 @@ pub struct AuthConfig {
     pub jwt: JwtConfig,
     pub google: GoogleOAuthConfig,
     pub gmail: GmailConfig,
+    pub notification: NotificationServiceConfig,
     pub security: SecurityConfig,
     pub swagger: SwaggerConfig,
     pub rate_limit: RateLimitConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct NotificationServiceConfig {
+    pub url: String,
+    pub enabled: bool,
+    pub timeout_seconds: u64,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -174,6 +182,19 @@ impl AuthConfig {
             gmail: GmailConfig {
                 user: get_env("GMAIL_USER", None, is_prod)?,
                 app_password: get_env("GMAIL_APP_PASSWORD", None, is_prod)?,
+            },
+            notification: NotificationServiceConfig {
+                url: get_env(
+                    "NOTIFICATION_SERVICE_URL",
+                    Some("http://notification-service:8080"),
+                    is_prod,
+                )?,
+                enabled: get_env("NOTIFICATION_SERVICE_ENABLED", Some("false"), is_prod)?
+                    .parse()
+                    .unwrap_or(false),
+                timeout_seconds: get_env("NOTIFICATION_SERVICE_TIMEOUT", Some("30"), is_prod)?
+                    .parse()
+                    .unwrap_or(30),
             },
             security: {
                 let require_signatures = get_env("REQUIRE_SIGNATURES", Some("false"), is_prod)?

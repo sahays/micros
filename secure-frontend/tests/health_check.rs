@@ -13,20 +13,17 @@ use secrecy::Secret;
 
 #[tokio::test]
 async fn health_check_works() {
-    // 1. Setup (mock auth client config)
+    // 1. Setup (auth client config)
     let auth_config = secure_frontend::config::AuthServiceSettings {
         url: "http://localhost:8081".to_string(),
         public_url: "http://localhost:8081".to_string(),
-        client_id: "test_client".to_string(),
-        signing_secret: Secret::new("test_secret".to_string()),
     };
     let auth_client = Arc::new(AuthClient::new(auth_config));
 
-    // Setup mock document client config
+    // Setup document client config
     let document_config = secure_frontend::config::DocumentServiceSettings {
         url: "http://localhost:8002".to_string(),
-        client_id: "test_client".to_string(),
-        signing_secret: Secret::new("test_secret".to_string()),
+        document_signing_secret: Secret::new("test_secret".to_string()),
     };
     let document_client = Arc::new(DocumentClient::new(document_config));
 
