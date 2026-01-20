@@ -7,6 +7,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=../proto/micros/auth/v1/");
     println!("cargo:rerun-if-changed=../proto/micros/notification/v1/");
     println!("cargo:rerun-if-changed=../proto/micros/document/v1/");
+    println!("cargo:rerun-if-changed=../proto/micros/payment/v1/");
     println!("cargo:rerun-if-changed=../proto/micros/common/");
 
     // Compile auth service protos (client-side)
@@ -41,6 +42,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build_client(true) // Build clients for calling document-service
         .compile_protos(
             &["../proto/micros/document/v1/document.proto"],
+            &[&proto_root],
+        )?;
+
+    // Compile payment service protos (client-side)
+    tonic_build::configure()
+        .build_server(false) // No server code in service-core
+        .build_client(true) // Build clients for calling payment-service
+        .compile_protos(
+            &[
+                "../proto/micros/payment/v1/payment.proto",
+                "../proto/micros/payment/v1/transaction.proto",
+            ],
             &[&proto_root],
         )?;
 

@@ -33,6 +33,7 @@ pub struct UpiConfig {
 pub struct ServerConfig {
     pub host: String,
     pub port: u16,
+    pub grpc_port: u16,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -60,6 +61,9 @@ impl Config {
         let host = env::var("PAYMENT_SERVICE_HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
         let port = env::var("PAYMENT_SERVICE_PORT")
             .unwrap_or_else(|_| "3003".to_string())
+            .parse()?;
+        let grpc_port = env::var("PAYMENT_SERVICE_GRPC_PORT")
+            .unwrap_or_else(|_| "3004".to_string())
             .parse()?;
 
         let db_url = env::var("PAYMENT_DATABASE_URL").expect("PAYMENT_DATABASE_URL must be set");
@@ -90,7 +94,7 @@ impl Config {
             .unwrap_or_else(|_| "https://api.razorpay.com/v1".to_string());
 
         Ok(Self {
-            server: ServerConfig { host, port },
+            server: ServerConfig { host, port, grpc_port },
             database: DatabaseConfig {
                 url: Secret::new(db_url),
                 db_name,

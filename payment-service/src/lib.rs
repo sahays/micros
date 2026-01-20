@@ -1,5 +1,6 @@
 pub mod config;
 pub mod dtos;
+pub mod grpc;
 pub mod handlers;
 pub mod middleware;
 pub mod models;
@@ -93,6 +94,7 @@ impl SignatureStore for AppState {
 pub struct Application {
     port: u16,
     router: Router,
+    state: AppState,
 }
 
 impl Application {
@@ -185,12 +187,18 @@ impl Application {
                     )
                 }),
             )
-            .with_state(state);
+            .with_state(state.clone());
 
         Ok(Self {
             port: config.server.port,
             router,
+            state,
         })
+    }
+
+    /// Get the AppState for sharing with gRPC service.
+    pub fn state(&self) -> AppState {
+        self.state.clone()
     }
 
     pub async fn run_until_stopped(self) -> anyhow::Result<()> {

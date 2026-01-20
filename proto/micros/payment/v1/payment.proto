@@ -1,0 +1,130 @@
+syntax = "proto3";
+
+package micros.payment.v1;
+
+import "micros/payment/v1/transaction.proto";
+
+// PaymentService provides payment operations.
+//
+// All RPC methods require tenant context in gRPC metadata:
+// - x-app-id: Application/tenant ID
+// - x-org-id: Organization ID
+// - x-user-id: User ID (optional)
+service PaymentService {
+  // Transaction management
+
+  // Create a new transaction.
+  rpc CreateTransaction(CreateTransactionRequest) returns (CreateTransactionResponse);
+
+  // Get a transaction by ID.
+  rpc GetTransaction(GetTransactionRequest) returns (GetTransactionResponse);
+
+  // Update a transaction's status.
+  rpc UpdateTransactionStatus(UpdateTransactionStatusRequest) returns (UpdateTransactionStatusResponse);
+
+  // List transactions with optional filters.
+  rpc ListTransactions(ListTransactionsRequest) returns (ListTransactionsResponse);
+
+  // Razorpay integration
+
+  // Create a Razorpay order for payment.
+  rpc CreateRazorpayOrder(CreateRazorpayOrderRequest) returns (CreateRazorpayOrderResponse);
+
+  // Verify a Razorpay payment after checkout.
+  rpc VerifyRazorpayPayment(VerifyRazorpayPaymentRequest) returns (VerifyRazorpayPaymentResponse);
+
+  // UPI integration
+
+  // Generate a UPI QR code for payment.
+  rpc GenerateUpiQr(GenerateUpiQrRequest) returns (GenerateUpiQrResponse);
+}
+
+// CreateRazorpayOrderRequest to create a Razorpay order.
+message CreateRazorpayOrderRequest {
+  // Amount in smallest currency unit (e.g., paise for INR).
+  uint64 amount = 1;
+
+  // Currency code (default: "INR").
+  string currency = 2;
+
+  // Optional receipt ID for tracking.
+  optional string receipt = 3;
+
+  // Optional notes as JSON string.
+  optional string notes_json = 4;
+}
+
+// CreateRazorpayOrderResponse after creating a Razorpay order.
+message CreateRazorpayOrderResponse {
+  // Internal transaction ID.
+  string transaction_id = 1;
+
+  // Razorpay order ID (use this in frontend checkout).
+  string razorpay_order_id = 2;
+
+  // Amount in smallest currency unit.
+  uint64 amount = 3;
+
+  // Currency code.
+  string currency = 4;
+
+  // Razorpay key ID (for frontend initialization).
+  string razorpay_key_id = 5;
+}
+
+// VerifyRazorpayPaymentRequest to verify a payment after checkout.
+message VerifyRazorpayPaymentRequest {
+  // Internal transaction ID.
+  string transaction_id = 1;
+
+  // Razorpay order ID.
+  string razorpay_order_id = 2;
+
+  // Razorpay payment ID.
+  string razorpay_payment_id = 3;
+
+  // Razorpay signature for verification.
+  string razorpay_signature = 4;
+}
+
+// VerifyRazorpayPaymentResponse after verifying a payment.
+message VerifyRazorpayPaymentResponse {
+  // Transaction ID.
+  string transaction_id = 1;
+
+  // Updated transaction status.
+  TransactionStatus status = 2;
+
+  // Razorpay payment ID.
+  string razorpay_payment_id = 3;
+
+  // Human-readable result message.
+  string message = 4;
+}
+
+// GenerateUpiQrRequest to generate a UPI QR code.
+message GenerateUpiQrRequest {
+  // Amount in base currency unit.
+  double amount = 1;
+
+  // Optional description for the payment.
+  optional string description = 2;
+
+  // Optional transaction ID to associate with.
+  optional string transaction_id = 3;
+
+  // Optional VPA (Virtual Payment Address).
+  optional string vpa = 4;
+
+  // Optional merchant name.
+  optional string merchant_name = 5;
+}
+
+// GenerateUpiQrResponse with UPI QR code data.
+message GenerateUpiQrResponse {
+  // UPI payment link.
+  string upi_link = 1;
+
+  // Base64-encoded QR code image (optional, may not be generated).
+  optional string qr_image_base64 = 2;
+}

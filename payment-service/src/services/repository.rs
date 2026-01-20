@@ -153,4 +153,48 @@ impl PaymentRepository {
             .await?;
         Ok(())
     }
+
+    /// List transactions within a specific tenant with optional status filter.
+    pub async fn list_transactions_in_tenant(
+        &self,
+        app_id: &str,
+        org_id: &str,
+        status_filter: Option<TransactionStatus>,
+        limit: i64,
+        offset: u64,
+    ) -> Result<(Vec<Transaction>, i64)> {
+        use futures::TryStreamExt;
+        use mongodb::options::FindOptions;
+
+        let mut filter = doc! {
+            "app_id": app_id,
+            "org_id": org_id
+        };
+
+        if let Some(status) = status_filter {
+            filter.insert("status", mongodb::bson::to_bson(&status)?);
+        }
+
+        // Get total count
+        let total_count = self
+            .transaction_collection
+            .count_documents(filter.clone(), None)
+            .await? as i64;
+
+        // Get paginated results
+        let options = FindOptions::builder()
+            .sort(doc! { "created_at": -1 })
+            .skip(offset)
+            .limit(limit)
+            .build();
+
+        let cursor = self
+            .transaction_collection
+            .find(filter, Some(options))
+            .await?;
+
+        let transactions: Vec<Transaction> = cursor.try_collect().await?;
+
+        Ok((transactions, total_count))
+    }
 }

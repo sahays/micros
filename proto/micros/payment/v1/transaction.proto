@@ -1,0 +1,108 @@
+syntax = "proto3";
+
+package micros.payment.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// TransactionStatus represents the lifecycle state of a transaction.
+enum TransactionStatus {
+  TRANSACTION_STATUS_UNSPECIFIED = 0;
+  TRANSACTION_STATUS_CREATED = 1;
+  TRANSACTION_STATUS_PENDING = 2;
+  TRANSACTION_STATUS_COMPLETED = 3;
+  TRANSACTION_STATUS_FAILED = 4;
+  TRANSACTION_STATUS_REFUNDED = 5;
+}
+
+// Transaction represents a payment transaction.
+message Transaction {
+  // Unique transaction identifier.
+  string id = 1;
+
+  // Application ID (tenant).
+  string app_id = 2;
+
+  // Organization ID within the application.
+  string org_id = 3;
+
+  // User who initiated this transaction (optional).
+  optional string user_id = 4;
+
+  // Transaction amount (in base currency unit, e.g., rupees).
+  double amount = 5;
+
+  // Currency code (e.g., "INR", "USD").
+  string currency = 6;
+
+  // Current status of the transaction.
+  TransactionStatus status = 7;
+
+  // Payment provider's order ID (e.g., Razorpay order ID).
+  optional string provider_order_id = 8;
+
+  // When the transaction was created.
+  google.protobuf.Timestamp created_at = 9;
+
+  // When the transaction was last updated.
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+// CreateTransactionRequest to create a new transaction.
+message CreateTransactionRequest {
+  // Amount in base currency unit.
+  double amount = 1;
+
+  // Currency code (e.g., "INR").
+  string currency = 2;
+}
+
+// CreateTransactionResponse after creating a transaction.
+message CreateTransactionResponse {
+  // The created transaction.
+  Transaction transaction = 1;
+}
+
+// GetTransactionRequest to retrieve a transaction by ID.
+message GetTransactionRequest {
+  // Transaction ID.
+  string transaction_id = 1;
+}
+
+// GetTransactionResponse with the transaction details.
+message GetTransactionResponse {
+  // The transaction.
+  Transaction transaction = 1;
+}
+
+// UpdateTransactionStatusRequest to update a transaction's status.
+message UpdateTransactionStatusRequest {
+  // Transaction ID.
+  string transaction_id = 1;
+
+  // New status.
+  TransactionStatus status = 2;
+}
+
+// UpdateTransactionStatusResponse (empty on success).
+message UpdateTransactionStatusResponse {}
+
+// ListTransactionsRequest to list transactions with filters.
+message ListTransactionsRequest {
+  // Filter by status (optional).
+  optional TransactionStatus status = 1;
+
+  // Maximum number of results (default: 50, max: 100).
+  int32 limit = 2;
+
+  // Offset for pagination.
+  int32 offset = 3;
+}
+
+// ListTransactionsResponse with paginated transactions.
+message ListTransactionsResponse {
+  // List of transactions.
+  repeated Transaction transactions = 1;
+
+  // Total count matching the filter.
+  int64 total_count = 2;
+}
