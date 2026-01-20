@@ -7,7 +7,7 @@
 
 ## Overview
 
-Migrate all non-BFF microservices from REST/HTTP to gRPC for service-to-service communication. This improves type safety, enables better schema evolution through protobuf, and provides performance benefits through HTTP/2 and binary serialization.
+Migrate all non-BFF microservices to gRPC-only interfaces. All backend services are internal-facing; external clients (browsers, mobile apps) interact exclusively through BFF services which expose REST APIs.
 
 ## Motivation
 
@@ -29,8 +29,8 @@ Migrate all non-BFF microservices from REST/HTTP to gRPC for service-to-service 
 
 ### Target State
 
-- Service-to-service calls use gRPC with protobuf
-- REST endpoints maintained for external clients (mobile apps, third-party integrations)
+- All backend services expose gRPC-only interfaces (no REST)
+- BFFs are the only external-facing layer, exposing REST to clients
 - Shared proto definitions in a central location
 - Generated Rust clients for type-safe service calls
 - gRPC reflection enabled for debugging
@@ -38,27 +38,42 @@ Migrate all non-BFF microservices from REST/HTTP to gRPC for service-to-service 
 ## Architecture
 
 ```
-┌─────────────────┐     REST/HTTP      ┌──────────────────┐
-│  Mobile Apps    │◄──────────────────►│  auth-service    │
-│  External APIs  │                    │  (REST + gRPC)   │
+┌─────────────────┐                    ┌──────────────────┐
+│  Browsers       │     REST/HTTP      │  secure-frontend │
+│  Mobile Apps    │◄──────────────────►│  (BFF)           │
+│  External APIs  │                    │  REST → gRPC     │
 └─────────────────┘                    └────────┬─────────┘
-                                                │ gRPC
-┌─────────────────┐     REST/HTTP      ┌────────▼─────────┐
-│  secure-frontend│◄──────────────────►│notification-svc  │
-│  (BFF)          │                    │  (gRPC only)     │
-└────────┬────────┘                    └──────────────────┘
-         │ gRPC
-         ▼
-┌─────────────────┐     gRPC           ┌──────────────────┐
-│  auth-service   │◄──────────────────►│  document-service│
-│                 │                    │  (REST + gRPC)   │
-└─────────────────┘                    └──────────────────┘
+                                                │
+                    ┌───────────────────────────┼───────────────────────────┐
+                    │           Internal Network (gRPC only)                │
+                    │                           │                           │
+                    │    ┌──────────────────────┼──────────────────────┐    │
+                    │    │                      ▼                      │    │
+                    │    │  ┌──────────────────────────────────────┐   │    │
+                    │    │  │           auth-service               │   │    │
+                    │    │  │           (gRPC only)                │   │    │
+                    │    │  └──────────────────────────────────────┘   │    │
+                    │    │                      │                      │    │
+                    │    │         ┌────────────┴────────────┐         │    │
+                    │    │         ▼                         ▼         │    │
+                    │    │  ┌─────────────────┐    ┌─────────────────┐ │    │
+                    │    │  │notification-svc │    │ document-service│ │    │
+                    │    │  │  (gRPC only)    │    │  (gRPC only)    │ │    │
+                    │    │  └─────────────────┘    └─────────────────┘ │    │
+                    │    │                                             │    │
+                    │    │  ┌─────────────────┐                        │    │
+                    │    │  │ payment-service │                        │    │
+                    │    │  │  (gRPC only)    │                        │    │
+                    │    │  └─────────────────┘                        │    │
+                    │    └─────────────────────────────────────────────┘    │
+                    └───────────────────────────────────────────────────────┘
 ```
 
-**Dual Protocol Strategy:**
-- External-facing services (auth, document): REST + gRPC
-- Internal-only services (notification): gRPC only
-- BFF (secure-frontend): REST to clients, gRPC to backend services
+**Architecture Principles:**
+- All backend services are internal-only with gRPC interfaces
+- BFFs are the single entry point for all external traffic
+- BFFs translate REST requests to gRPC calls
+- Service-to-service communication uses gRPC exclusively
 
 ## Proto Organization
 
@@ -192,17 +207,17 @@ proto/
 **Priority**: High
 **Estimated Effort**: Large
 
-**Description**: Implement gRPC server for auth-service alongside existing REST API.
+**Description**: Replace REST API with gRPC server for auth-service.
 
 **Acceptance Criteria**:
 - [ ] Generate Rust code from auth protos
 - [ ] Implement `AuthService` trait from generated code
-- [ ] Reuse existing business logic (handlers call same service layer)
-- [ ] Add gRPC server to auth-service startup
-- [ ] Configure separate port for gRPC (e.g., 3001)
+- [ ] Reuse existing business logic (gRPC handlers call same service layer)
+- [ ] Remove REST handlers and Axum router
 - [ ] Add gRPC health check endpoint
 - [ ] Add gRPC reflection for debugging
-- [ ] Update Docker configuration to expose gRPC port
+- [ ] Keep HTTP health check on separate port for Docker/K8s probes
+- [ ] Update Docker configuration
 
 **Files to Create**:
 - `auth-service/build.rs`
@@ -219,6 +234,9 @@ proto/
 - `docker-compose.dev.yml`
 - `docker-compose.prod.yml`
 
+**Files to Remove**:
+- `auth-service/src/handlers/*.rs` (REST handlers)
+
 ---
 
 #### Task 2.3: Create Auth gRPC Client in service-core
@@ -227,7 +245,7 @@ proto/
 **Priority**: High
 **Estimated Effort**: Small
 
-**Description**: Create reusable auth-service gRPC client for other services.
+**Description**: Create reusable auth-service gRPC client for BFFs and other services.
 
 **Acceptance Criteria**:
 - [ ] Generate client code from auth protos
@@ -276,13 +294,13 @@ proto/
 **Priority**: High
 **Estimated Effort**: Medium
 
-**Description**: Replace REST API with gRPC-only server for notification-service.
+**Description**: Replace REST API with gRPC server for notification-service.
 
 **Acceptance Criteria**:
 - [ ] Generate Rust code from notification protos
 - [ ] Implement `NotificationService` trait
-- [ ] Remove REST handlers (internal service only)
-- [ ] Keep health check endpoint on HTTP for Docker
+- [ ] Remove REST handlers
+- [ ] Keep HTTP health check on separate port for Docker/K8s probes
 - [ ] Add gRPC reflection
 - [ ] Update all configuration
 
@@ -295,6 +313,9 @@ proto/
 - `notification-service/Cargo.toml`
 - `notification-service/src/lib.rs`
 - `notification-service/src/main.rs`
+
+**Files to Remove**:
+- `notification-service/src/handlers/*.rs` (REST handlers)
 
 ---
 
@@ -349,12 +370,26 @@ proto/
 **Priority**: Medium
 **Estimated Effort**: Large
 
-**Description**: Add gRPC server to document-service alongside REST.
+**Description**: Replace REST API with gRPC server for document-service.
 
 **Acceptance Criteria**:
 - [ ] Implement streaming upload/download
-- [ ] Maintain REST for direct browser uploads
-- [ ] Add gRPC endpoints for service-to-service calls
+- [ ] Remove REST handlers
+- [ ] Add gRPC endpoints for all document operations
+- [ ] Keep HTTP health check on separate port for Docker/K8s probes
+
+**Files to Create**:
+- `document-service/build.rs`
+- `document-service/src/grpc/mod.rs`
+- `document-service/src/grpc/document_service.rs`
+
+**Files to Modify**:
+- `document-service/Cargo.toml`
+- `document-service/src/lib.rs`
+- `document-service/src/main.rs`
+
+**Files to Remove**:
+- `document-service/src/handlers/*.rs` (REST handlers)
 
 ---
 
@@ -363,7 +398,7 @@ proto/
 #### Task 5.1: Update secure-frontend to Use gRPC Clients
 
 **Status**: [ ] Not Started
-**Priority**: Medium
+**Priority**: High
 **Estimated Effort**: Medium
 
 **Description**: Replace REST clients in BFF with gRPC clients.
@@ -371,9 +406,10 @@ proto/
 **Acceptance Criteria**:
 - [ ] Replace `AuthClient` HTTP calls with gRPC
 - [ ] Replace `DocumentClient` HTTP calls with gRPC
-- [ ] Replace `NotificationClient` HTTP calls with gRPC
+- [ ] Replace `NotificationClient` HTTP calls with gRPC (if applicable)
 - [ ] Maintain REST API for browser clients
 - [ ] Verify all trace context propagation works
+- [ ] Ensure proper error translation (gRPC status → HTTP status)
 
 **Files to Modify**:
 - `secure-frontend/src/services/auth_client.rs`
@@ -402,17 +438,31 @@ proto/
 **Priority**: Low
 **Estimated Effort**: Medium
 
+**Description**: Implement gRPC-only server for payment-service.
+
+**Acceptance Criteria**:
+- [ ] Generate Rust code from payment protos
+- [ ] Implement `PaymentService` trait
+- [ ] gRPC-only interface (no REST)
+- [ ] Keep HTTP health check on separate port for Docker/K8s probes
+
 ---
 
 ### Phase 7: Cleanup and Documentation
 
-#### Task 7.1: Remove Unused REST Code
+#### Task 7.1: Remove Legacy REST Infrastructure
 
 **Status**: [ ] Not Started
 **Priority**: Low
 **Estimated Effort**: Small
 
-**Description**: Remove REST handlers that are no longer needed after gRPC migration.
+**Description**: Remove REST-related code and dependencies from backend services.
+
+**Acceptance Criteria**:
+- [ ] Remove unused Axum route definitions from backend services
+- [ ] Remove JSON serialization dependencies if no longer needed
+- [ ] Clean up unused middleware (REST-specific rate limiting, etc.)
+- [ ] Update Cargo.toml to remove unused dependencies
 
 ---
 
@@ -426,7 +476,8 @@ proto/
 - [ ] Update CLAUDE.md with gRPC development workflow
 - [ ] Document proto style guide
 - [ ] Add gRPC debugging guide (using grpcurl, reflection)
-- [ ] Update API documentation
+- [ ] Update architecture diagrams
+- [ ] Document BFF → backend communication patterns
 
 ---
 
@@ -442,12 +493,13 @@ proto/
 
 ## Success Criteria
 
-- [ ] All service-to-service calls use gRPC
+- [ ] All backend services expose gRPC-only interfaces
+- [ ] All external traffic routes through BFFs
 - [ ] Proto definitions pass buf lint with no warnings
 - [ ] No breaking changes detected by buf breaking
 - [ ] gRPC reflection enabled on all services
 - [ ] Trace context propagates through gRPC calls (visible in Tempo)
-- [ ] All existing tests pass
+- [ ] All existing tests pass (updated for gRPC)
 - [ ] gRPC endpoints have equivalent test coverage
 - [ ] Documentation updated
 
@@ -479,12 +531,14 @@ Map `AppError` variants to gRPC status codes:
 
 ### Port Configuration
 
-| Service | REST Port | gRPC Port |
-|---------|-----------|-----------|
-| auth-service | 3000 | 3001 |
-| document-service | 8080 | 8081 |
-| notification-service | - | 8080 |
-| payment-service | 3003 | 3004 |
+| Service | gRPC Port | Health HTTP Port |
+|---------|-----------|------------------|
+| auth-service | 50051 | 3000 |
+| document-service | 50052 | 8080 |
+| notification-service | 50053 | 8081 |
+| payment-service | 50054 | 8082 |
+
+**Note**: Health HTTP ports are minimal HTTP servers for Docker/K8s health probes only.
 
 ### Dependencies
 
@@ -505,7 +559,7 @@ tonic-build = "0.12"
 
 | Risk | Mitigation |
 |------|------------|
-| Breaking changes during migration | Keep REST endpoints until gRPC stable |
+| Migration disruption | Implement in phases, one service at a time |
 | Proto schema drift | Use buf breaking to detect incompatibilities |
 | Debugging difficulty | Enable gRPC reflection, use grpcurl |
 | Performance regression | Benchmark before/after, use connection pooling |
