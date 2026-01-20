@@ -1,0 +1,120 @@
+syntax = "proto3";
+
+package micros.auth.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// OrgService provides organization hierarchy management.
+service OrgService {
+  // Create a new org node.
+  rpc CreateOrgNode(CreateOrgNodeRequest) returns (CreateOrgNodeResponse);
+
+  // Get an org node by ID.
+  rpc GetOrgNode(GetOrgNodeRequest) returns (GetOrgNodeResponse);
+
+  // Get descendants of an org node.
+  rpc GetOrgNodeDescendants(GetOrgNodeDescendantsRequest) returns (GetOrgNodeDescendantsResponse);
+
+  // List all org nodes for a tenant.
+  rpc ListTenantOrgNodes(ListTenantOrgNodesRequest) returns (ListTenantOrgNodesResponse);
+
+  // Get the org tree structure for a tenant.
+  rpc GetTenantOrgTree(GetTenantOrgTreeRequest) returns (GetTenantOrgTreeResponse);
+}
+
+// CreateOrgNodeRequest for creating a new org node.
+message CreateOrgNodeRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // Parent org node ID (optional, UUID).
+  optional string parent_org_node_id = 2;
+
+  // Node type code (e.g., "company", "department", "team").
+  string node_type_code = 3;
+
+  // Node label (display name).
+  string node_label = 4;
+}
+
+// GetOrgNodeRequest for fetching an org node.
+message GetOrgNodeRequest {
+  // Org node ID (UUID).
+  string org_node_id = 1;
+}
+
+// GetOrgNodeDescendantsRequest for fetching descendants.
+message GetOrgNodeDescendantsRequest {
+  // Org node ID (UUID).
+  string org_node_id = 1;
+}
+
+// GetOrgNodeDescendantsResponse with list of descendant nodes.
+message GetOrgNodeDescendantsResponse {
+  repeated OrgNode descendants = 1;
+}
+
+// ListTenantOrgNodesRequest for listing tenant org nodes.
+message ListTenantOrgNodesRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+}
+
+// ListTenantOrgNodesResponse with list of org nodes.
+message ListTenantOrgNodesResponse {
+  repeated OrgNode org_nodes = 1;
+}
+
+// GetTenantOrgTreeRequest for getting org tree.
+message GetTenantOrgTreeRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+}
+
+// GetTenantOrgTreeResponse with tree structure.
+message GetTenantOrgTreeResponse {
+  repeated OrgNodeTree roots = 1;
+}
+
+// OrgNode represents an organization node.
+message OrgNode {
+  // Org node ID (UUID).
+  string org_node_id = 1;
+
+  // Tenant ID (UUID).
+  string tenant_id = 2;
+
+  // Parent org node ID (optional, UUID).
+  optional string parent_org_node_id = 3;
+
+  // Node type code.
+  string node_type_code = 4;
+
+  // Node label.
+  string node_label = 5;
+
+  // Whether the node is active.
+  bool active_flag = 6;
+
+  // Creation timestamp.
+  google.protobuf.Timestamp created_utc = 7;
+}
+
+// CreateOrgNodeResponse wraps a created org node.
+message CreateOrgNodeResponse {
+  OrgNode org_node = 1;
+}
+
+// GetOrgNodeResponse wraps a fetched org node.
+message GetOrgNodeResponse {
+  OrgNode org_node = 1;
+}
+
+// OrgNodeTree represents an org node with children (tree structure).
+message OrgNodeTree {
+  // The org node.
+  OrgNode node = 1;
+
+  // Child nodes.
+  repeated OrgNodeTree children = 2;
+}

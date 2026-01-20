@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package micros.auth.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// AuditService provides audit log access.
+service AuditService {
+  // List audit events with filters.
+  rpc ListAuditEvents(ListAuditEventsRequest) returns (ListAuditEventsResponse);
+}
+
+// ListAuditEventsRequest for querying audit events.
+message ListAuditEventsRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // Filter by actor user ID (optional).
+  optional string actor_user_id = 2;
+
+  // Filter by event type (optional).
+  optional string event_type = 3;
+
+  // Filter by target type (optional, e.g., "user", "role", "assignment").
+  optional string target_type = 4;
+
+  // Filter by target ID (optional).
+  optional string target_id = 5;
+
+  // Start timestamp for range filter.
+  optional google.protobuf.Timestamp start_utc = 6;
+
+  // End timestamp for range filter.
+  optional google.protobuf.Timestamp end_utc = 7;
+
+  // Pagination limit (default 50, max 100).
+  int32 limit = 8;
+
+  // Pagination offset.
+  int32 offset = 9;
+}
+
+// ListAuditEventsResponse with list of audit events.
+message ListAuditEventsResponse {
+  repeated AuditEvent events = 1;
+  int64 total_count = 2;
+}
+
+// AuditEvent represents an audit log entry.
+message AuditEvent {
+  // Event ID (UUID).
+  string event_id = 1;
+
+  // Tenant ID (UUID).
+  string tenant_id = 2;
+
+  // Actor user ID (UUID).
+  string actor_user_id = 3;
+
+  // Event type (e.g., "user.created", "role.assigned").
+  string event_type = 4;
+
+  // Target type.
+  string target_type = 5;
+
+  // Target ID.
+  string target_id = 6;
+
+  // Event details as JSON string.
+  string details_json = 7;
+
+  // IP address of the actor.
+  optional string ip_address = 8;
+
+  // User agent of the actor.
+  optional string user_agent = 9;
+
+  // Event timestamp.
+  google.protobuf.Timestamp created_utc = 10;
+}

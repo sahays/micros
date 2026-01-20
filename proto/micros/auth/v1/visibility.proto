@@ -1,0 +1,102 @@
+syntax = "proto3";
+
+package micros.auth.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// VisibilityService provides visibility grant management.
+// Visibility grants allow users to see org nodes they don't have assignments to.
+service VisibilityService {
+  // Create a visibility grant.
+  rpc CreateVisibilityGrant(CreateVisibilityGrantRequest) returns (CreateVisibilityGrantResponse);
+
+  // Revoke a visibility grant.
+  rpc RevokeVisibilityGrant(RevokeVisibilityGrantRequest) returns (RevokeVisibilityGrantResponse);
+
+  // List visibility grants for a user.
+  rpc ListUserVisibilityGrants(ListUserVisibilityGrantsRequest) returns (ListUserVisibilityGrantsResponse);
+}
+
+// CreateVisibilityGrantRequest for creating a visibility grant.
+message CreateVisibilityGrantRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // User ID (UUID).
+  string user_id = 2;
+
+  // Org node ID to grant visibility to (UUID).
+  string org_node_id = 3;
+
+  // Access scope: "read" or "analyze" (default: "read").
+  optional string access_scope = 4;
+
+  // Optional start timestamp (default: now).
+  optional google.protobuf.Timestamp start_utc = 5;
+
+  // Optional end timestamp.
+  optional google.protobuf.Timestamp end_utc = 6;
+}
+
+// RevokeVisibilityGrantRequest for revoking a visibility grant.
+message RevokeVisibilityGrantRequest {
+  // Visibility grant ID (UUID).
+  string grant_id = 1;
+}
+
+// RevokeVisibilityGrantResponse after revoking grant.
+message RevokeVisibilityGrantResponse {
+  string message = 1;
+}
+
+// ListUserVisibilityGrantsRequest for listing user visibility grants.
+message ListUserVisibilityGrantsRequest {
+  // User ID (UUID).
+  string user_id = 1;
+
+  // Only include active grants.
+  bool active_only = 2;
+}
+
+// ListUserVisibilityGrantsResponse with list of grants.
+message ListUserVisibilityGrantsResponse {
+  repeated VisibilityGrant grants = 1;
+}
+
+// VisibilityGrant represents a visibility grant.
+message VisibilityGrant {
+  // Grant ID (UUID).
+  string grant_id = 1;
+
+  // Tenant ID (UUID).
+  string tenant_id = 2;
+
+  // User ID (UUID).
+  string user_id = 3;
+
+  // Org node ID (UUID).
+  string org_node_id = 4;
+
+  // Access scope code ("read" or "analyze").
+  string access_scope = 5;
+
+  // Granter user ID (UUID) - may be empty if not tracked.
+  string granter_user_id = 6;
+
+  // Start timestamp.
+  google.protobuf.Timestamp start_utc = 7;
+
+  // End timestamp (optional).
+  optional google.protobuf.Timestamp end_utc = 8;
+
+  // Whether the grant was revoked (end_utc is in the past).
+  bool revoked = 9;
+
+  // Creation timestamp (same as start_utc).
+  google.protobuf.Timestamp created_utc = 10;
+}
+
+// CreateVisibilityGrantResponse wraps a created visibility grant.
+message CreateVisibilityGrantResponse {
+  VisibilityGrant grant = 1;
+}

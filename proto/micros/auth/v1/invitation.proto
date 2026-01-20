@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package micros.auth.v1;
+
+import "google/protobuf/timestamp.proto";
+import "micros/auth/v1/auth.proto";
+
+// InvitationService provides invitation management for onboarding users.
+service InvitationService {
+  // Create a new invitation.
+  rpc CreateInvitation(CreateInvitationRequest) returns (CreateInvitationResponse);
+
+  // Get invitation by token.
+  rpc GetInvitation(GetInvitationRequest) returns (GetInvitationResponse);
+
+  // Accept an invitation (creates user and assignments).
+  rpc AcceptInvitation(AcceptInvitationRequest) returns (AcceptInvitationResponse);
+}
+
+// CreateInvitationRequest for creating an invitation.
+message CreateInvitationRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // Email address to invite.
+  string email = 2;
+
+  // Org node ID for initial assignment (UUID).
+  string org_node_id = 3;
+
+  // Role ID for initial assignment (UUID).
+  string role_id = 4;
+
+  // Invitation expiry in hours (default 72).
+  optional int32 expires_in_hours = 5;
+
+  // Inviter user ID (UUID).
+  string inviter_user_id = 6;
+}
+
+// GetInvitationRequest for fetching an invitation.
+message GetInvitationRequest {
+  // Invitation token.
+  string token = 1;
+}
+
+// AcceptInvitationRequest for accepting an invitation.
+message AcceptInvitationRequest {
+  // Invitation token.
+  string token = 1;
+
+  // Password for the new user account.
+  string password = 2;
+
+  // Optional display name.
+  optional string display_name = 3;
+}
+
+// AcceptInvitationResponse after accepting invitation.
+message AcceptInvitationResponse {
+  // Auth tokens for the new user.
+  LoginResponse auth = 1;
+
+  // Message.
+  string message = 2;
+}
+
+// Invitation status.
+enum InvitationStatus {
+  INVITATION_STATUS_UNSPECIFIED = 0;
+  INVITATION_STATUS_PENDING = 1;
+  INVITATION_STATUS_ACCEPTED = 2;
+  INVITATION_STATUS_EXPIRED = 3;
+  INVITATION_STATUS_REVOKED = 4;
+}
+
+// Invitation represents an invitation.
+message Invitation {
+  // Invitation ID (UUID).
+  string invitation_id = 1;
+
+  // Tenant ID (UUID).
+  string tenant_id = 2;
+
+  // Email address.
+  string email = 3;
+
+  // Org node ID (UUID).
+  string org_node_id = 4;
+
+  // Role ID (UUID).
+  string role_id = 5;
+
+  // Invitation status.
+  InvitationStatus status = 6;
+
+  // Expiry timestamp.
+  google.protobuf.Timestamp expires_utc = 7;
+
+  // Creation timestamp.
+  google.protobuf.Timestamp created_utc = 8;
+
+  // Inviter user ID (UUID).
+  string inviter_user_id = 9;
+}
+
+// CreateInvitationResponse wraps a created invitation.
+message CreateInvitationResponse {
+  Invitation invitation = 1;
+}
+
+// GetInvitationResponse wraps a fetched invitation.
+message GetInvitationResponse {
+  Invitation invitation = 1;
+}

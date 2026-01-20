@@ -1,0 +1,138 @@
+syntax = "proto3";
+
+package micros.auth.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// RoleService provides role and capability management.
+// Key principle: never authorize by role label, only by capability key.
+service RoleService {
+  // Create a new role.
+  rpc CreateRole(CreateRoleRequest) returns (CreateRoleResponse);
+
+  // Get a role by ID (includes capabilities).
+  rpc GetRole(GetRoleRequest) returns (GetRoleResponse);
+
+  // List roles for a tenant.
+  rpc ListTenantRoles(ListTenantRolesRequest) returns (ListTenantRolesResponse);
+
+  // Get capabilities assigned to a role.
+  rpc GetRoleCapabilities(GetRoleCapabilitiesRequest) returns (GetRoleCapabilitiesResponse);
+
+  // Assign a capability to a role.
+  rpc AssignCapability(AssignCapabilityRequest) returns (AssignCapabilityResponse);
+
+  // List all available capabilities.
+  rpc ListCapabilities(ListCapabilitiesRequest) returns (ListCapabilitiesResponse);
+
+  // Get a capability by key.
+  rpc GetCapability(GetCapabilityRequest) returns (GetCapabilityResponse);
+}
+
+// CreateRoleRequest for creating a new role.
+message CreateRoleRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+
+  // Role label (display name).
+  string role_label = 2;
+}
+
+// GetRoleRequest for fetching a role.
+message GetRoleRequest {
+  // Role ID (UUID).
+  string role_id = 1;
+}
+
+// ListTenantRolesRequest for listing tenant roles.
+message ListTenantRolesRequest {
+  // Tenant ID (UUID).
+  string tenant_id = 1;
+}
+
+// ListTenantRolesResponse with list of roles.
+message ListTenantRolesResponse {
+  repeated Role roles = 1;
+}
+
+// GetRoleCapabilitiesRequest for getting role capabilities.
+message GetRoleCapabilitiesRequest {
+  // Role ID (UUID).
+  string role_id = 1;
+}
+
+// GetRoleCapabilitiesResponse with list of capability keys.
+message GetRoleCapabilitiesResponse {
+  repeated string capabilities = 1;
+}
+
+// AssignCapabilityRequest for assigning capability to role.
+message AssignCapabilityRequest {
+  // Role ID (UUID).
+  string role_id = 1;
+
+  // Capability key.
+  string capability_key = 2;
+}
+
+// AssignCapabilityResponse after capability assignment.
+message AssignCapabilityResponse {
+  string message = 1;
+}
+
+// ListCapabilitiesRequest for listing all capabilities.
+message ListCapabilitiesRequest {}
+
+// ListCapabilitiesResponse with list of capabilities.
+message ListCapabilitiesResponse {
+  repeated Capability capabilities = 1;
+}
+
+// GetCapabilityRequest for fetching a capability.
+message GetCapabilityRequest {
+  // Capability key.
+  string cap_key = 1;
+}
+
+// Role represents a role.
+message Role {
+  // Role ID (UUID).
+  string role_id = 1;
+
+  // Tenant ID (UUID).
+  string tenant_id = 2;
+
+  // Role label.
+  string role_label = 3;
+
+  // Creation timestamp.
+  google.protobuf.Timestamp created_utc = 4;
+}
+
+// CreateRoleResponse wraps a created role.
+message CreateRoleResponse {
+  Role role = 1;
+}
+
+// GetRoleResponse includes role and its capabilities.
+message GetRoleResponse {
+  Role role = 1;
+  repeated string capabilities = 2;
+}
+
+// Capability represents a capability.
+message Capability {
+  // Capability ID (UUID).
+  string cap_id = 1;
+
+  // Capability key (unique identifier).
+  string cap_key = 2;
+
+  // Creation timestamp.
+  google.protobuf.Timestamp created_utc = 3;
+}
+
+// GetCapabilityResponse wraps a fetched capability.
+message GetCapabilityResponse {
+  Capability capability = 1;
+}

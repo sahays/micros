@@ -1,0 +1,90 @@
+syntax = "proto3";
+
+package micros.auth.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// AssignmentService provides role assignment management.
+// Assignments are time-bounded and immutable (ended, not deleted).
+service AssignmentService {
+  // Create a new role assignment.
+  rpc CreateAssignment(CreateAssignmentRequest) returns (CreateAssignmentResponse);
+
+  // End an assignment (mark as ended, not delete).
+  rpc EndAssignment(EndAssignmentRequest) returns (EndAssignmentResponse);
+
+  // List assignments for a user.
+  rpc ListUserAssignments(ListUserAssignmentsRequest) returns (ListUserAssignmentsResponse);
+}
+
+// CreateAssignmentRequest for creating a role assignment.
+message CreateAssignmentRequest {
+  // User ID (UUID).
+  string user_id = 1;
+
+  // Org node ID where role is assigned (UUID).
+  string org_node_id = 2;
+
+  // Role ID (UUID).
+  string role_id = 3;
+
+  // Optional end timestamp (if omitted, assignment is indefinite).
+  optional google.protobuf.Timestamp end_utc = 4;
+}
+
+// EndAssignmentRequest for ending an assignment.
+message EndAssignmentRequest {
+  // Assignment ID (UUID).
+  string assignment_id = 1;
+}
+
+// EndAssignmentResponse after ending assignment.
+message EndAssignmentResponse {
+  string message = 1;
+}
+
+// ListUserAssignmentsRequest for listing user assignments.
+message ListUserAssignmentsRequest {
+  // User ID (UUID).
+  string user_id = 1;
+
+  // Only include active assignments (not ended).
+  bool active_only = 2;
+}
+
+// ListUserAssignmentsResponse with list of assignments.
+message ListUserAssignmentsResponse {
+  repeated Assignment assignments = 1;
+}
+
+// Assignment represents a role assignment.
+message Assignment {
+  // Assignment ID (UUID).
+  string assignment_id = 1;
+
+  // User ID (UUID).
+  string user_id = 2;
+
+  // Org node ID (UUID).
+  string org_node_id = 3;
+
+  // Role ID (UUID).
+  string role_id = 4;
+
+  // Role label for convenience.
+  string role_label = 5;
+
+  // Start timestamp.
+  google.protobuf.Timestamp start_utc = 6;
+
+  // End timestamp (optional).
+  optional google.protobuf.Timestamp end_utc = 7;
+
+  // Creation timestamp.
+  google.protobuf.Timestamp created_utc = 8;
+}
+
+// CreateAssignmentResponse wraps a single assignment.
+message CreateAssignmentResponse {
+  Assignment assignment = 1;
+}

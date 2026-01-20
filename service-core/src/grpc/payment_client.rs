@@ -7,7 +7,8 @@ use tonic::transport::{Channel, Endpoint};
 use super::proto::payment::payment_service_client::PaymentServiceClient;
 use super::proto::payment::{
     CreateRazorpayOrderRequest, CreateRazorpayOrderResponse, CreateTransactionRequest,
-    GenerateUpiQrRequest, GenerateUpiQrResponse, GetTransactionRequest, ListTransactionsRequest,
+    GenerateUpiQrRequest, GenerateUpiQrResponse, GetTransactionRequest,
+    HandleRazorpayWebhookRequest, HandleRazorpayWebhookResponse, ListTransactionsRequest,
     Transaction, TransactionStatus, UpdateTransactionStatusRequest, VerifyRazorpayPaymentRequest,
     VerifyRazorpayPaymentResponse,
 };
@@ -180,6 +181,7 @@ impl PaymentClient {
     // =========================================================================
 
     /// Create a Razorpay order for payment.
+    #[allow(clippy::too_many_arguments)]
     pub async fn create_razorpay_order(
         &mut self,
         app_id: &str,
@@ -204,6 +206,7 @@ impl PaymentClient {
     }
 
     /// Verify a Razorpay payment after checkout.
+    #[allow(clippy::too_many_arguments)]
     pub async fn verify_razorpay_payment(
         &mut self,
         app_id: &str,
@@ -232,6 +235,7 @@ impl PaymentClient {
     // =========================================================================
 
     /// Generate a UPI QR code for payment.
+    #[allow(clippy::too_many_arguments)]
     pub async fn generate_upi_qr(
         &mut self,
         app_id: &str,
@@ -253,6 +257,29 @@ impl PaymentClient {
 
         let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
         let response = self.client.generate_upi_qr(request).await?;
+
+        Ok(response.into_inner())
+    }
+
+    // =========================================================================
+    // Webhook Operations (called by BFF to proxy external webhooks)
+    // =========================================================================
+
+    /// Handle a Razorpay webhook event proxied from BFF.
+    ///
+    /// This method is called by the BFF to proxy Razorpay webhook events
+    /// to the payment service for processing.
+    pub async fn handle_razorpay_webhook(
+        &mut self,
+        body: &str,
+        signature: &str,
+    ) -> Result<HandleRazorpayWebhookResponse, tonic::Status> {
+        let request = HandleRazorpayWebhookRequest {
+            body: body.to_string(),
+            signature: signature.to_string(),
+        };
+
+        let response = self.client.handle_razorpay_webhook(request).await?;
 
         Ok(response.into_inner())
     }

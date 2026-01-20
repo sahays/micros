@@ -1,9 +1,18 @@
 //! Auth Service v2 - Main entry point (gRPC-only).
 
 use auth_service::grpc::proto::auth::{
+    assignment_service_server::AssignmentServiceServer, audit_service_server::AuditServiceServer,
     auth_service_server::AuthServiceServer, authz_service_server::AuthzServiceServer,
+    invitation_service_server::InvitationServiceServer, org_service_server::OrgServiceServer,
+    role_service_server::RoleServiceServer,
+    service_registry_service_server::ServiceRegistryServiceServer,
+    visibility_service_server::VisibilityServiceServer,
 };
-use auth_service::grpc::{AuthServiceImpl, AuthzServiceImpl};
+use auth_service::grpc::{
+    AssignmentServiceImpl, AuditServiceImpl, AuthServiceImpl, AuthzServiceImpl,
+    InvitationServiceImpl, OrgServiceImpl, RoleServiceImpl, ServiceRegistryServiceImpl,
+    VisibilityServiceImpl,
+};
 use auth_service::{config::AuthConfig, db, services, AppState};
 use axum::{extract::State, routing::get, Json, Router};
 use opentelemetry::KeyValue;
@@ -89,7 +98,14 @@ async fn main() -> anyhow::Result<()> {
     let grpc_addr = SocketAddr::from(([0, 0, 0, 0], grpc_port));
 
     let auth_service = AuthServiceImpl::new(state.clone());
-    let authz_service = AuthzServiceImpl::new(state);
+    let authz_service = AuthzServiceImpl::new(state.clone());
+    let org_service = OrgServiceImpl::new(state.clone());
+    let role_service = RoleServiceImpl::new(state.clone());
+    let assignment_service = AssignmentServiceImpl::new(state.clone());
+    let invitation_service = InvitationServiceImpl::new(state.clone());
+    let visibility_service = VisibilityServiceImpl::new(state.clone());
+    let audit_service = AuditServiceImpl::new(state.clone());
+    let service_registry_service = ServiceRegistryServiceImpl::new(state);
 
     // Create reflection service
     let reflection_service = tonic_reflection::server::Builder::configure()
@@ -104,6 +120,27 @@ async fn main() -> anyhow::Result<()> {
     health_reporter
         .set_serving::<AuthzServiceServer<AuthzServiceImpl>>()
         .await;
+    health_reporter
+        .set_serving::<OrgServiceServer<OrgServiceImpl>>()
+        .await;
+    health_reporter
+        .set_serving::<RoleServiceServer<RoleServiceImpl>>()
+        .await;
+    health_reporter
+        .set_serving::<AssignmentServiceServer<AssignmentServiceImpl>>()
+        .await;
+    health_reporter
+        .set_serving::<InvitationServiceServer<InvitationServiceImpl>>()
+        .await;
+    health_reporter
+        .set_serving::<VisibilityServiceServer<VisibilityServiceImpl>>()
+        .await;
+    health_reporter
+        .set_serving::<AuditServiceServer<AuditServiceImpl>>()
+        .await;
+    health_reporter
+        .set_serving::<ServiceRegistryServiceServer<ServiceRegistryServiceImpl>>()
+        .await;
 
     tracing::info!("gRPC server listening on {}", grpc_addr);
 
@@ -116,6 +153,34 @@ async fn main() -> anyhow::Result<()> {
         ))
         .add_service(AuthzServiceServer::with_interceptor(
             authz_service,
+            trace_context_interceptor,
+        ))
+        .add_service(OrgServiceServer::with_interceptor(
+            org_service,
+            trace_context_interceptor,
+        ))
+        .add_service(RoleServiceServer::with_interceptor(
+            role_service,
+            trace_context_interceptor,
+        ))
+        .add_service(AssignmentServiceServer::with_interceptor(
+            assignment_service,
+            trace_context_interceptor,
+        ))
+        .add_service(InvitationServiceServer::with_interceptor(
+            invitation_service,
+            trace_context_interceptor,
+        ))
+        .add_service(VisibilityServiceServer::with_interceptor(
+            visibility_service,
+            trace_context_interceptor,
+        ))
+        .add_service(AuditServiceServer::with_interceptor(
+            audit_service,
+            trace_context_interceptor,
+        ))
+        .add_service(ServiceRegistryServiceServer::with_interceptor(
+            service_registry_service,
             trace_context_interceptor,
         ))
         .serve_with_shutdown(grpc_addr, shutdown_signal());
