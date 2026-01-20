@@ -6,6 +6,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Tell cargo to recompile if any proto files change
     println!("cargo:rerun-if-changed=../proto/micros/auth/v1/");
     println!("cargo:rerun-if-changed=../proto/micros/notification/v1/");
+    println!("cargo:rerun-if-changed=../proto/micros/document/v1/");
     println!("cargo:rerun-if-changed=../proto/micros/common/");
 
     // Compile auth service protos (client-side)
@@ -31,6 +32,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "../proto/micros/notification/v1/sms.proto",
                 "../proto/micros/notification/v1/push.proto",
             ],
+            &[&proto_root],
+        )?;
+
+    // Compile document service protos (client-side)
+    tonic_build::configure()
+        .build_server(false) // No server code in service-core
+        .build_client(true) // Build clients for calling document-service
+        .compile_protos(
+            &["../proto/micros/document/v1/document.proto"],
             &[&proto_root],
         )?;
 

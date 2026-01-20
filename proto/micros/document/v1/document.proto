@@ -1,0 +1,366 @@
+syntax = "proto3";
+
+package micros.document.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// DocumentService provides document storage and management.
+service DocumentService {
+  // Upload a document using client streaming.
+  rpc UploadDocument(stream UploadDocumentRequest) returns (UploadDocumentResponse);
+
+  // Download a document using server streaming.
+  rpc DownloadDocument(DownloadDocumentRequest) returns (stream DownloadDocumentResponse);
+
+  // Get document metadata.
+  rpc GetDocument(GetDocumentRequest) returns (GetDocumentResponse);
+
+  // List documents with filters and pagination.
+  rpc ListDocuments(ListDocumentsRequest) returns (ListDocumentsResponse);
+
+  // Delete a document.
+  rpc DeleteDocument(DeleteDocumentRequest) returns (DeleteDocumentResponse);
+
+  // Trigger document processing.
+  rpc ProcessDocument(ProcessDocumentRequest) returns (ProcessDocumentResponse);
+
+  // Get document processing status.
+  rpc GetProcessingStatus(GetProcessingStatusRequest) returns (GetProcessingStatusResponse);
+
+  // Generate a signed URL for document access.
+  rpc GenerateSignedUrl(GenerateSignedUrlRequest) returns (GenerateSignedUrlResponse);
+
+  // Download a video chunk using server streaming.
+  rpc DownloadVideoChunk(DownloadVideoChunkRequest) returns (stream DownloadVideoChunkResponse);
+}
+
+// DocumentStatus represents the document's lifecycle state.
+enum DocumentStatus {
+  DOCUMENT_STATUS_UNSPECIFIED = 0;
+  DOCUMENT_STATUS_UPLOADING = 1;
+  DOCUMENT_STATUS_PROCESSING = 2;
+  DOCUMENT_STATUS_READY = 3;
+  DOCUMENT_STATUS_FAILED = 4;
+}
+
+// UploadDocumentRequest is streamed from client.
+// First message contains metadata, subsequent messages contain file chunks.
+message UploadDocumentRequest {
+  oneof data {
+    // Metadata sent in the first message.
+    UploadMetadata metadata = 1;
+    // File chunk data sent in subsequent messages.
+    bytes chunk = 2;
+  }
+}
+
+// UploadMetadata contains document information.
+message UploadMetadata {
+  // Original filename.
+  string filename = 1;
+  // MIME type of the file.
+  string mime_type = 2;
+  // Optional metadata key-value pairs.
+  map<string, string> metadata = 3;
+}
+
+// UploadDocumentResponse after upload completes.
+message UploadDocumentResponse {
+  // The created document.
+  Document document = 1;
+}
+
+// DownloadDocumentRequest to download a document.
+message DownloadDocumentRequest {
+  // Document ID.
+  string document_id = 1;
+  // Optional signed URL parameters for public access.
+  optional string signature = 2;
+  optional int64 expires = 3;
+}
+
+// DownloadDocumentResponse streamed from server.
+message DownloadDocumentResponse {
+  oneof data {
+    // Metadata sent in the first message.
+    DownloadMetadata metadata = 1;
+    // File chunk data sent in subsequent messages.
+    bytes chunk = 2;
+    // For chunked videos, this is returned instead of file data.
+    ChunkedVideoInfo chunked_video = 3;
+  }
+}
+
+// DownloadMetadata contains file information.
+message DownloadMetadata {
+  // Filename for Content-Disposition.
+  string filename = 1;
+  // MIME type for Content-Type.
+  string content_type = 2;
+  // Total file size in bytes.
+  int64 size = 3;
+}
+
+// ChunkedVideoInfo for videos that have been split into chunks.
+message ChunkedVideoInfo {
+  // Original filename.
+  string original_name = 1;
+  // Video resolution (e.g., "1920x1080").
+  optional string resolution = 2;
+  // Total size of all chunks.
+  int64 total_size = 3;
+  // Number of chunks.
+  int32 chunk_count = 4;
+  // Information about each chunk.
+  repeated VideoChunkInfo chunks = 5;
+}
+
+// VideoChunkInfo describes a single video chunk.
+message VideoChunkInfo {
+  // Chunk index (0-based).
+  int32 index = 1;
+  // Chunk size in bytes.
+  int64 size = 2;
+}
+
+// GetDocumentRequest to get document metadata.
+message GetDocumentRequest {
+  // Document ID.
+  string document_id = 1;
+}
+
+// GetDocumentResponse with document metadata.
+message GetDocumentResponse {
+  // The document.
+  Document document = 1;
+}
+
+// ListDocumentsRequest with pagination and filters.
+message ListDocumentsRequest {
+  // Page number (1-based).
+  optional int32 page = 1;
+  // Page size (max 100).
+  optional int32 page_size = 2;
+  // Filter by status.
+  optional DocumentStatus status = 3;
+  // Filter by MIME type prefix (e.g., "image/", "video/").
+  optional string mime_type = 4;
+}
+
+// ListDocumentsResponse with paginated results.
+message ListDocumentsResponse {
+  // The documents.
+  repeated Document documents = 1;
+  // Total number of documents matching the filter.
+  int64 total = 2;
+  // Current page number.
+  int32 page = 3;
+  // Page size used.
+  int32 page_size = 4;
+  // Total number of pages.
+  int32 total_pages = 5;
+}
+
+// DeleteDocumentRequest to delete a document.
+message DeleteDocumentRequest {
+  // Document ID.
+  string document_id = 1;
+}
+
+// DeleteDocumentResponse after deletion.
+message DeleteDocumentResponse {
+  // Whether the deletion was successful.
+  bool success = 1;
+}
+
+// ProcessDocumentRequest to trigger document processing.
+message ProcessDocumentRequest {
+  // Document ID.
+  string document_id = 1;
+  // Processing options.
+  ProcessingOptions options = 2;
+}
+
+// ProcessingOptions for document processing.
+message ProcessingOptions {
+  // Optional list of processors to run.
+  repeated ProcessorType processors = 1;
+  // PDF-specific options.
+  optional PdfOptions pdf_options = 2;
+  // Image-specific options.
+  optional ImageOptions image_options = 3;
+  // Video-specific options.
+  optional VideoOptions video_options = 4;
+}
+
+// ProcessorType enum.
+enum ProcessorType {
+  PROCESSOR_TYPE_UNSPECIFIED = 0;
+  PROCESSOR_TYPE_PDF = 1;
+  PROCESSOR_TYPE_IMAGE = 2;
+  PROCESSOR_TYPE_VIDEO = 3;
+}
+
+// PdfOptions for PDF processing.
+message PdfOptions {
+  // Extract text from PDF.
+  bool extract_text = 1;
+  // Extract images from PDF.
+  bool extract_images = 2;
+}
+
+// ImageOptions for image processing.
+message ImageOptions {
+  // Output format: "webp", "jpeg", "png".
+  string format = 1;
+  // Quality 1-100.
+  int32 quality = 2;
+}
+
+// VideoOptions for video processing.
+message VideoOptions {
+  // Output format: "hls", "mp4".
+  string format = 1;
+  // Optional resolution like "1920x1080", "1280x720".
+  optional string resolution = 2;
+}
+
+// ProcessDocumentResponse after processing is triggered.
+message ProcessDocumentResponse {
+  // Whether processing was successfully queued.
+  bool queued = 1;
+  // Current document status.
+  DocumentStatus status = 2;
+}
+
+// GetProcessingStatusRequest to check processing status.
+message GetProcessingStatusRequest {
+  // Document ID.
+  string document_id = 1;
+}
+
+// GetProcessingStatusResponse with processing details.
+message GetProcessingStatusResponse {
+  // Document ID.
+  string document_id = 1;
+  // Current status.
+  DocumentStatus status = 2;
+  // Processing progress (if processing).
+  optional ProcessingProgress progress = 3;
+  // Processing metadata (if completed).
+  optional ProcessingMetadata metadata = 4;
+  // Error message (if failed).
+  optional string error_message = 5;
+  // Number of processing attempts.
+  int32 processing_attempts = 6;
+  // Last processing attempt timestamp.
+  optional google.protobuf.Timestamp last_processing_attempt = 7;
+}
+
+// ProcessingProgress during document processing.
+message ProcessingProgress {
+  // Current processor being run.
+  optional string current_processor = 1;
+  // List of completed processors.
+  repeated string processors_completed = 2;
+  // List of remaining processors.
+  repeated string processors_remaining = 3;
+  // Percentage complete (0-100).
+  int32 percent_complete = 4;
+}
+
+// ProcessingMetadata after processing completes.
+message ProcessingMetadata {
+  // Extracted text (for PDFs).
+  optional string extracted_text = 1;
+  // Page count (for PDFs).
+  optional int32 page_count = 2;
+  // Duration in seconds (for videos).
+  optional double duration_seconds = 3;
+  // Optimized file size.
+  optional int64 optimized_size = 4;
+  // Path to thumbnail.
+  optional string thumbnail_path = 5;
+  // Error details if partially failed.
+  optional string error_details = 6;
+  // Video resolution (for videos).
+  optional string resolution = 7;
+  // Chunk count (for chunked videos).
+  optional int32 chunk_count = 8;
+  // Total size of chunks (for chunked videos).
+  optional int64 total_size = 9;
+}
+
+// GenerateSignedUrlRequest to create a signed URL.
+message GenerateSignedUrlRequest {
+  // Document ID.
+  string document_id = 1;
+  // Expiration time in seconds from now.
+  int64 expires_in_seconds = 2;
+}
+
+// GenerateSignedUrlResponse with the signed URL.
+message GenerateSignedUrlResponse {
+  // The signed URL.
+  string url = 1;
+  // When the URL expires.
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+// DownloadVideoChunkRequest to download a specific chunk.
+message DownloadVideoChunkRequest {
+  // Document ID.
+  string document_id = 1;
+  // Chunk index (0-based).
+  int32 chunk_index = 2;
+}
+
+// DownloadVideoChunkResponse streamed from server.
+message DownloadVideoChunkResponse {
+  oneof data {
+    // Metadata sent in the first message.
+    ChunkDownloadMetadata metadata = 1;
+    // Chunk data sent in subsequent messages.
+    bytes chunk = 2;
+  }
+}
+
+// ChunkDownloadMetadata for chunk downloads.
+message ChunkDownloadMetadata {
+  // Chunk index.
+  int32 index = 1;
+  // Chunk size in bytes.
+  int64 size = 2;
+  // Content type (usually "video/mp4").
+  string content_type = 3;
+}
+
+// Document represents a stored document.
+message Document {
+  // Unique document identifier.
+  string id = 1;
+  // Application ID.
+  string app_id = 2;
+  // Organization ID.
+  string org_id = 3;
+  // Owner user ID.
+  string owner_id = 4;
+  // Original filename.
+  string original_name = 5;
+  // MIME type.
+  string mime_type = 6;
+  // File size in bytes.
+  int64 size = 7;
+  // Storage key/path.
+  string storage_key = 8;
+  // Document status.
+  DocumentStatus status = 9;
+  // Error message if failed.
+  optional string error_message = 10;
+  // Processing metadata.
+  optional ProcessingMetadata processing_metadata = 11;
+  // When the document was created.
+  google.protobuf.Timestamp created_at = 12;
+  // When the document was last updated.
+  google.protobuf.Timestamp updated_at = 13;
+}

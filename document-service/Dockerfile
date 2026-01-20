@@ -2,6 +2,9 @@
 FROM lukemathwalker/cargo-chef:latest-rust-1.91.0 AS chef
 WORKDIR /app
 
+# Install protobuf compiler for gRPC
+RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
+
 # Stage 2: Planner (Compute recipe)
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
@@ -9,6 +12,8 @@ COPY auth-service ./auth-service
 COPY document-service ./document-service
 COPY secure-frontend ./secure-frontend
 COPY service-core ./service-core
+COPY notification-service ./notification-service
+COPY proto ./proto
 RUN cargo chef prepare --recipe-path recipe.json --bin document-service
 
 # Stage 3: Builder (Build dependencies and binary)
@@ -22,6 +27,8 @@ COPY auth-service ./auth-service
 COPY document-service ./document-service
 COPY secure-frontend ./secure-frontend
 COPY service-core ./service-core
+COPY notification-service ./notification-service
+COPY proto ./proto
 RUN cargo build --release --bin document-service
 
 # Stage 4: Runtime (The final image)
@@ -42,8 +49,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy the binary from the builder stage
 COPY --from=builder /app/target/release/document-service /app/document-service
 
-# Expose the service port
-EXPOSE 8080
+# Expose health and gRPC ports
+EXPOSE 8080 8081
 
 # Set healthcheck
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

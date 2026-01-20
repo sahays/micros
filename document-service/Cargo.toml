@@ -28,6 +28,17 @@ base64 = { workspace = true }
 backoff = { workspace = true }
 tokio-util = { workspace = true }
 metrics = { workspace = true }
+tokio-stream = "0.1"
+
+# gRPC dependencies
+tonic = { workspace = true }
+tonic-health = { workspace = true }
+tonic-reflection = { workspace = true }
+prost = { workspace = true }
+prost-types = { workspace = true }
+
+[build-dependencies]
+tonic-build = "0.12"
 
 [dev-dependencies]
 reqwest = { workspace = true, features = ["json", "multipart"] }

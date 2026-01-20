@@ -191,9 +191,10 @@ services:
       dockerfile: document-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-document-service
     ports:
-      - "${DOCUMENT_SERVICE_PORT:-9098}:8080"
+      - "${DOCUMENT_SERVICE_HEALTH_PORT:-9098}:8080"
+      - "${DOCUMENT_SERVICE_GRPC_PORT:-50053}:8081"
     environment:
-      - APP__PORT=8080
+      - PORT=8080
       - MONGODB_URI=${MONGODB_URI:-mongodb://host.docker.internal:27017}
       - MONGODB_DATABASE=${MONGODB_DATABASE:-auth_db}
       - RUST_LOG=${DOCUMENT_SERVICE_LOG_LEVEL:-info}
@@ -201,10 +202,11 @@ services:
       - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
       - STORAGE_LOCAL_PATH=${STORAGE_LOCAL_PATH:-./storage}
       - REQUIRE_SIGNATURES=${REQUIRE_SIGNATURES:-false}
+      - SIGNING_SECRET=${DOCUMENT_SERVICE_SIGNING_SECRET:-dev-signing-secret}
     labels:
       - "prometheus.io/scrape=true"
       - "prometheus.io/port=8080"
-      - "prometheus.io/path=/metrics"
+      - "prometheus.io/path=/health"
     logging:
       driver: "json-file"
       options:
