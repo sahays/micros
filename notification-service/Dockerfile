@@ -52,12 +52,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /app/target/release/notification-service /app/notification-service
 
 # Expose the health and gRPC ports
-EXPOSE 3000
-EXPOSE 3001
+EXPOSE 8080
+EXPOSE 8081
 
 # Set healthcheck
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/health || exit 1
+  CMD curl -f http://localhost:8080/health || exit 1
 
 # Run the binary
 CMD ["/app/notification-service"]
