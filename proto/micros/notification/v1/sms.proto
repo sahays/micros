@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package micros.notification.v1;
+
+// SendSmsRequest for sending an SMS notification.
+message SendSmsRequest {
+  // Recipient phone number (E.164 format, e.g., +14155551234).
+  string to = 1;
+
+  // SMS body text.
+  string body = 2;
+
+  // Metadata key-value pairs for tracking.
+  map<string, string> metadata = 3;
+}
+
+// SendSmsResponse after sending an SMS.
+message SendSmsResponse {
+  // Unique notification identifier.
+  string notification_id = 1;
+
+  // Current status (queued, sent, etc.).
+  string status = 2;
+
+  // Channel (always "sms" for this response).
+  string channel = 3;
+}

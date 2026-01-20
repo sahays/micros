@@ -11,10 +11,17 @@ COPY notification-service ./notification-service
 COPY payment-service ./payment-service
 COPY secure-frontend ./secure-frontend
 COPY service-core ./service-core
+COPY proto ./proto
 RUN cargo chef prepare --recipe-path recipe.json --bin notification-service
 
 # Stage 3: Builder (Build dependencies and binary)
 FROM chef AS builder
+
+# Install protobuf compiler for gRPC code generation
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=planner /app/recipe.json recipe.json
 # Build dependencies - this is the caching layer
 RUN cargo chef cook --release --recipe-path recipe.json
@@ -26,6 +33,7 @@ COPY notification-service ./notification-service
 COPY payment-service ./payment-service
 COPY secure-frontend ./secure-frontend
 COPY service-core ./service-core
+COPY proto ./proto
 RUN cargo build --release --bin notification-service
 
 # Stage 4: Runtime (The final image)
@@ -42,12 +50,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy the binary from the builder stage
 COPY --from=builder /app/target/release/notification-service /app/notification-service
 
-# Expose the service port
-EXPOSE 8080
+# Expose the health and gRPC ports
+EXPOSE 3000
+EXPOSE 3001
 
 # Set healthcheck
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8080/health || exit 1
+  CMD curl -f http://localhost:3000/health || exit 1
 
 # Run the binary
 CMD ["/app/notification-service"]

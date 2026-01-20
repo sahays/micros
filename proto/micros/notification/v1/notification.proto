@@ -1,0 +1,178 @@
+syntax = "proto3";
+
+package micros.notification.v1;
+
+import "google/protobuf/timestamp.proto";
+import "micros/notification/v1/email.proto";
+import "micros/notification/v1/sms.proto";
+import "micros/notification/v1/push.proto";
+
+// NotificationService provides notification sending and management.
+service NotificationService {
+  // Send an email notification.
+  rpc SendEmail(SendEmailRequest) returns (SendEmailResponse);
+
+  // Send an SMS notification.
+  rpc SendSms(SendSmsRequest) returns (SendSmsResponse);
+
+  // Send a push notification.
+  rpc SendPush(SendPushRequest) returns (SendPushResponse);
+
+  // Send multiple notifications in a batch.
+  rpc SendBatch(SendBatchRequest) returns (SendBatchResponse);
+
+  // Get the status of a notification.
+  rpc GetNotification(GetNotificationRequest) returns (GetNotificationResponse);
+
+  // List notifications with filters.
+  rpc ListNotifications(ListNotificationsRequest) returns (ListNotificationsResponse);
+}
+
+// NotificationChannel represents the delivery channel.
+enum NotificationChannel {
+  NOTIFICATION_CHANNEL_UNSPECIFIED = 0;
+  NOTIFICATION_CHANNEL_EMAIL = 1;
+  NOTIFICATION_CHANNEL_SMS = 2;
+  NOTIFICATION_CHANNEL_PUSH = 3;
+}
+
+// NotificationStatus represents the delivery status.
+enum NotificationStatus {
+  NOTIFICATION_STATUS_UNSPECIFIED = 0;
+  NOTIFICATION_STATUS_QUEUED = 1;
+  NOTIFICATION_STATUS_SENT = 2;
+  NOTIFICATION_STATUS_DELIVERED = 3;
+  NOTIFICATION_STATUS_FAILED = 4;
+}
+
+// SendBatchRequest for sending multiple notifications at once.
+message SendBatchRequest {
+  // List of notifications to send.
+  repeated BatchNotification notifications = 1;
+}
+
+// BatchNotification represents a single notification in a batch.
+message BatchNotification {
+  // The channel to use for this notification.
+  NotificationChannel channel = 1;
+
+  // Email-specific fields (only if channel is EMAIL).
+  optional SendEmailRequest email = 2;
+
+  // SMS-specific fields (only if channel is SMS).
+  optional SendSmsRequest sms = 3;
+
+  // Push-specific fields (only if channel is PUSH).
+  optional SendPushRequest push = 4;
+}
+
+// SendBatchResponse with results for each notification.
+message SendBatchResponse {
+  // Batch ID for tracking.
+  string batch_id = 1;
+
+  // Results for each notification in the batch.
+  repeated BatchNotificationResult results = 2;
+}
+
+// BatchNotificationResult for a single notification in a batch.
+message BatchNotificationResult {
+  // Notification ID.
+  string notification_id = 1;
+
+  // Status of the notification.
+  NotificationStatus status = 2;
+
+  // Error message if failed.
+  optional string error = 3;
+}
+
+// GetNotificationRequest to retrieve a notification by ID.
+message GetNotificationRequest {
+  // The notification ID.
+  string notification_id = 1;
+}
+
+// GetNotificationResponse with notification details.
+message GetNotificationResponse {
+  // The notification.
+  Notification notification = 1;
+}
+
+// Notification represents a notification record.
+message Notification {
+  // Unique notification identifier.
+  string notification_id = 1;
+
+  // The delivery channel.
+  NotificationChannel channel = 2;
+
+  // Current status.
+  NotificationStatus status = 3;
+
+  // Recipient (email address, phone number, or device token).
+  string recipient = 4;
+
+  // Subject (for emails).
+  optional string subject = 5;
+
+  // Body text.
+  optional string body = 6;
+
+  // Metadata key-value pairs.
+  map<string, string> metadata = 7;
+
+  // Provider's message ID.
+  optional string provider_id = 8;
+
+  // Error message if failed.
+  optional string error_message = 9;
+
+  // When the notification was created.
+  google.protobuf.Timestamp created_at = 10;
+
+  // When the notification was sent.
+  optional google.protobuf.Timestamp sent_at = 11;
+
+  // When delivery was confirmed.
+  optional google.protobuf.Timestamp delivered_at = 12;
+
+  // When the notification failed.
+  optional google.protobuf.Timestamp failed_at = 13;
+}
+
+// ListNotificationsRequest with filters.
+message ListNotificationsRequest {
+  // Filter by channel.
+  optional NotificationChannel channel = 1;
+
+  // Filter by status.
+  optional NotificationStatus status = 2;
+
+  // Filter by recipient.
+  optional string recipient = 3;
+
+  // Filter by metadata user_id.
+  optional string user_id = 4;
+
+  // Filter by metadata tenant_id.
+  optional string tenant_id = 5;
+
+  // Maximum results to return.
+  int32 page_size = 6;
+
+  // Page token for pagination.
+  optional string page_token = 7;
+}
+
+// ListNotificationsResponse with paginated results.
+message ListNotificationsResponse {
+  // The notifications.
+  repeated Notification notifications = 1;
+
+  // Token for the next page.
+  optional string next_page_token = 2;
+
+  // Total count (if available).
+  optional int32 total_count = 3;
+}

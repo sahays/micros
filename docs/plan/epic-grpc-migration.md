@@ -1,6 +1,6 @@
 # Epic: Migrate Services to gRPC
 
-**Status**: Not Started
+**Status**: In Progress (Phase 2 Complete)
 **Priority**: Medium
 **Created**: 2026-01-20
 **Related Services**: auth-service, document-service, notification-service, payment-service, service-core
@@ -112,7 +112,7 @@ proto/
 
 #### Task 1.1: Set Up Proto Infrastructure
 
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: Critical
 **Estimated Effort**: Medium
 
@@ -143,7 +143,7 @@ proto/
 
 #### Task 1.2: Add gRPC Dependencies to service-core
 
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: Critical
 **Estimated Effort**: Small
 
@@ -174,7 +174,7 @@ proto/
 
 #### Task 2.1: Define Auth Service Protos
 
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: High
 **Estimated Effort**: Medium
 
@@ -203,7 +203,7 @@ proto/
 
 #### Task 2.2: Implement Auth gRPC Server
 
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: High
 **Estimated Effort**: Large
 
@@ -241,7 +241,7 @@ proto/
 
 #### Task 2.3: Create Auth gRPC Client in service-core
 
-**Status**: [ ] Not Started
+**Status**: [x] Completed
 **Priority**: High
 **Estimated Effort**: Small
 

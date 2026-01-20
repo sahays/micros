@@ -98,13 +98,13 @@ services:
       dockerfile: auth-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-auth-service
     ports:
-      - "${AUTH_SERVICE_PORT:-9096}:8080"
+      - "${AUTH_SERVICE_HEALTH_PORT:-9096}:3000"
+      - "${AUTH_SERVICE_GRPC_PORT:-50051}:3001"
     environment:
-      - MONGODB_URI=${MONGODB_URI:-mongodb://host.docker.internal:27017}
-      - MONGODB_DATABASE=${MONGODB_DATABASE:-auth_db}
+      - DATABASE_URL=${AUTH_DATABASE_URL:-postgres://postgres:pass%40word1@host.docker.internal:5432/auth_db}
       - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
       - RUST_LOG=${LOG_LEVEL:-info}
-      - PORT=8080
+      - PORT=3000
       - ENVIRONMENT=${ENVIRONMENT:-dev}
       - SERVICE_NAME=auth-service
       - SERVICE_VERSION=${SERVICE_VERSION:-0.1.0}
@@ -132,14 +132,14 @@ services:
       - RATE_LIMIT_GLOBAL_IP_WINDOW_SECONDS=${RATE_LIMIT_GLOBAL_IP_WINDOW_SECONDS:-60}
       - RATE_LIMIT_APP_TOKEN_LIMIT=${RATE_LIMIT_APP_TOKEN_LIMIT:-10}
       - RATE_LIMIT_APP_TOKEN_WINDOW_SECONDS=${RATE_LIMIT_APP_TOKEN_WINDOW_SECONDS:-60}
-      # Notification Service Integration
-      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-http://notification-service:8080}
+      # Notification Service Integration (gRPC)
+      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-http://notification-service:3001}
       - NOTIFICATION_SERVICE_ENABLED=${NOTIFICATION_SERVICE_ENABLED:-false}
       - NOTIFICATION_SERVICE_TIMEOUT=${NOTIFICATION_SERVICE_TIMEOUT:-30}
     labels:
       - "prometheus.io/scrape=true"
       - "prometheus.io/port=3000"
-      - "prometheus.io/path=/metrics"
+      - "prometheus.io/path=/health"
     logging:
       driver: "json-file"
       options:
@@ -220,9 +220,10 @@ services:
       dockerfile: notification-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-notification-service
     ports:
-      - "${NOTIFICATION_SERVICE_PORT:-9008}:8080"
+      - "${NOTIFICATION_SERVICE_HEALTH_PORT:-9008}:3000"
+      - "${NOTIFICATION_SERVICE_GRPC_PORT:-50052}:3001"
     environment:
-      - APP__PORT=8080
+      - PORT=3000
       - ENVIRONMENT=${ENVIRONMENT:-dev}
       - MONGODB_URI=${NOTIFICATION_MONGODB_URI:-mongodb://host.docker.internal:27017}
       - MONGODB_DATABASE=${NOTIFICATION_MONGODB_DATABASE:-notification_db}
@@ -246,8 +247,8 @@ services:
       - FCM_ENABLED=${NOTIFICATION_FCM_ENABLED:-false}
     labels:
       - "prometheus.io/scrape=true"
-      - "prometheus.io/port=8080"
-      - "prometheus.io/path=/metrics"
+      - "prometheus.io/port=3000"
+      - "prometheus.io/path=/health"
     logging:
       driver: "json-file"
       options:

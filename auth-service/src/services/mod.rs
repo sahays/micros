@@ -15,5 +15,5 @@ pub use database::Database;
 pub use email::{EmailProvider, EmailService, MockEmailService};
 pub use error::ServiceError;
 pub use jwt::{AccessTokenClaims, JwtService, RefreshTokenClaims, TokenResponse};
-pub use notification_client::{NotificationClient, NotificationClientConfig};
+pub use notification_client::NotificationClient;
 pub use redis::{MockBlacklist, RedisService, TokenBlacklist};

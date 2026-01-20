@@ -84,17 +84,18 @@ const OTP_MAX_ATTEMPTS: i32 = 5;
 // Handlers
 // ============================================================================
 
-/// Send an OTP to the specified destination.
+/// Send an OTP to the specified destination - implementation.
 ///
-/// POST /auth/otp/send
+/// This function contains the core OTP sending logic and can be called
+/// from both REST handlers and gRPC services.
 #[tracing::instrument(
     skip(state),
     fields(tenant_id = %req.tenant_id, channel = ?req.channel, purpose = ?req.purpose)
 )]
-pub async fn send_otp(
-    State(state): State<AppState>,
-    Json(req): Json<SendOtpRequest>,
-) -> Result<(StatusCode, Json<SendOtpResponse>), AppError> {
+pub async fn send_otp_impl(
+    state: &AppState,
+    req: SendOtpRequest,
+) -> Result<SendOtpResponse, AppError> {
     // Validate tenant exists
     let _tenant = state
         .db
@@ -167,7 +168,7 @@ pub async fn send_otp(
     // Send OTP via appropriate channel
     match req.channel {
         OtpChannel::Email => {
-            send_otp_email(&state, &req.destination, &code, &req.purpose).await?;
+            send_otp_email(state, &req.destination, &code, &req.purpose).await?;
         }
         OtpChannel::Sms => {
             // TODO: Implement SMS sending via Twilio
@@ -187,23 +188,32 @@ pub async fn send_otp(
         }
     }
 
-    Ok((
-        StatusCode::OK,
-        Json(SendOtpResponse {
-            otp_id,
-            expires_in: OTP_EXPIRY_SECONDS,
-        }),
-    ))
+    Ok(SendOtpResponse {
+        otp_id,
+        expires_in: OTP_EXPIRY_SECONDS,
+    })
 }
 
-/// Verify an OTP code.
+/// Send an OTP to the specified destination.
 ///
-/// POST /auth/otp/verify
-#[tracing::instrument(skip(state, req), fields(otp_id = %req.otp_id))]
-pub async fn verify_otp(
+/// POST /auth/otp/send
+pub async fn send_otp(
     State(state): State<AppState>,
-    Json(req): Json<VerifyOtpRequest>,
-) -> Result<Json<VerifyOtpResponse>, AppError> {
+    Json(req): Json<SendOtpRequest>,
+) -> Result<(StatusCode, Json<SendOtpResponse>), AppError> {
+    let response = send_otp_impl(&state, req).await?;
+    Ok((StatusCode::OK, Json(response)))
+}
+
+/// Verify an OTP code - implementation.
+///
+/// This function contains the core OTP verification logic and can be called
+/// from both REST handlers and gRPC services.
+#[tracing::instrument(skip(state, req), fields(otp_id = %req.otp_id))]
+pub async fn verify_otp_impl(
+    state: &AppState,
+    req: VerifyOtpRequest,
+) -> Result<VerifyOtpResponse, AppError> {
     // Find OTP record
     let otp = state
         .db
@@ -260,7 +270,7 @@ pub async fn verify_otp(
                 .tenant_id
                 .ok_or_else(|| AppError::BadRequest(anyhow::anyhow!("Tenant ID required")))?;
 
-            let user = find_user_by_email(&state, tenant_id, &otp.destination_text).await?;
+            let user = find_user_by_email(state, tenant_id, &otp.destination_text).await?;
 
             // Generate tokens
             let (access_token, refresh_token, refresh_token_id) = state
@@ -288,13 +298,13 @@ pub async fn verify_otp(
                 .await
                 .map_err(|e| AppError::InternalError(anyhow::anyhow!("Database error: {}", e)))?;
 
-            Ok(Json(VerifyOtpResponse::Login(VerifyOtpLoginResponse {
+            Ok(VerifyOtpResponse::Login(VerifyOtpLoginResponse {
                 user_id: user.user_id,
                 access_token,
                 refresh_token,
                 token_type: "Bearer".to_string(),
                 expires_in: state.jwt.access_token_expiry_seconds(),
-            })))
+            }))
         }
         OtpPurpose::VerifyEmail => {
             // Mark email as verified
@@ -314,10 +324,10 @@ pub async fn verify_otp(
                 }
             }
 
-            Ok(Json(VerifyOtpResponse::Verify(VerifyOtpVerifyResponse {
+            Ok(VerifyOtpResponse::Verify(VerifyOtpVerifyResponse {
                 verified: true,
                 purpose: "verify_email".to_string(),
-            })))
+            }))
         }
         OtpPurpose::VerifyPhone => {
             // Phone verification requires looking up user by phone in user_identities
@@ -327,19 +337,30 @@ pub async fn verify_otp(
                 "Phone verification completed but user lookup by phone not yet implemented"
             );
 
-            Ok(Json(VerifyOtpResponse::Verify(VerifyOtpVerifyResponse {
+            Ok(VerifyOtpResponse::Verify(VerifyOtpVerifyResponse {
                 verified: true,
                 purpose: "verify_phone".to_string(),
-            })))
+            }))
         }
         OtpPurpose::ResetPassword => {
             // Return success - caller should use this to enable password reset
-            Ok(Json(VerifyOtpResponse::Verify(VerifyOtpVerifyResponse {
+            Ok(VerifyOtpResponse::Verify(VerifyOtpVerifyResponse {
                 verified: true,
                 purpose: "reset_password".to_string(),
-            })))
+            }))
         }
     }
+}
+
+/// Verify an OTP code.
+///
+/// POST /auth/otp/verify
+pub async fn verify_otp(
+    State(state): State<AppState>,
+    Json(req): Json<VerifyOtpRequest>,
+) -> Result<Json<VerifyOtpResponse>, AppError> {
+    let response = verify_otp_impl(&state, req).await?;
+    Ok(Json(response))
 }
 
 // ============================================================================

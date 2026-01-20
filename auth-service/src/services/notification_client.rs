@@ -1,83 +1,74 @@
-//! Notification service client for auth-service.
+//! Notification service gRPC client for auth-service.
 //!
-//! Sends emails and SMS via the notification-service with trace context propagation.
+//! Sends emails and SMS via the notification-service using gRPC.
 
-use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use service_core::axum::async_trait;
 use service_core::error::AppError;
-use service_core::observability::trace_context::TracedClientExt;
-use std::time::Duration;
+use service_core::grpc::NotificationClient as GrpcNotificationClient;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use tracing::instrument;
 
 use super::EmailProvider;
 
-/// Configuration for the notification service client.
-#[derive(Debug, Clone)]
-pub struct NotificationClientConfig {
-    pub base_url: String,
-    pub timeout_seconds: u64,
-}
-
-impl Default for NotificationClientConfig {
-    fn default() -> Self {
-        Self {
-            base_url: "http://notification-service:8080".to_string(),
-            timeout_seconds: 30,
-        }
-    }
-}
-
-/// Client for interacting with the notification-service.
+/// Client for interacting with the notification-service via gRPC.
 #[derive(Clone)]
 pub struct NotificationClient {
-    client: Client,
-    base_url: String,
-}
-
-/// Request to send an email via notification-service.
-#[derive(Debug, Serialize)]
-struct SendEmailRequest {
-    to: String,
-    subject: String,
-    body_html: String,
-    body_text: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    from_name: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    reply_to: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    metadata: Option<serde_json::Value>,
-}
-
-/// Response from notification-service.
-#[derive(Debug, Deserialize)]
-struct NotificationResponse {
-    notification_id: String,
-    status: String,
-    #[allow(dead_code)]
-    channel: String,
+    /// The inner gRPC client, wrapped in RwLock for interior mutability.
+    inner: Arc<RwLock<Option<GrpcNotificationClient>>>,
+    /// The gRPC endpoint.
+    endpoint: String,
 }
 
 impl NotificationClient {
     /// Create a new notification client.
-    pub fn new(config: NotificationClientConfig) -> Result<Self, AppError> {
-        let client = Client::builder()
-            .timeout(Duration::from_secs(config.timeout_seconds))
-            .build()
-            .map_err(|e| {
-                AppError::InternalError(anyhow::anyhow!("Failed to create HTTP client: {}", e))
-            })?;
-
+    ///
+    /// Connection is lazy - it will be established on first use.
+    pub fn new(endpoint: &str) -> Self {
         tracing::info!(
-            base_url = %config.base_url,
-            "Notification client initialized"
+            endpoint = %endpoint,
+            "Notification gRPC client configured (lazy connection)"
         );
 
-        Ok(Self {
-            client,
-            base_url: config.base_url,
-        })
+        Self {
+            inner: Arc::new(RwLock::new(None)),
+            endpoint: endpoint.to_string(),
+        }
+    }
+
+    /// Get or create the inner gRPC client.
+    async fn get_client(&self) -> Result<GrpcNotificationClient, AppError> {
+        // First, try to read existing client
+        {
+            let guard = self.inner.read().await;
+            if let Some(client) = guard.as_ref() {
+                return Ok(client.clone());
+            }
+        }
+
+        // Need to create a new client
+        let mut guard = self.inner.write().await;
+
+        // Double-check in case another task created it while we were waiting
+        if let Some(client) = guard.as_ref() {
+            return Ok(client.clone());
+        }
+
+        // Create new client
+        let client = GrpcNotificationClient::connect(&self.endpoint)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, endpoint = %self.endpoint, "Failed to connect to notification service");
+                AppError::InternalError(anyhow::anyhow!(
+                    "Failed to connect to notification service: {}",
+                    e
+                ))
+            })?;
+
+        tracing::info!(endpoint = %self.endpoint, "Connected to notification gRPC service");
+        *guard = Some(client.clone());
+        Ok(client)
     }
 
     /// Send an email via the notification service.
@@ -89,58 +80,34 @@ impl NotificationClient {
         body_text: &str,
         body_html: &str,
     ) -> Result<(), AppError> {
-        let url = format!("{}/notifications/email", self.base_url);
+        let mut client = self.get_client().await?;
 
-        let request = SendEmailRequest {
-            to: to.to_string(),
-            subject: subject.to_string(),
-            body_html: body_html.to_string(),
-            body_text: body_text.to_string(),
-            from_name: Some("Auth Service".to_string()),
-            reply_to: None,
-            metadata: None,
-        };
+        let mut metadata = HashMap::new();
+        metadata.insert("source".to_string(), "auth-service".to_string());
 
-        let response = self
-            .client
-            .traced_post(&url)
-            .json(&request)
-            .send()
+        let response = client
+            .send_email(
+                to.to_string(),
+                subject.to_string(),
+                Some(body_text.to_string()),
+                Some(body_html.to_string()),
+                Some("Auth Service".to_string()),
+                None,
+                metadata,
+            )
             .await
             .map_err(|e| {
-                tracing::error!(error = %e, "Failed to send email request to notification service");
+                tracing::error!(error = %e, "Failed to send email via notification service");
                 AppError::InternalError(anyhow::anyhow!("Notification service error: {}", e))
             })?;
 
-        if response.status().is_success() {
-            let result: NotificationResponse = response.json().await.map_err(|e| {
-                AppError::InternalError(anyhow::anyhow!(
-                    "Failed to parse notification response: {}",
-                    e
-                ))
-            })?;
+        tracing::info!(
+            notification_id = %response.notification_id,
+            status = %response.status,
+            "Email queued successfully via gRPC"
+        );
 
-            tracing::info!(
-                notification_id = %result.notification_id,
-                status = %result.status,
-                "Email queued successfully"
-            );
-
-            Ok(())
-        } else {
-            let status = response.status();
-            let error_text = response.text().await.unwrap_or_default();
-            tracing::error!(
-                status = %status,
-                error = %error_text,
-                "Notification service returned error"
-            );
-            Err(AppError::InternalError(anyhow::anyhow!(
-                "Notification service error: {} - {}",
-                status,
-                error_text
-            )))
-        }
+        Ok(())
     }
 }
 

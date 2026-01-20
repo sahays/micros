@@ -166,8 +166,8 @@ services:
       - RATE_LIMIT_GLOBAL_IP_WINDOW_SECONDS=${RATE_LIMIT_GLOBAL_IP_WINDOW_SECONDS:-60}
       - RATE_LIMIT_APP_TOKEN_LIMIT=${RATE_LIMIT_APP_TOKEN_LIMIT:-10}
       - RATE_LIMIT_APP_TOKEN_WINDOW_SECONDS=${RATE_LIMIT_APP_TOKEN_WINDOW_SECONDS:-60}
-      # Notification Service Integration
-      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-http://notification-service:8080}
+      # Notification Service Integration (gRPC)
+      - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-http://notification-service:3001}
       - NOTIFICATION_SERVICE_ENABLED=${NOTIFICATION_SERVICE_ENABLED:-true}
       - NOTIFICATION_SERVICE_TIMEOUT=${NOTIFICATION_SERVICE_TIMEOUT:-30}
     labels:
@@ -264,9 +264,10 @@ services:
       dockerfile: notification-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-notification-service
     ports:
-      - "${NOTIFICATION_SERVICE_PORT:-10008}:8080"
+      - "${NOTIFICATION_SERVICE_HEALTH_PORT:-10008}:3000"
+      - "${NOTIFICATION_SERVICE_GRPC_PORT:-50052}:3001"
     environment:
-      - APP__PORT=8080
+      - PORT=3000
       - ENVIRONMENT=${ENVIRONMENT:-prod}
       - MONGODB_URI=${NOTIFICATION_MONGODB_URI:-mongodb://mongo:27017}
       - MONGODB_DATABASE=${NOTIFICATION_MONGODB_DATABASE:-notification_db}
@@ -290,8 +291,8 @@ services:
       - FCM_ENABLED=${NOTIFICATION_FCM_ENABLED:-false}
     labels:
       - "prometheus.io/scrape=true"
-      - "prometheus.io/port=8080"
-      - "prometheus.io/path=/metrics"
+      - "prometheus.io/port=3000"
+      - "prometheus.io/path=/health"
     depends_on:
       mongo:
         condition: service_healthy

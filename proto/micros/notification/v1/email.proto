@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package micros.notification.v1;
+
+// SendEmailRequest for sending an email notification.
+message SendEmailRequest {
+  // Recipient email address.
+  string to = 1;
+
+  // Email subject.
+  string subject = 2;
+
+  // Plain text body.
+  optional string body_text = 3;
+
+  // HTML body.
+  optional string body_html = 4;
+
+  // Display name for the sender.
+  optional string from_name = 5;
+
+  // Reply-to email address.
+  optional string reply_to = 6;
+
+  // Metadata key-value pairs for tracking.
+  map<string, string> metadata = 7;
+}
+
+// SendEmailResponse after sending an email.
+message SendEmailResponse {
+  // Unique notification identifier.
+  string notification_id = 1;
+
+  // Current status (queued, sent, etc.).
+  string status = 2;
+
+  // Channel (always "email" for this response).
+  string channel = 3;
+}

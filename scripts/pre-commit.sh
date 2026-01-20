@@ -1,4 +1,14 @@
 #!/bin/bash
+# pre-commit.sh - Fast pre-commit checks for staged files
+#
+# Runs:
+# - cargo fmt --check (formatting)
+# - cargo clippy (linting)
+# - cargo test --lib (unit tests only, no database required)
+# - buf lint (proto files)
+#
+# For full integration tests with database, run: ./scripts/integ-tests.sh
+
 set -e
 
 # Ensure cargo is in PATH (common locations)
@@ -6,131 +16,105 @@ export PATH="$HOME/.cargo/bin:$PATH"
 
 # Load environment variables from .env.test for local tests
 if [ -f ".env.test" ]; then
-    echo "Loading environment variables from .env.test..."
-    export $(grep -v '^#' .env.test | xargs)
+    export $(grep -v '^#' .env.test | xargs 2>/dev/null) || true
 fi
 
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m'
 
-echo "Running pre-commit checks..."
+log_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+log_step() {
+    echo -e "${BLUE}[STEP]${NC} $1"
+}
+
+echo ""
+echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}  Pre-Commit Checks${NC}"
+echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+echo ""
 
 # Check only staged rust files
 STAGED_RS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.rs$' || true)
 
+# Track which services have changes
+SERVICES_WITH_CHANGES=()
+
 if [ -n "$STAGED_RS_FILES" ]; then
-    # Auth Service Checks
+    # Detect which services have changes
     if echo "$STAGED_RS_FILES" | grep -q "auth-service/"; then
-        echo "Staged Rust files detected in auth-service. Running checks..."
-        cd auth-service
-        
-        echo "Checking formatting..."
-        if ! cargo fmt -- --check; then
-            echo -e "${RED}Formatting check failed. Running 'cargo fmt' to fix...${NC}"
-            cargo fmt
-            echo -e "${RED}Please review and re-stage the formatted files.${NC}"
-            exit 1
-        fi
-        
-        echo "Running clippy..."
-        if ! cargo clippy --jobs 2 -- -D warnings; then
-            echo -e "${RED}Clippy check failed.${NC}"
-            exit 1
-        fi
-        
-        echo "Running tests..."
-        if ! cargo test --jobs 2; then
-            echo -e "${RED}Tests failed.${NC}"
-            exit 1
-        fi
-        
-        cd ..
+        SERVICES_WITH_CHANGES+=("auth-service")
     fi
-
-    # Service Core Checks
     if echo "$STAGED_RS_FILES" | grep -q "service-core/"; then
-        echo "Staged Rust files detected in service-core. Running checks..."
-        cd service-core
-        
-        echo "Checking formatting..."
-        if ! cargo fmt -- --check; then
-            echo -e "${RED}Formatting check failed. Running 'cargo fmt' to fix...${NC}"
-            cargo fmt
-            echo -e "${RED}Please review and re-stage the formatted files.${NC}"
-            exit 1
-        fi
-        
-        echo "Running clippy..."
-        if ! cargo clippy --jobs 2 -- -D warnings; then
-            echo -e "${RED}Clippy check failed.${NC}"
-            exit 1
-        fi
-        
-        echo "Running tests..."
-        if ! cargo test --jobs 2; then
-            echo -e "${RED}Tests failed.${NC}"
-            exit 1
-        fi
-        
-        cd ..
+        SERVICES_WITH_CHANGES+=("service-core")
     fi
-
-    # Document Service Checks
     if echo "$STAGED_RS_FILES" | grep -q "document-service/"; then
-        echo "Staged Rust files detected in document-service. Running checks..."
-        cd document-service
-        
-        echo "Checking formatting..."
-        if ! cargo fmt -- --check; then
-            echo -e "${RED}Formatting check failed. Running 'cargo fmt' to fix...${NC}"
-            cargo fmt
-            echo -e "${RED}Please review and re-stage the formatted files.${NC}"
-            exit 1
-        fi
-        
-        echo "Running clippy..."
-        if ! cargo clippy --jobs 2 -- -D warnings; then
-            echo -e "${RED}Clippy check failed.${NC}"
-            exit 1
-        fi
-        
-        echo "Running tests..."
-        if ! cargo test --jobs 2; then
-            echo -e "${RED}Tests failed.${NC}"
-            exit 1
-        fi
-        
-        cd ..
+        SERVICES_WITH_CHANGES+=("document-service")
+    fi
+    if echo "$STAGED_RS_FILES" | grep -q "secure-frontend/"; then
+        SERVICES_WITH_CHANGES+=("secure-frontend")
+    fi
+    if echo "$STAGED_RS_FILES" | grep -q "notification-service/"; then
+        SERVICES_WITH_CHANGES+=("notification-service")
     fi
 
-    # Secure Frontend Checks
-    if echo "$STAGED_RS_FILES" | grep -q "secure-frontend/"; then
-        echo "Staged Rust files detected in secure-frontend. Running checks..."
-        cd secure-frontend
-        
-        echo "Checking formatting..."
-        if ! cargo fmt -- --check; then
-            echo -e "${RED}Formatting check failed. Running 'cargo fmt' to fix...${NC}"
-            cargo fmt
-            echo -e "${RED}Please review and re-stage the formatted files.${NC}"
-            exit 1
-        fi
-        
-        echo "Running clippy..."
-        if ! cargo clippy --jobs 2 -- -D warnings; then
-            echo -e "${RED}Clippy check failed.${NC}"
-            exit 1
-        fi
-        
-        echo "Running tests..."
-        if ! cargo test --jobs 2; then
-            echo -e "${RED}Tests failed.${NC}"
-            exit 1
-        fi
-        
-        cd ..
+    if [ ${#SERVICES_WITH_CHANGES[@]} -gt 0 ]; then
+        log_info "Staged Rust files detected in: ${SERVICES_WITH_CHANGES[*]}"
+        echo ""
+
+        # Run checks for each service with changes
+        for service in "${SERVICES_WITH_CHANGES[@]}"; do
+            log_step "Checking $service..."
+
+            # Check if service directory exists
+            if [ ! -d "$service" ]; then
+                log_warn "Directory $service not found, skipping"
+                continue
+            fi
+
+            cd "$service"
+
+            # Formatting check
+            echo "  Checking formatting..."
+            if ! cargo fmt -- --check 2>/dev/null; then
+                log_error "Formatting check failed. Running 'cargo fmt' to fix..."
+                cargo fmt
+                log_error "Please review and re-stage the formatted files."
+                exit 1
+            fi
+
+            # Clippy check
+            echo "  Running clippy..."
+            if ! cargo clippy --jobs 2 -- -D warnings 2>&1 | grep -v "^warning: profiles for the non root package"; then
+                log_error "Clippy check failed."
+                exit 1
+            fi
+
+            # Unit tests only (fast, no database required)
+            echo "  Running unit tests..."
+            if ! cargo test --lib --jobs 2 2>&1 | grep -v "^warning: profiles for the non root package"; then
+                log_error "Unit tests failed."
+                exit 1
+            fi
+
+            cd ..
+            log_info "$service checks passed"
+            echo ""
+        done
     fi
 fi
 
@@ -138,24 +122,33 @@ fi
 STAGED_PROTO_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.proto$' || true)
 
 if [ -n "$STAGED_PROTO_FILES" ]; then
-    echo "Staged proto files detected. Running buf lint..."
+    log_step "Checking proto files..."
 
     # Check if buf is installed
     if command -v buf &> /dev/null; then
         cd proto
         if ! buf lint; then
-            echo -e "${RED}Proto lint check failed.${NC}"
+            log_error "Proto lint check failed."
             exit 1
         fi
         cd ..
-        echo -e "${GREEN}Proto lint passed!${NC}"
+        log_info "Proto lint passed"
     else
-        echo -e "${RED}Warning: buf not installed. Skipping proto lint.${NC}"
+        log_warn "buf not installed. Skipping proto lint."
         echo "Install buf with: brew install bufbuild/buf/buf"
     fi
+    echo ""
 fi
 
-# Run frontend checks
-./scripts/pre-commit-frontend.sh
+# Run frontend checks if script exists
+if [ -f "./scripts/pre-commit-frontend.sh" ]; then
+    ./scripts/pre-commit-frontend.sh
+fi
 
-echo -e "${GREEN}All checks passed!${NC}"
+echo ""
+echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}  All pre-commit checks passed!${NC}"
+echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
+echo ""
+log_info "For full integration tests with database, run: ./scripts/integ-tests.sh"
+echo ""

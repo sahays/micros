@@ -1,13 +1,20 @@
-//! Auth Service v2 - Main entry point.
+//! Auth Service v2 - Main entry point (gRPC-only).
 
-use auth_service::{build_router, config::AuthConfig, db, services, AppState};
+use auth_service::grpc::proto::auth::{
+    auth_service_server::AuthServiceServer, authz_service_server::AuthzServiceServer,
+};
+use auth_service::grpc::{AuthServiceImpl, AuthzServiceImpl};
+use auth_service::{config::AuthConfig, db, services, AppState};
+use axum::{extract::State, routing::get, Json, Router};
 use opentelemetry::KeyValue;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{runtime, trace as sdktrace, Resource};
+use service_core::grpc::interceptors::trace_context_interceptor;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::signal;
+use tonic::transport::Server as GrpcServer;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
@@ -25,7 +32,7 @@ async fn main() -> anyhow::Result<()> {
         service = %config.service_name,
         version = %config.service_version,
         environment = ?config.environment,
-        "Starting auth-service v2"
+        "Starting auth-service v2 (gRPC)"
     );
 
     // Create PostgreSQL connection pool
@@ -62,20 +69,111 @@ async fn main() -> anyhow::Result<()> {
         redis,
     };
 
-    // Build router
-    let app = build_router(state).await?;
+    // HTTP health endpoint for Docker/K8s probes
+    let health_port = config.common.port;
+    let health_addr = SocketAddr::from(([0, 0, 0, 0], health_port));
+    let health_state = state.clone();
 
-    // Start server
-    let addr = SocketAddr::from(([0, 0, 0, 0], config.common.port));
-    tracing::info!("Listening on {}", addr);
+    let health_router = Router::new()
+        .route("/health", get(health_check))
+        .route("/ready", get(readiness_check))
+        .with_state(health_state);
 
-    let listener = TcpListener::bind(addr).await?;
-    axum::serve(listener, app.into_make_service())
-        .with_graceful_shutdown(shutdown_signal())
-        .await?;
+    tracing::info!("HTTP health endpoint listening on {}", health_addr);
+
+    let health_listener = TcpListener::bind(health_addr).await?;
+    let health_server = axum::serve(health_listener, health_router.into_make_service());
+
+    // Build gRPC services
+    let grpc_port = config.common.port + 1;
+    let grpc_addr = SocketAddr::from(([0, 0, 0, 0], grpc_port));
+
+    let auth_service = AuthServiceImpl::new(state.clone());
+    let authz_service = AuthzServiceImpl::new(state);
+
+    // Create reflection service
+    let reflection_service = tonic_reflection::server::Builder::configure()
+        .register_encoded_file_descriptor_set(auth_service::grpc::proto::auth::FILE_DESCRIPTOR_SET)
+        .build_v1()?;
+
+    // Create gRPC health service
+    let (mut health_reporter, grpc_health_service) = tonic_health::server::health_reporter();
+    health_reporter
+        .set_serving::<AuthServiceServer<AuthServiceImpl>>()
+        .await;
+    health_reporter
+        .set_serving::<AuthzServiceServer<AuthzServiceImpl>>()
+        .await;
+
+    tracing::info!("gRPC server listening on {}", grpc_addr);
+
+    let grpc_server = GrpcServer::builder()
+        .add_service(grpc_health_service)
+        .add_service(reflection_service)
+        .add_service(AuthServiceServer::with_interceptor(
+            auth_service,
+            trace_context_interceptor,
+        ))
+        .add_service(AuthzServiceServer::with_interceptor(
+            authz_service,
+            trace_context_interceptor,
+        ))
+        .serve_with_shutdown(grpc_addr, shutdown_signal());
+
+    // Run both servers concurrently
+    tokio::select! {
+        result = health_server => {
+            if let Err(e) = result {
+                tracing::error!("HTTP health server error: {}", e);
+            }
+        }
+        result = grpc_server => {
+            if let Err(e) = result {
+                tracing::error!("gRPC server error: {}", e);
+            }
+        }
+    }
 
     tracing::info!("Service shutdown complete");
     Ok(())
+}
+
+/// Liveness probe - service is running.
+async fn health_check() -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "status": "healthy",
+        "service": "auth-service",
+    }))
+}
+
+/// Readiness probe - service is ready to accept requests.
+async fn readiness_check(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    // Check PostgreSQL connection
+    if let Err(e) = state.db.health_check().await {
+        return Err((
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            format!("PostgreSQL not ready: {}", e),
+        ));
+    }
+
+    // Check Redis connection
+    if let Err(e) = state.redis.health_check().await {
+        return Err((
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            format!("Redis not ready: {}", e),
+        ));
+    }
+
+    Ok(Json(serde_json::json!({
+        "status": "ready",
+        "service": "auth-service",
+        "checks": {
+            "postgresql": "up",
+            "redis": "up"
+        }
+    })))
 }
 
 async fn shutdown_signal() {

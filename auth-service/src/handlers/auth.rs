@@ -80,13 +80,14 @@ pub struct MessageResponse {
 // Handlers
 // ============================================================================
 
-/// Register a new user.
+/// Register a new user - implementation.
 ///
-/// POST /auth/register
-pub async fn register(
-    State(state): State<AppState>,
-    Json(req): Json<RegisterRequest>,
-) -> Result<(StatusCode, Json<AuthResponse>), AppError> {
+/// This function contains the core registration logic and can be called
+/// from both REST handlers and gRPC services.
+pub async fn register_impl(
+    state: &AppState,
+    req: RegisterRequest,
+) -> Result<AuthResponse, AppError> {
     // Validate input
     validate_email(&req.email)?;
     validate_password(&req.password)?;
@@ -142,9 +143,9 @@ pub async fn register(
 
     // Generate tokens
     let (access_token, refresh_token, expires_in) =
-        generate_tokens(&state, &user, tenant.tenant_id).await?;
+        generate_tokens(state, &user, tenant.tenant_id).await?;
 
-    let response = AuthResponse {
+    Ok(AuthResponse {
         access_token,
         refresh_token,
         token_type: "Bearer".to_string(),
@@ -155,18 +156,25 @@ pub async fn register(
             display_name: user.display_name.clone(),
             tenant_id: user.tenant_id,
         },
-    };
+    })
+}
 
+/// Register a new user.
+///
+/// POST /auth/register
+pub async fn register(
+    State(state): State<AppState>,
+    Json(req): Json<RegisterRequest>,
+) -> Result<(StatusCode, Json<AuthResponse>), AppError> {
+    let response = register_impl(&state, req).await?;
     Ok((StatusCode::CREATED, Json(response)))
 }
 
-/// Login with email and password.
+/// Login with email and password - implementation.
 ///
-/// POST /auth/login
-pub async fn login(
-    State(state): State<AppState>,
-    Json(req): Json<LoginRequest>,
-) -> Result<Json<AuthResponse>, AppError> {
+/// This function contains the core login logic and can be called
+/// from both REST handlers and gRPC services.
+pub async fn login_impl(state: &AppState, req: LoginRequest) -> Result<AuthResponse, AppError> {
     // Find tenant
     let tenant = state
         .db
@@ -208,9 +216,9 @@ pub async fn login(
 
     // Generate tokens
     let (access_token, refresh_token, expires_in) =
-        generate_tokens(&state, &user, tenant.tenant_id).await?;
+        generate_tokens(state, &user, tenant.tenant_id).await?;
 
-    Ok(Json(AuthResponse {
+    Ok(AuthResponse {
         access_token,
         refresh_token,
         token_type: "Bearer".to_string(),
@@ -221,16 +229,25 @@ pub async fn login(
             display_name: user.display_name.clone(),
             tenant_id: user.tenant_id,
         },
-    }))
+    })
 }
 
-/// Refresh access token using refresh token.
+/// Login with email and password.
 ///
-/// POST /auth/refresh
-pub async fn refresh(
+/// POST /auth/login
+pub async fn login(
     State(state): State<AppState>,
-    Json(req): Json<RefreshRequest>,
+    Json(req): Json<LoginRequest>,
 ) -> Result<Json<AuthResponse>, AppError> {
+    let response = login_impl(&state, req).await?;
+    Ok(Json(response))
+}
+
+/// Refresh access token using refresh token - implementation.
+///
+/// This function contains the core refresh logic and can be called
+/// from both REST handlers and gRPC services.
+pub async fn refresh_impl(state: &AppState, req: RefreshRequest) -> Result<AuthResponse, AppError> {
     // Verify and decode refresh token
     let claims = state
         .jwt
@@ -284,9 +301,9 @@ pub async fn refresh(
 
     // Generate new tokens
     let (access_token, refresh_token, expires_in) =
-        generate_tokens(&state, &user, user.tenant_id).await?;
+        generate_tokens(state, &user, user.tenant_id).await?;
 
-    Ok(Json(AuthResponse {
+    Ok(AuthResponse {
         access_token,
         refresh_token,
         token_type: "Bearer".to_string(),
@@ -297,16 +314,25 @@ pub async fn refresh(
             display_name: user.display_name.clone(),
             tenant_id: user.tenant_id,
         },
-    }))
+    })
 }
 
-/// Logout and revoke refresh token.
+/// Refresh access token using refresh token.
 ///
-/// POST /auth/logout
-pub async fn logout(
+/// POST /auth/refresh
+pub async fn refresh(
     State(state): State<AppState>,
-    Json(req): Json<LogoutRequest>,
-) -> Result<Json<MessageResponse>, AppError> {
+    Json(req): Json<RefreshRequest>,
+) -> Result<Json<AuthResponse>, AppError> {
+    let response = refresh_impl(&state, req).await?;
+    Ok(Json(response))
+}
+
+/// Logout and revoke refresh token - implementation.
+///
+/// This function contains the core logout logic and can be called
+/// from both REST handlers and gRPC services.
+pub async fn logout_impl(state: &AppState, req: LogoutRequest) -> Result<(), AppError> {
     // Verify refresh token (but don't fail if invalid - still try to revoke)
     if let Ok(claims) = state.jwt.validate_refresh_token(&req.refresh_token) {
         let token_hash = hash_token(&req.refresh_token);
@@ -321,6 +347,17 @@ pub async fn logout(
         let _ = state.redis.blacklist_token(&claims.jti, ttl).await;
     }
 
+    Ok(())
+}
+
+/// Logout and revoke refresh token.
+///
+/// POST /auth/logout
+pub async fn logout(
+    State(state): State<AppState>,
+    Json(req): Json<LogoutRequest>,
+) -> Result<Json<MessageResponse>, AppError> {
+    logout_impl(&state, req).await?;
     Ok(Json(MessageResponse {
         message: "Logged out successfully".to_string(),
     }))
