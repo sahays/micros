@@ -2,13 +2,22 @@
 FROM lukemathwalker/cargo-chef:latest-rust-1.91.0 AS chef
 WORKDIR /app
 
+# Install protobuf compiler and dev files (includes google well-known types)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    protobuf-compiler \
+    libprotobuf-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Stage 2: Planner (Compute recipe)
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
 COPY auth-service ./auth-service
 COPY document-service ./document-service
+COPY notification-service ./notification-service
+COPY payment-service ./payment-service
 COPY secure-frontend ./secure-frontend
 COPY service-core ./service-core
+COPY proto ./proto
 RUN cargo chef prepare --recipe-path recipe.json --bin secure-frontend
 
 # Stage 3: Builder (Build dependencies and binary)
@@ -20,8 +29,11 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY Cargo.toml Cargo.lock ./
 COPY auth-service ./auth-service
 COPY document-service ./document-service
+COPY notification-service ./notification-service
+COPY payment-service ./payment-service
 COPY secure-frontend ./secure-frontend
 COPY service-core ./service-core
+COPY proto ./proto
 RUN cargo build --release --bin secure-frontend
 
 # Stage 4: CSS Builder (Build optimized CSS with Tailwind)
@@ -35,7 +47,8 @@ COPY secure-frontend/static/input.css ./static/input.css
 RUN npm run build:css
 
 # Stage 5: Runtime (The final image)
-FROM debian:bookworm-slim AS runtime
+# Use trixie-slim to match cargo-chef's GLIBC version (2.39)
+FROM debian:trixie-slim AS runtime
 WORKDIR /app
 
 # Install runtime dependencies

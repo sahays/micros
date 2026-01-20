@@ -104,7 +104,7 @@ services:
       - DATABASE_URL=${DATABASE_URL:-postgres://postgres:password@host.docker.internal:5432/auth_db}
       - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
       - RUST_LOG=${LOG_LEVEL:-info}
-      - PORT=3000
+      - APP__PORT=3000
       - GRPC_PORT=3001
       - ENVIRONMENT=${ENVIRONMENT:-dev}
       - SERVICE_NAME=auth-service
@@ -191,11 +191,11 @@ services:
       dockerfile: notification-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-notification-service
     ports:
-      - "${NOTIFICATION_SERVICE_HEALTH_PORT:-9008}:3000"
-      - "${NOTIFICATION_SERVICE_GRPC_PORT:-50053}:3001"
+      - "${NOTIFICATION_SERVICE_HEALTH_PORT:-9008}:8080"
+      - "${NOTIFICATION_SERVICE_GRPC_PORT:-50053}:8081"
     environment:
-      - PORT=3000
-      - GRPC_PORT=3001
+      - APP__PORT=8080
+      - GRPC_PORT=8081
       - ENVIRONMENT=${ENVIRONMENT:-dev}
       - MONGODB_URI=${NOTIFICATION_MONGODB_URI:-mongodb://host.docker.internal:27017}
       - MONGODB_DATABASE=${NOTIFICATION_MONGODB_DATABASE:-notification_db}

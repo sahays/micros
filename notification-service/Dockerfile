@@ -2,6 +2,12 @@
 FROM lukemathwalker/cargo-chef:latest-rust-1.91.0 AS chef
 WORKDIR /app
 
+# Install protobuf compiler and dev files (includes google well-known types)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    protobuf-compiler \
+    libprotobuf-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 # Stage 2: Planner (Compute recipe)
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
@@ -16,12 +22,6 @@ RUN cargo chef prepare --recipe-path recipe.json --bin notification-service
 
 # Stage 3: Builder (Build dependencies and binary)
 FROM chef AS builder
-
-# Install protobuf compiler for gRPC code generation
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    protobuf-compiler \
-    && rm -rf /var/lib/apt/lists/*
-
 COPY --from=planner /app/recipe.json recipe.json
 # Build dependencies - this is the caching layer
 RUN cargo chef cook --release --recipe-path recipe.json
@@ -37,7 +37,8 @@ COPY proto ./proto
 RUN cargo build --release --bin notification-service
 
 # Stage 4: Runtime (The final image)
-FROM debian:bookworm-slim AS runtime
+# Use trixie-slim to match cargo-chef's GLIBC version (2.39)
+FROM debian:trixie-slim AS runtime
 WORKDIR /app
 
 # Install runtime dependencies
