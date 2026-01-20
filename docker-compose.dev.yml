@@ -2,8 +2,8 @@ services:
   # ==============================================================================
   # Development Configuration
   # ==============================================================================
-  # MongoDB and Redis run on HOST machine (not included here)
-  # Services connect to host.docker.internal:27017 and host.docker.internal:6379
+  # PostgreSQL, MongoDB, and Redis run on HOST machine (not included here)
+  # Services connect via host.docker.internal
   # ==============================================================================
 
   # Observability Stack
@@ -19,7 +19,7 @@ services:
       - "--storage.tsdb.path=/prometheus"
       - "--storage.tsdb.retention.time=15d"
     ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
+      - "${PROMETHEUS_PORT:-9000}:9090"
     restart: unless-stopped
     networks:
       - micros-net
@@ -32,7 +32,7 @@ services:
       - loki_data:/loki
     command: -config.file=/etc/loki/loki.yaml
     ports:
-      - "${LOKI_PORT:-9091}:3100"
+      - "${LOKI_PORT:-9001}:3100"
     restart: unless-stopped
     networks:
       - micros-net
@@ -47,7 +47,7 @@ services:
       - tempo_data:/var/tempo
     ports:
       - "14268:14268"
-      - "${TEMPO_PORT:-9099}:3200"
+      - "${TEMPO_PORT:-9003}:3200"
       - "4317:4317"
       - "4318:4318"
       - "9411:9411"
@@ -66,7 +66,7 @@ services:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
     ports:
-      - "${GRAFANA_PORT:-9092}:3000"
+      - "${GRAFANA_PORT:-9002}:3000"
     restart: unless-stopped
     depends_on:
       - prometheus
@@ -84,7 +84,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     command: -config.file=/etc/promtail/promtail.yaml
     ports:
-      - "${PROMTAIL_PORT:-9080}:9080"
+      - "${PROMTAIL_PORT:-9004}:9080"
     restart: unless-stopped
     depends_on:
       - loki
@@ -98,13 +98,14 @@ services:
       dockerfile: auth-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-auth-service
     ports:
-      - "${AUTH_SERVICE_HEALTH_PORT:-9096}:3000"
+      - "${AUTH_SERVICE_HEALTH_PORT:-9005}:3000"
       - "${AUTH_SERVICE_GRPC_PORT:-50051}:3001"
     environment:
-      - DATABASE_URL=${AUTH_DATABASE_URL:-postgres://postgres:pass%40word1@host.docker.internal:5432/auth_db}
+      - DATABASE_URL=${DATABASE_URL:-postgres://postgres:password@host.docker.internal:5432/auth_db}
       - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
       - RUST_LOG=${LOG_LEVEL:-info}
       - PORT=3000
+      - GRPC_PORT=3001
       - ENVIRONMENT=${ENVIRONMENT:-dev}
       - SERVICE_NAME=auth-service
       - SERVICE_VERSION=${SERVICE_VERSION:-0.1.0}
@@ -113,13 +114,13 @@ services:
       - JWT_ACCESS_TOKEN_EXPIRY_MINUTES=${JWT_ACCESS_TOKEN_EXPIRY_MINUTES:-15}
       - JWT_REFRESH_TOKEN_EXPIRY_DAYS=${JWT_REFRESH_TOKEN_EXPIRY_DAYS:-7}
       - JWT_APP_TOKEN_EXPIRY_MINUTES=${JWT_APP_TOKEN_EXPIRY_MINUTES:-60}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
-      - GMAIL_USER=${GMAIL_USER}
-      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-}
+      - GMAIL_USER=${GMAIL_USER:-}
+      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD:-}
       - ADMIN_API_KEY=${ADMIN_API_KEY:-dev-admin-key}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:9097}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:9006}
       - REQUIRE_SIGNATURES=${REQUIRE_SIGNATURES:-false}
       - ENABLE_SWAGGER=${ENABLE_SWAGGER:-public}
       - RATE_LIMIT_LOGIN_ATTEMPTS=${RATE_LIMIT_LOGIN_ATTEMPTS:-5}
@@ -132,6 +133,7 @@ services:
       - RATE_LIMIT_GLOBAL_IP_WINDOW_SECONDS=${RATE_LIMIT_GLOBAL_IP_WINDOW_SECONDS:-60}
       - RATE_LIMIT_APP_TOKEN_LIMIT=${RATE_LIMIT_APP_TOKEN_LIMIT:-10}
       - RATE_LIMIT_APP_TOKEN_WINDOW_SECONDS=${RATE_LIMIT_APP_TOKEN_WINDOW_SECONDS:-60}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
       # Notification Service Integration (gRPC)
       - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-http://notification-service:3001}
       - NOTIFICATION_SERVICE_ENABLED=${NOTIFICATION_SERVICE_ENABLED:-false}
@@ -151,57 +153,19 @@ services:
     networks:
       - micros-net
 
-  secure-frontend:
-    build:
-      context: .
-      dockerfile: secure-frontend/Dockerfile
-    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-secure-frontend
-    ports:
-      - "${SECURE_FRONTEND_PORT:-9097}:8080"
-    environment:
-      - APP_SERVER__HOST=${APP_SERVER__HOST:-0.0.0.0}
-      - APP_SERVER__PORT=${APP_SERVER__PORT:-8080}
-      - APP_SERVER__SESSION_SECRET=${APP_SERVER__SESSION_SECRET}
-      # Auth Service (gRPC for internal, HTTP for OAuth redirects)
-      - APP_AUTH_SERVICE__URL=${APP_AUTH_SERVICE__URL:-http://auth-service:3000}
-      - APP_AUTH_SERVICE__PUBLIC_URL=${APP_AUTH_SERVICE__PUBLIC_URL:-http://localhost:9096}
-      - APP_AUTH_SERVICE__GRPC_URL=${APP_AUTH_SERVICE__GRPC_URL:-http://auth-service:3001}
-      - APP_AUTH_SERVICE__DEFAULT_TENANT_SLUG=${APP_AUTH_SERVICE__DEFAULT_TENANT_SLUG:-default}
-      # Document Service (gRPC)
-      - APP_DOCUMENT_SERVICE__URL=${APP_DOCUMENT_SERVICE__URL:-http://document-service:8080}
-      - APP_DOCUMENT_SERVICE__GRPC_URL=${APP_DOCUMENT_SERVICE__GRPC_URL:-http://document-service:8081}
-      - APP_DOCUMENT_SERVICE__DOCUMENT_SIGNING_SECRET=${APP_DOCUMENT_SERVICE__DOCUMENT_SIGNING_SECRET:-dev-signing-secret}
-      - APP_DOCUMENT_SERVICE__DEFAULT_APP_ID=${APP_DOCUMENT_SERVICE__DEFAULT_APP_ID:-secure-frontend}
-      - APP_DOCUMENT_SERVICE__DEFAULT_ORG_ID=${APP_DOCUMENT_SERVICE__DEFAULT_ORG_ID:-default}
-      - RUST_LOG=${LOG_LEVEL:-info}
-    labels:
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=8080"
-      - "prometheus.io/path=/metrics"
-    depends_on:
-      - auth-service
-      - document-service
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
-    networks:
-      - micros-net
-
   document-service:
     build:
       context: .
       dockerfile: document-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-document-service
     ports:
-      - "${DOCUMENT_SERVICE_HEALTH_PORT:-9098}:8080"
-      - "${DOCUMENT_SERVICE_GRPC_PORT:-50053}:8081"
+      - "${DOCUMENT_SERVICE_HEALTH_PORT:-9007}:8080"
+      - "${DOCUMENT_SERVICE_GRPC_PORT:-50052}:8081"
     environment:
       - PORT=8080
+      - GRPC_PORT=8081
       - MONGODB_URI=${MONGODB_URI:-mongodb://host.docker.internal:27017}
-      - MONGODB_DATABASE=${MONGODB_DATABASE:-auth_db}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-micros_db}
       - RUST_LOG=${DOCUMENT_SERVICE_LOG_LEVEL:-info}
       - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
       - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
@@ -228,9 +192,10 @@ services:
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-notification-service
     ports:
       - "${NOTIFICATION_SERVICE_HEALTH_PORT:-9008}:3000"
-      - "${NOTIFICATION_SERVICE_GRPC_PORT:-50052}:3001"
+      - "${NOTIFICATION_SERVICE_GRPC_PORT:-50053}:3001"
     environment:
       - PORT=3000
+      - GRPC_PORT=3001
       - ENVIRONMENT=${ENVIRONMENT:-dev}
       - MONGODB_URI=${NOTIFICATION_MONGODB_URI:-mongodb://host.docker.internal:27017}
       - MONGODB_DATABASE=${NOTIFICATION_MONGODB_DATABASE:-notification_db}
@@ -256,6 +221,83 @@ services:
       - "prometheus.io/scrape=true"
       - "prometheus.io/port=3000"
       - "prometheus.io/path=/health"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    networks:
+      - micros-net
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-payment-service
+    ports:
+      - "${PAYMENT_SERVICE_HEALTH_PORT:-9009}:3003"
+      - "${PAYMENT_SERVICE_GRPC_PORT:-50054}:3004"
+    environment:
+      - PAYMENT_SERVICE_HOST=0.0.0.0
+      - PAYMENT_SERVICE_PORT=3003
+      - PAYMENT_SERVICE_GRPC_PORT=3004
+      - PAYMENT_DATABASE_URL=${PAYMENT_DATABASE_URL:-mongodb://host.docker.internal:27017}
+      - PAYMENT_DATABASE_NAME=${PAYMENT_DATABASE_NAME:-payment_db}
+      - PAYMENT_REDIS_URL=${PAYMENT_REDIS_URL:-redis://host.docker.internal:6379/0}
+      - RUST_LOG=${LOG_LEVEL:-info}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      - PAYMENT_SIGNATURE_ENABLED=${PAYMENT_SIGNATURE_ENABLED:-false}
+      - PAYMENT_SIGNATURE_SECRET=${PAYMENT_SIGNATURE_SECRET:-dev-secret}
+      - PAYMENT_UPI_VPA=${PAYMENT_UPI_VPA:-merchant@upi}
+      - PAYMENT_UPI_MERCHANT_NAME=${PAYMENT_UPI_MERCHANT_NAME:-Micros Merchant}
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-}
+      - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET:-}
+      - RAZORPAY_API_BASE_URL=${RAZORPAY_API_BASE_URL:-https://api.razorpay.com/v1}
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=3003"
+      - "prometheus.io/path=/health"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    networks:
+      - micros-net
+
+  secure-frontend:
+    build:
+      context: .
+      dockerfile: secure-frontend/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-secure-frontend
+    ports:
+      - "${SECURE_FRONTEND_PORT:-9006}:8080"
+    environment:
+      - APP_SERVER__HOST=${APP_SERVER__HOST:-0.0.0.0}
+      - APP_SERVER__PORT=${APP_SERVER__PORT:-8080}
+      - APP_SERVER__SESSION_SECRET=${APP_SERVER__SESSION_SECRET:-dev-session-secret}
+      # Auth Service (gRPC)
+      - APP_AUTH_SERVICE__URL=${APP_AUTH_SERVICE__URL:-http://auth-service:3000}
+      - APP_AUTH_SERVICE__GRPC_URL=${APP_AUTH_SERVICE__GRPC_URL:-http://auth-service:3001}
+      - APP_AUTH_SERVICE__PUBLIC_URL=${APP_AUTH_SERVICE__PUBLIC_URL:-http://localhost:9005}
+      - APP_AUTH_SERVICE__DEFAULT_TENANT_SLUG=${APP_AUTH_SERVICE__DEFAULT_TENANT_SLUG:-default}
+      # Document Service (gRPC)
+      - APP_DOCUMENT_SERVICE__URL=${APP_DOCUMENT_SERVICE__URL:-http://document-service:8080}
+      - APP_DOCUMENT_SERVICE__GRPC_URL=${APP_DOCUMENT_SERVICE__GRPC_URL:-http://document-service:8081}
+      - APP_DOCUMENT_SERVICE__DOCUMENT_SIGNING_SECRET=${APP_DOCUMENT_SERVICE__DOCUMENT_SIGNING_SECRET:-dev-signing-secret}
+      - APP_DOCUMENT_SERVICE__DEFAULT_APP_ID=${APP_DOCUMENT_SERVICE__DEFAULT_APP_ID:-secure-frontend}
+      - APP_DOCUMENT_SERVICE__DEFAULT_ORG_ID=${APP_DOCUMENT_SERVICE__DEFAULT_ORG_ID:-default}
+      - RUST_LOG=${LOG_LEVEL:-info}
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=8080"
+      - "prometheus.io/path=/metrics"
+    depends_on:
+      - auth-service
+      - document-service
     logging:
       driver: "json-file"
       options:

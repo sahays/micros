@@ -2,8 +2,9 @@ services:
   # ==============================================================================
   # Production Configuration
   # ==============================================================================
-  # All services including MongoDB and Redis are containerized
-  # All services use non-standard ports to avoid conflicts
+  # All services including databases are containerized
+  # PostgreSQL (auth), MongoDB (document/notification/payment), Redis (all)
+  # Services exposed on 10xxx port range
   # ==============================================================================
 
   # Observability Stack
@@ -19,7 +20,7 @@ services:
       - "--storage.tsdb.path=/prometheus"
       - "--storage.tsdb.retention.time=15d"
     ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
+      - "${PROMETHEUS_PORT:-10000}:9090"
     restart: unless-stopped
     networks:
       - micros-net
@@ -32,7 +33,7 @@ services:
       - loki_data:/loki
     command: -config.file=/etc/loki/loki.yaml
     ports:
-      - "${LOKI_PORT:-9091}:3100"
+      - "${LOKI_PORT:-10001}:3100"
     restart: unless-stopped
     networks:
       - micros-net
@@ -40,14 +41,14 @@ services:
   tempo:
     image: grafana/tempo:latest
     container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-tempo
-    command: [ "-config.file=/etc/tempo.yaml" ]
+    command: ["-config.file=/etc/tempo.yaml"]
     user: "10001:10001"
     volumes:
       - ./config/tempo/tempo.yaml:/etc/tempo.yaml:ro
       - tempo_data:/var/tempo
     ports:
       - "14268:14268"
-      - "${TEMPO_PORT:-9099}:3200"
+      - "${TEMPO_PORT:-10003}:3200"
       - "4317:4317"
       - "4318:4318"
       - "9411:9411"
@@ -66,7 +67,7 @@ services:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
     ports:
-      - "${GRAFANA_PORT:-9092}:3000"
+      - "${GRAFANA_PORT:-10002}:3000"
     restart: unless-stopped
     depends_on:
       - prometheus
@@ -84,7 +85,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     command: -config.file=/etc/promtail/promtail.yaml
     ports:
-      - "${PROMTAIL_PORT:-9080}:9080"
+      - "${PROMTAIL_PORT:-10004}:9080"
     restart: unless-stopped
     depends_on:
       - loki
@@ -92,11 +93,32 @@ services:
       - micros-net
 
   # Database Stack
+  postgres:
+    image: postgres:16-alpine
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-postgres
+    ports:
+      - "${POSTGRES_PORT:-10010}:5432"
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-password}
+      - POSTGRES_DB=${POSTGRES_DB:-auth_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - micros-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
   mongo:
     image: mongo:6.0
     container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-mongo
     ports:
-      - "${MONGO_PORT:-9094}:27017"
+      - "${MONGO_PORT:-10008}:27017"
     volumes:
       - mongo_data:/data/db
     networks:
@@ -113,7 +135,7 @@ services:
     image: redis:7-alpine
     container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-redis
     ports:
-      - "${REDIS_PORT:-9095}:6379"
+      - "${REDIS_PORT:-10009}:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -132,14 +154,14 @@ services:
       dockerfile: auth-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-auth-service
     ports:
-      - "${AUTH_SERVICE_PORT:-9096}:3000"
+      - "${AUTH_SERVICE_HEALTH_PORT:-10005}:3000"
       - "${AUTH_SERVICE_GRPC_PORT:-50051}:3001"
     environment:
-      - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:27017}
-      - MONGODB_DATABASE=${MONGODB_DATABASE:-auth_db}
+      - DATABASE_URL=${DATABASE_URL:-postgres://postgres:password@postgres:5432/auth_db}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - RUST_LOG=${LOG_LEVEL:-info}
       - PORT=3000
+      - GRPC_PORT=3001
       - ENVIRONMENT=${ENVIRONMENT:-prod}
       - SERVICE_NAME=auth-service
       - SERVICE_VERSION=${SERVICE_VERSION:-0.1.0}
@@ -148,13 +170,13 @@ services:
       - JWT_ACCESS_TOKEN_EXPIRY_MINUTES=${JWT_ACCESS_TOKEN_EXPIRY_MINUTES:-15}
       - JWT_REFRESH_TOKEN_EXPIRY_DAYS=${JWT_REFRESH_TOKEN_EXPIRY_DAYS:-7}
       - JWT_APP_TOKEN_EXPIRY_MINUTES=${JWT_APP_TOKEN_EXPIRY_MINUTES:-60}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
-      - GMAIL_USER=${GMAIL_USER}
-      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
-      - ADMIN_API_KEY=${ADMIN_API_KEY}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-}
+      - GMAIL_USER=${GMAIL_USER:-}
+      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD:-}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-prod-admin-key}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:10006}
       - REQUIRE_SIGNATURES=${REQUIRE_SIGNATURES:-true}
       - ENABLE_SWAGGER=${ENABLE_SWAGGER:-disabled}
       - RATE_LIMIT_LOGIN_ATTEMPTS=${RATE_LIMIT_LOGIN_ATTEMPTS:-5}
@@ -167,6 +189,7 @@ services:
       - RATE_LIMIT_GLOBAL_IP_WINDOW_SECONDS=${RATE_LIMIT_GLOBAL_IP_WINDOW_SECONDS:-60}
       - RATE_LIMIT_APP_TOKEN_LIMIT=${RATE_LIMIT_APP_TOKEN_LIMIT:-10}
       - RATE_LIMIT_APP_TOKEN_WINDOW_SECONDS=${RATE_LIMIT_APP_TOKEN_WINDOW_SECONDS:-60}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
       # Notification Service Integration (gRPC)
       - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-http://notification-service:3001}
       - NOTIFICATION_SERVICE_ENABLED=${NOTIFICATION_SERVICE_ENABLED:-true}
@@ -174,14 +197,7 @@ services:
     labels:
       - "prometheus.io/scrape=true"
       - "prometheus.io/port=3000"
-      - "prometheus.io/path=/metrics"
-    depends_on:
-      mongo:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      notification-service:
-        condition: service_started
+      - "prometheus.io/path=/health"
     logging:
       driver: "json-file"
       options:
@@ -190,6 +206,137 @@ services:
         tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
     volumes:
       - ./auth-service/keys:/app/keys
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - micros-net
+
+  document-service:
+    build:
+      context: .
+      dockerfile: document-service/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-document-service
+    ports:
+      - "${DOCUMENT_SERVICE_HEALTH_PORT:-10007}:8080"
+      - "${DOCUMENT_SERVICE_GRPC_PORT:-50052}:8081"
+    environment:
+      - PORT=8080
+      - GRPC_PORT=8081
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:27017}
+      - MONGODB_DATABASE=${MONGODB_DATABASE:-micros_db}
+      - RUST_LOG=${DOCUMENT_SERVICE_LOG_LEVEL:-info}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
+      - STORAGE_LOCAL_PATH=${STORAGE_LOCAL_PATH:-./storage}
+      - REQUIRE_SIGNATURES=${REQUIRE_SIGNATURES:-true}
+      - SIGNING_SECRET=${DOCUMENT_SERVICE_SIGNING_SECRET:-prod-signing-secret}
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=8080"
+      - "prometheus.io/path=/health"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - micros-net
+
+  notification-service:
+    build:
+      context: .
+      dockerfile: notification-service/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-notification-service
+    ports:
+      - "${NOTIFICATION_SERVICE_HEALTH_PORT:-10008}:3000"
+      - "${NOTIFICATION_SERVICE_GRPC_PORT:-50053}:3001"
+    environment:
+      - PORT=3000
+      - GRPC_PORT=3001
+      - ENVIRONMENT=${ENVIRONMENT:-prod}
+      - MONGODB_URI=${NOTIFICATION_MONGODB_URI:-mongodb://mongo:27017}
+      - MONGODB_DATABASE=${NOTIFICATION_MONGODB_DATABASE:-notification_db}
+      - RUST_LOG=${LOG_LEVEL:-info}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      # SMTP Configuration
+      - SMTP_HOST=${NOTIFICATION_SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${NOTIFICATION_SMTP_PORT:-587}
+      - SMTP_USER=${NOTIFICATION_SMTP_USER:-}
+      - SMTP_PASSWORD=${NOTIFICATION_SMTP_PASSWORD:-}
+      - SMTP_FROM_EMAIL=${NOTIFICATION_SMTP_FROM_EMAIL:-noreply@example.com}
+      - SMTP_FROM_NAME=${NOTIFICATION_SMTP_FROM_NAME:-Notification Service}
+      - SMTP_ENABLED=${NOTIFICATION_SMTP_ENABLED:-true}
+      # Msg91 SMS Configuration
+      - MSG91_AUTH_KEY=${NOTIFICATION_MSG91_AUTH_KEY:-}
+      - MSG91_SENDER_ID=${NOTIFICATION_MSG91_SENDER_ID:-}
+      - MSG91_ENABLED=${NOTIFICATION_MSG91_ENABLED:-false}
+      # FCM Push Configuration
+      - FCM_PROJECT_ID=${NOTIFICATION_FCM_PROJECT_ID:-}
+      - FCM_SERVICE_ACCOUNT_KEY=${NOTIFICATION_FCM_SERVICE_ACCOUNT_KEY:-}
+      - FCM_ENABLED=${NOTIFICATION_FCM_ENABLED:-false}
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=3000"
+      - "prometheus.io/path=/health"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - micros-net
+
+  payment-service:
+    build:
+      context: .
+      dockerfile: payment-service/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-payment-service
+    ports:
+      - "${PAYMENT_SERVICE_HEALTH_PORT:-10009}:3003"
+      - "${PAYMENT_SERVICE_GRPC_PORT:-50054}:3004"
+    environment:
+      - PAYMENT_SERVICE_HOST=0.0.0.0
+      - PAYMENT_SERVICE_PORT=3003
+      - PAYMENT_SERVICE_GRPC_PORT=3004
+      - PAYMENT_DATABASE_URL=${PAYMENT_DATABASE_URL:-mongodb://mongo:27017}
+      - PAYMENT_DATABASE_NAME=${PAYMENT_DATABASE_NAME:-payment_db}
+      - PAYMENT_REDIS_URL=${PAYMENT_REDIS_URL:-redis://redis:6379/0}
+      - RUST_LOG=${LOG_LEVEL:-info}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      - PAYMENT_SIGNATURE_ENABLED=${PAYMENT_SIGNATURE_ENABLED:-true}
+      - PAYMENT_SIGNATURE_SECRET=${PAYMENT_SIGNATURE_SECRET:-prod-secret}
+      - PAYMENT_UPI_VPA=${PAYMENT_UPI_VPA:-merchant@upi}
+      - PAYMENT_UPI_MERCHANT_NAME=${PAYMENT_UPI_MERCHANT_NAME:-Micros Merchant}
+      - RAZORPAY_KEY_ID=${RAZORPAY_KEY_ID:-}
+      - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-}
+      - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET:-}
+      - RAZORPAY_API_BASE_URL=${RAZORPAY_API_BASE_URL:-https://api.razorpay.com/v1}
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=3003"
+      - "prometheus.io/path=/health"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - micros-net
 
@@ -199,15 +346,15 @@ services:
       dockerfile: secure-frontend/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-secure-frontend
     ports:
-      - "${SECURE_FRONTEND_PORT:-9097}:8080"
+      - "${SECURE_FRONTEND_PORT:-10006}:8080"
     environment:
       - APP_SERVER__HOST=${APP_SERVER__HOST:-0.0.0.0}
       - APP_SERVER__PORT=${APP_SERVER__PORT:-8080}
-      - APP_SERVER__SESSION_SECRET=${APP_SERVER__SESSION_SECRET}
-      # Auth Service (gRPC for internal, HTTP for OAuth redirects)
+      - APP_SERVER__SESSION_SECRET=${APP_SERVER__SESSION_SECRET:-prod-session-secret}
+      # Auth Service (gRPC)
       - APP_AUTH_SERVICE__URL=${APP_AUTH_SERVICE__URL:-http://auth-service:3000}
-      - APP_AUTH_SERVICE__PUBLIC_URL=${APP_AUTH_SERVICE__PUBLIC_URL:-http://localhost:9096}
       - APP_AUTH_SERVICE__GRPC_URL=${APP_AUTH_SERVICE__GRPC_URL:-http://auth-service:3001}
+      - APP_AUTH_SERVICE__PUBLIC_URL=${APP_AUTH_SERVICE__PUBLIC_URL:-http://localhost:10005}
       - APP_AUTH_SERVICE__DEFAULT_TENANT_SLUG=${APP_AUTH_SERVICE__DEFAULT_TENANT_SLUG:-default}
       # Document Service (gRPC)
       - APP_DOCUMENT_SERVICE__URL=${APP_DOCUMENT_SERVICE__URL:-http://document-service:8080}
@@ -232,87 +379,6 @@ services:
     networks:
       - micros-net
 
-  document-service:
-    build:
-      context: .
-      dockerfile: document-service/Dockerfile
-    container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-document-service
-    ports:
-      - "${DOCUMENT_SERVICE_HEALTH_PORT:-10098}:8080"
-      - "${DOCUMENT_SERVICE_GRPC_PORT:-50053}:8081"
-    environment:
-      - PORT=8080
-      - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:27017}
-      - MONGODB_DATABASE=${MONGODB_DATABASE:-auth_db}
-      - RUST_LOG=${DOCUMENT_SERVICE_LOG_LEVEL:-info}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
-      - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
-      - STORAGE_LOCAL_PATH=${STORAGE_LOCAL_PATH:-./storage}
-      - REQUIRE_SIGNATURES=${REQUIRE_SIGNATURES:-false}
-      - SIGNING_SECRET=${DOCUMENT_SERVICE_SIGNING_SECRET:-prod-signing-secret}
-    labels:
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=8080"
-      - "prometheus.io/path=/health"
-    depends_on:
-      mongo:
-        condition: service_healthy
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
-    networks:
-      - micros-net
-
-  notification-service:
-    build:
-      context: .
-      dockerfile: notification-service/Dockerfile
-    container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-notification-service
-    ports:
-      - "${NOTIFICATION_SERVICE_HEALTH_PORT:-10008}:3000"
-      - "${NOTIFICATION_SERVICE_GRPC_PORT:-50052}:3001"
-    environment:
-      - PORT=3000
-      - ENVIRONMENT=${ENVIRONMENT:-prod}
-      - MONGODB_URI=${NOTIFICATION_MONGODB_URI:-mongodb://mongo:27017}
-      - MONGODB_DATABASE=${NOTIFICATION_MONGODB_DATABASE:-notification_db}
-      - RUST_LOG=${LOG_LEVEL:-info}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
-      # SMTP Configuration
-      - SMTP_HOST=${NOTIFICATION_SMTP_HOST:-smtp.gmail.com}
-      - SMTP_PORT=${NOTIFICATION_SMTP_PORT:-587}
-      - SMTP_USER=${NOTIFICATION_SMTP_USER}
-      - SMTP_PASSWORD=${NOTIFICATION_SMTP_PASSWORD}
-      - SMTP_FROM_EMAIL=${NOTIFICATION_SMTP_FROM_EMAIL:-noreply@example.com}
-      - SMTP_FROM_NAME=${NOTIFICATION_SMTP_FROM_NAME:-Notification Service}
-      - SMTP_ENABLED=${NOTIFICATION_SMTP_ENABLED:-false}
-      # Msg91 SMS Configuration
-      - MSG91_AUTH_KEY=${NOTIFICATION_MSG91_AUTH_KEY}
-      - MSG91_SENDER_ID=${NOTIFICATION_MSG91_SENDER_ID}
-      - MSG91_ENABLED=${NOTIFICATION_MSG91_ENABLED:-false}
-      # FCM Push Configuration
-      - FCM_PROJECT_ID=${NOTIFICATION_FCM_PROJECT_ID}
-      - FCM_SERVICE_ACCOUNT_KEY=${NOTIFICATION_FCM_SERVICE_ACCOUNT_KEY}
-      - FCM_ENABLED=${NOTIFICATION_FCM_ENABLED:-false}
-    labels:
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=3000"
-      - "prometheus.io/path=/health"
-    depends_on:
-      mongo:
-        condition: service_healthy
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
-    networks:
-      - micros-net
-
 networks:
   micros-net:
     driver: bridge
@@ -327,6 +393,8 @@ volumes:
     name: ${COMPOSE_PROJECT_NAME:-micros-prod}_tempo_data
   grafana_data:
     name: ${COMPOSE_PROJECT_NAME:-micros-prod}_grafana_data
+  postgres_data:
+    name: ${COMPOSE_PROJECT_NAME:-micros-prod}_postgres_data
   mongo_data:
     name: ${COMPOSE_PROJECT_NAME:-micros-prod}_mongo_data
   redis_data:

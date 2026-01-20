@@ -123,9 +123,10 @@ impl Application {
         })?;
         let http_port = http_listener.local_addr()?.port();
 
-        // Bind gRPC listener (port 0 = random port for testing)
-        let grpc_listener = TcpListener::bind("0.0.0.0:0").await.map_err(|e| {
-            tracing::error!("Failed to bind gRPC listener: {}", e);
+        // Bind gRPC listener
+        let grpc_addr = SocketAddr::from(([0, 0, 0, 0], config.server.grpc_port));
+        let grpc_listener = TcpListener::bind(grpc_addr).await.map_err(|e| {
+            tracing::error!("Failed to bind gRPC listener to {}: {}", grpc_addr, e);
             AppError::from(e)
         })?;
         let grpc_port = grpc_listener.local_addr()?.port();

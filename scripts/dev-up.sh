@@ -1,5 +1,5 @@
 #!/bin/bash
-# Start development stack (MongoDB/Redis on host)
+# Start development stack (PostgreSQL/MongoDB/Redis on host)
 
 set -e
 
@@ -39,7 +39,7 @@ if [ -n "$NO_CACHE_FLAG" ]; then
 fi
 
 echo -e "${GREEN}Starting Micros Development Stack${NC}"
-echo "MongoDB and Redis should be running on your host machine"
+echo "PostgreSQL, MongoDB, and Redis should be running on your host machine"
 echo ""
 
 if [ -n "$REBUILD_FLAG" ]; then
@@ -69,7 +69,17 @@ if [ ! -f auth-service/keys/private.pem ]; then
     echo -e "${GREEN}JWT keys generated${NC}"
 fi
 
-# Check if MongoDB is accessible
+# Check if PostgreSQL is accessible (for auth-service)
+echo "Checking host PostgreSQL connection..."
+if nc -z localhost 5432 2>/dev/null; then
+    echo -e "${GREEN}✓ PostgreSQL is accessible on port 5432${NC}"
+else
+    echo -e "${RED}✗ PostgreSQL is not accessible on port 5432${NC}"
+    echo "Please start PostgreSQL on your host machine first (required by auth-service)"
+    exit 1
+fi
+
+# Check if MongoDB is accessible (for document/notification/payment services)
 echo "Checking host MongoDB connection..."
 if nc -z localhost 27017 2>/dev/null; then
     echo -e "${GREEN}✓ MongoDB is accessible on port 27017${NC}"
@@ -97,17 +107,29 @@ echo ""
 echo -e "${GREEN}Services started!${NC}"
 echo ""
 echo "Access points (Dev: ports 9000-9009):"
-echo "  - Auth Service:      http://localhost:9005"
-echo "  - Secure Frontend:   http://localhost:9006"
-echo "  - Document Service:  http://localhost:9007"
-echo "  - Prometheus:        http://localhost:9000"
-echo "  - Loki:              http://localhost:9001"
-echo "  - Grafana:           http://localhost:9002 (admin/admin)"
-echo "  - Tempo:             http://localhost:9003"
+echo "  Health Endpoints:"
+echo "    - Auth Service:         http://localhost:9005/health"
+echo "    - Secure Frontend:      http://localhost:9006"
+echo "    - Document Service:     http://localhost:9007/health"
+echo "    - Notification Service: http://localhost:9008/health"
+echo "    - Payment Service:      http://localhost:9009/health"
+echo ""
+echo "  gRPC Endpoints:"
+echo "    - Auth Service:         localhost:50051"
+echo "    - Document Service:     localhost:50052"
+echo "    - Notification Service: localhost:50053"
+echo "    - Payment Service:      localhost:50054"
+echo ""
+echo "  Observability:"
+echo "    - Prometheus:           http://localhost:9000"
+echo "    - Loki:                 http://localhost:9001"
+echo "    - Grafana:              http://localhost:9002 (admin/admin)"
+echo "    - Tempo:                http://localhost:9003"
 echo ""
 echo "Databases (on host machine):"
-echo "  - MongoDB:           localhost:27017"
-echo "  - Redis:             localhost:6379"
+echo "  - PostgreSQL:          localhost:5432  (auth-service)"
+echo "  - MongoDB:             localhost:27017 (document/notification/payment)"
+echo "  - Redis:               localhost:6379  (all services)"
 echo ""
 echo "View logs:"
 echo "  docker-compose -f docker-compose.dev.yml logs -f"
