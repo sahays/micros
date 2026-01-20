@@ -22,9 +22,24 @@ async fn main() -> anyhow::Result<()> {
 
     secure_frontend::services::metrics::init_metrics();
 
-    // Initialize service clients
-    let auth_client = Arc::new(AuthClient::new(configuration.auth_service.clone()));
-    let document_client = Arc::new(DocumentClient::new(configuration.document_service.clone()));
+    // Initialize gRPC service clients
+    let auth_client = Arc::new(
+        AuthClient::new(configuration.auth_service.clone())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to initialize auth client: {}", e);
+                anyhow::anyhow!("Auth client initialization failed: {}", e)
+            })?,
+    );
+
+    let document_client = Arc::new(
+        DocumentClient::new(configuration.document_service.clone())
+            .await
+            .map_err(|e| {
+                tracing::error!("Failed to initialize document client: {}", e);
+                anyhow::anyhow!("Document client initialization failed: {}", e)
+            })?,
+    );
 
     // Create shared application state
     let app_state = AppState::new(auth_client, document_client);

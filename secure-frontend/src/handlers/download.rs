@@ -26,10 +26,10 @@ pub struct SignedUrlResponse {
     pub expires_in_seconds: i64,
 }
 
-/// Download a document by proxying to document-service
+/// Download a document by proxying to document-service via gRPC
 ///
-/// This endpoint proxies the authenticated user's request to document-service
-/// with proper HMAC authentication. The document-service validates ownership.
+/// This endpoint proxies the authenticated user's request to document-service.
+/// The document-service validates ownership via tenant context in gRPC metadata.
 pub async fn download_document(
     State(state): State<AppState>,
     auth_user: AuthUser,
@@ -38,11 +38,11 @@ pub async fn download_document(
     tracing::info!(
         user_id = %auth_user.user_id,
         document_id = %document_id,
-        "Document download request"
+        "Document download request via gRPC"
     );
 
-    // Use DocumentClient to download with HMAC authentication
-    let response = state
+    // Use gRPC DocumentClient to download
+    let (filename, content_type, file_data) = state
         .document_client
         .download_document(&auth_user.user_id, &document_id)
         .await
@@ -51,54 +51,21 @@ pub async fn download_document(
                 user_id = %auth_user.user_id,
                 document_id = %document_id,
                 error = %e,
-                "Failed to download document"
+                "Failed to download document via gRPC"
             );
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    // Check if document-service returned success
-    if !response.status().is_success() {
-        let status = response.status();
-        tracing::warn!(
-            user_id = %auth_user.user_id,
-            document_id = %document_id,
-            status = %status,
-            "Document download failed"
-        );
-        return Err(status);
-    }
-
-    // Get content from document-service
-    let content_type = response
-        .headers()
-        .get("content-type")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("application/octet-stream")
-        .to_string();
-
-    let content_disposition = response
-        .headers()
-        .get("content-disposition")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("attachment")
-        .to_string();
-
-    let file_data = response.bytes().await.map_err(|e| {
-        tracing::error!(
-            user_id = %auth_user.user_id,
-            document_id = %document_id,
-            error = %e,
-            "Failed to read document bytes"
-        );
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-
     tracing::info!(
         user_id = %auth_user.user_id,
         document_id = %document_id,
+        filename = %filename,
         size = file_data.len(),
-        "Document download completed"
+        "Document download completed via gRPC"
     );
+
+    // Build content-disposition header
+    let content_disposition = format!("attachment; filename=\"{}\"", filename);
 
     // Return file to user
     Ok((
@@ -136,8 +103,8 @@ pub async fn generate_signed_url(
         "Generating signed URL"
     );
 
-    // First, verify the user owns this document by fetching its status
-    let status_response = state
+    // First, verify the user owns this document by fetching its metadata via gRPC
+    let _doc = state
         .document_client
         .get_document(&auth_user.user_id, &document_id)
         .await
@@ -146,20 +113,15 @@ pub async fn generate_signed_url(
                 user_id = %auth_user.user_id,
                 document_id = %document_id,
                 error = %e,
-                "Failed to verify document ownership"
+                "Failed to verify document ownership via gRPC"
             );
-            StatusCode::INTERNAL_SERVER_ERROR
+            // Return NOT_FOUND for document not found, INTERNAL_SERVER_ERROR for other errors
+            if e.to_string().contains("not found") {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
         })?;
-
-    if !status_response.status().is_success() {
-        tracing::warn!(
-            user_id = %auth_user.user_id,
-            document_id = %document_id,
-            status = %status_response.status(),
-            "Document not found or access denied"
-        );
-        return Err(status_response.status());
-    }
 
     // Generate signature using service-core utilities
     let signature = generate_document_signature(
@@ -235,7 +197,8 @@ pub async fn download_with_signature(
         StatusCode::UNAUTHORIZED
     })?;
 
-    // Forward to document-service with signature
+    // Forward to document-service with signature (using HTTP for signed URL downloads)
+    // This is kept as HTTP because signed URLs are designed to work without authentication
     let url = format!(
         "{}/documents/{}/content?signature={}&expires={}",
         state.document_client.settings.url, document_id, params.signature, params.expires

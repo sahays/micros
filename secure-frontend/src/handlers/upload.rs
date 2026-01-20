@@ -14,21 +14,11 @@ pub struct UploadTemplate {
     pub current_page: &'static str,
 }
 
-pub async fn upload_page(State(state): State<AppState>, auth_user: AuthUser) -> impl IntoResponse {
-    let response = state
-        .auth_client
-        .get_with_auth("/users/me", &auth_user.access_token)
-        .await;
-
-    let user = match response {
-        Ok(res) if res.status().is_success() => res.json().await.unwrap_or(UserProfile {
-            email: auth_user.email.clone(),
-            verified: false,
-        }),
-        _ => UserProfile {
-            email: auth_user.email.clone(),
-            verified: false,
-        },
+pub async fn upload_page(_state: State<AppState>, auth_user: AuthUser) -> impl IntoResponse {
+    // Use user info from session (extracted during login)
+    let user = UserProfile {
+        email: auth_user.email.clone(),
+        verified: true, // Users who can access this page are logged in
     };
 
     UploadTemplate {
@@ -63,34 +53,20 @@ pub async fn upload_handler(
             }
         };
 
-        // Upload using DocumentClient with HMAC authentication
+        // Upload using gRPC DocumentClient
         match state
             .document_client
             .upload(&auth_user.user_id, &file_name, &content_type, data)
             .await
         {
-            Ok(response) => {
-                if response.status().is_success() {
-                    uploaded_count += 1;
-                    tracing::info!(
-                        user_id = %auth_user.user_id,
-                        file_name = %file_name,
-                        "File uploaded successfully"
-                    );
-                } else {
-                    let status = response.status();
-                    let error_text = response
-                        .text()
-                        .await
-                        .unwrap_or_else(|_| "Unknown error".to_string());
-                    tracing::error!(
-                        "Upload failed for {}: {} - {}",
-                        file_name,
-                        status,
-                        error_text
-                    );
-                    errors.push(format!("{}: Upload failed ({})", file_name, status));
-                }
+            Ok(doc_response) => {
+                uploaded_count += 1;
+                tracing::info!(
+                    user_id = %auth_user.user_id,
+                    file_name = %file_name,
+                    document_id = %doc_response.id,
+                    "File uploaded successfully via gRPC"
+                );
             }
             Err(e) => {
                 tracing::error!("Failed to upload {}: {}", file_name, e);

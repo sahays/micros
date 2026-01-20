@@ -43,34 +43,24 @@ pub async fn login_handler(
     session: Session,
     Form(payload): Form<LoginRequest>,
 ) -> impl IntoResponse {
-    let response = state
+    // Use gRPC client for login
+    let result = state
         .auth_client
-        .post(
-            "/auth/login",
-            serde_json::json!({
-                "email": payload.email,
-                "password": payload.password,
-            }),
-        )
+        .login(&payload.email, &payload.password)
         .await;
 
-    match response {
-        Ok(res) if res.status().is_success() => {
-            let tokens: serde_json::Value = res.json().await.unwrap_or_default();
-
-            let access_token = tokens["access_token"].as_str().unwrap_or_default();
-
-            // Extract user_id and email from JWT for session storage and service propagation
-            // We trust the token since it came from auth-service via HMAC-signed request
-            match decode_jwt_claims(access_token) {
+    match result {
+        Ok(login_result) => {
+            // Extract user_id and email from JWT for session storage
+            match decode_jwt_claims(&login_result.access_token) {
                 Ok(claims) => {
                     // Store tokens and user context in session
-                    session.insert("access_token", access_token).await.unwrap();
                     session
-                        .insert(
-                            "refresh_token",
-                            tokens["refresh_token"].as_str().unwrap_or_default(),
-                        )
+                        .insert("access_token", &login_result.access_token)
+                        .await
+                        .unwrap();
+                    session
+                        .insert("refresh_token", &login_result.refresh_token)
                         .await
                         .unwrap();
 
@@ -81,7 +71,7 @@ pub async fn login_handler(
                     tracing::info!(
                         user_id = %claims.sub,
                         email = %claims.email,
-                        "User logged in successfully"
+                        "User logged in successfully via gRPC"
                     );
 
                     // HTMX Redirect to dashboard
@@ -99,7 +89,8 @@ pub async fn login_handler(
                 }
             }
         }
-        _ => {
+        Err(e) => {
+            tracing::warn!(email = %payload.email, error = %e, "Login failed");
             // Return error fragment for HTMX
             (
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -114,25 +105,19 @@ pub async fn register_handler(
     State(state): State<AppState>,
     Form(payload): Form<RegisterRequest>,
 ) -> impl IntoResponse {
-    let response = state
+    // Use gRPC client for registration
+    let result = state
         .auth_client
-        .post(
-            "/auth/register",
-            serde_json::json!({
-                "email": payload.email,
-                "password": payload.password,
-            }),
-        )
+        .register(&payload.email, &payload.password, None)
         .await;
 
-    match response {
-        Ok(res) if res.status().is_success() => {
+    match result {
+        Ok(_) => {
             (StatusCode::OK, Html("<p class='text-emerald-500 text-sm'>Registration successful! Please check your email.</p>")).into_response()
         }
-        Ok(res) => {
-            let status = res.status();
-            let error_msg = res.text().await.unwrap_or_else(|_| "Registration failed".to_string());
-            tracing::warn!("Registration failed with status {}: {}", status, error_msg);
+        Err(e) => {
+            let error_msg = e.to_string();
+            tracing::warn!(email = %payload.email, error = %error_msg, "Registration failed");
 
             // Try to extract useful error message
             let display_msg = if error_msg.contains("already exists") || error_msg.contains("already in use") {
@@ -147,31 +132,18 @@ pub async fn register_handler(
 
             (StatusCode::UNPROCESSABLE_ENTITY, Html(format!("<p class='text-red-500 text-sm'>{}</p>", display_msg))).into_response()
         }
-        Err(e) => {
-            tracing::error!("Registration request failed: {}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Html("<p class='text-red-500 text-sm'>Unable to connect to authentication service.</p>")).into_response()
-        }
     }
 }
 
 pub async fn logout_handler(State(state): State<AppState>, session: Session) -> impl IntoResponse {
-    // Get access token before clearing session
-    if let Some(access_token) = session.get::<String>("access_token").await.unwrap_or(None) {
-        // Attempt to revoke token via auth-service
+    // Get refresh token before clearing session (gRPC logout uses refresh_token)
+    if let Some(refresh_token) = session.get::<String>("refresh_token").await.unwrap_or(None) {
+        // Attempt to revoke token via gRPC
         // We don't fail the logout if this fails - just log the error
-        if let Err(e) = state
-            .auth_client
-            .post(
-                "/auth/logout",
-                serde_json::json!({
-                    "token": access_token
-                }),
-            )
-            .await
-        {
+        if let Err(e) = state.auth_client.logout(&refresh_token).await {
             tracing::error!("Failed to revoke token during logout: {}", e);
         } else {
-            tracing::info!("Token revoked successfully");
+            tracing::info!("Token revoked successfully via gRPC");
         }
     }
 
@@ -220,34 +192,24 @@ pub async fn google_oauth_callback(
 ) -> impl IntoResponse {
     tracing::info!("Processing Google OAuth callback");
 
-    // Exchange authorization code for tokens via auth-service
-    let response = state
+    // Exchange authorization code for tokens via HTTP (OAuth requires HTTP for browser flows)
+    let result = state
         .auth_client
-        .post(
-            "/auth/social/google/callback",
-            serde_json::json!({
-                "code": params.code,
-                "state": params.state,
-            }),
-        )
+        .oauth_callback(&params.code, params.state.as_deref())
         .await;
 
-    match response {
-        Ok(res) if res.status().is_success() => {
-            let tokens: serde_json::Value = res.json().await.unwrap_or_default();
-
-            let access_token = tokens["access_token"].as_str().unwrap_or_default();
-
+    match result {
+        Ok(oauth_result) => {
             // Extract user_id and email from JWT for session storage
-            match decode_jwt_claims(access_token) {
+            match decode_jwt_claims(&oauth_result.access_token) {
                 Ok(claims) => {
                     // Store tokens and user context in session
-                    session.insert("access_token", access_token).await.unwrap();
                     session
-                        .insert(
-                            "refresh_token",
-                            tokens["refresh_token"].as_str().unwrap_or_default(),
-                        )
+                        .insert("access_token", &oauth_result.access_token)
+                        .await
+                        .unwrap();
+                    session
+                        .insert("refresh_token", &oauth_result.refresh_token)
                         .await
                         .unwrap();
 
@@ -256,10 +218,10 @@ pub async fn google_oauth_callback(
                     session.insert("email", &claims.email).await.unwrap();
 
                     // Store name and picture if available from OAuth
-                    if let Some(name) = tokens["name"].as_str() {
+                    if let Some(name) = &oauth_result.name {
                         session.insert("name", name).await.unwrap();
                     }
-                    if let Some(picture) = tokens["picture"].as_str() {
+                    if let Some(picture) = &oauth_result.picture {
                         session.insert("picture", picture).await.unwrap();
                     }
 
@@ -278,14 +240,9 @@ pub async fn google_oauth_callback(
                 }
             }
         }
-        Ok(res) => {
-            let status = res.status();
-            tracing::error!("OAuth callback failed with status: {}", status);
-            Redirect::to("/login?error=oauth_failed").into_response()
-        }
         Err(e) => {
-            tracing::error!("Failed to call auth-service OAuth callback: {}", e);
-            Redirect::to("/login?error=service_error").into_response()
+            tracing::error!("OAuth callback failed: {}", e);
+            Redirect::to("/login?error=oauth_failed").into_response()
         }
     }
 }

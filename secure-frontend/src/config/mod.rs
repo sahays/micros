@@ -17,16 +17,54 @@ pub struct ServerSettings {
 
 #[derive(Deserialize, Clone)]
 pub struct AuthServiceSettings {
+    /// HTTP URL for OAuth redirects (browser-accessible).
     pub url: String,
-    pub public_url: String, // URL accessible from browser (e.g., localhost:9005)
+    /// URL accessible from browser for OAuth flows (e.g., localhost:9005).
+    pub public_url: String,
+    /// gRPC endpoint for internal service calls (e.g., http://auth-service:50051).
+    #[serde(default = "default_auth_grpc_url")]
+    pub grpc_url: String,
+    /// Default tenant slug for BFF operations.
+    #[serde(default = "default_tenant_slug")]
+    pub default_tenant_slug: String,
+}
+
+fn default_auth_grpc_url() -> String {
+    "http://localhost:50051".to_string()
+}
+
+fn default_tenant_slug() -> String {
+    "default".to_string()
 }
 
 #[derive(Deserialize, Clone)]
 pub struct DocumentServiceSettings {
+    /// HTTP URL (kept for backward compatibility, may be removed).
     pub url: String,
+    /// gRPC endpoint for internal service calls (e.g., http://document-service:8081).
+    #[serde(default = "default_document_grpc_url")]
+    pub grpc_url: String,
     /// Secret used for generating signed shareable URLs for documents.
     /// This is NOT for KYS authentication - it's for time-limited public download links.
     pub document_signing_secret: Secret<String>,
+    /// Default app_id for document operations.
+    #[serde(default = "default_app_id")]
+    pub default_app_id: String,
+    /// Default org_id for document operations.
+    #[serde(default = "default_org_id")]
+    pub default_org_id: String,
+}
+
+fn default_document_grpc_url() -> String {
+    "http://localhost:50053".to_string()
+}
+
+fn default_app_id() -> String {
+    "secure-frontend".to_string()
+}
+
+fn default_org_id() -> String {
+    "default".to_string()
 }
 
 pub fn get_configuration() -> Result<Settings, config::ConfigError> {
