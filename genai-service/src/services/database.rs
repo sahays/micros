@@ -3,6 +3,7 @@
 //! Handles session management and usage tracking via MongoDB.
 
 use crate::models::{Session, UsageRecord};
+use crate::services::metrics::{record_db_error, record_db_operation};
 use futures::TryStreamExt;
 use mongodb::{
     bson::{doc, DateTime as BsonDateTime},
@@ -10,6 +11,7 @@ use mongodb::{
     Client as MongoClient, Collection, Database, IndexModel,
 };
 use service_core::error::AppError;
+use std::time::Instant;
 
 #[derive(Clone)]
 pub struct GenaiDb {
@@ -18,19 +20,33 @@ pub struct GenaiDb {
 }
 
 impl GenaiDb {
+    #[tracing::instrument(skip_all, fields(database = %database))]
     pub async fn connect(uri: &str, database: &str) -> Result<Self, AppError> {
-        tracing::info!(uri = %uri, "Connecting to MongoDB");
+        tracing::info!("Connecting to MongoDB");
+        let start = Instant::now();
+
         let client = MongoClient::with_uri_str(uri).await.map_err(|e| {
-            tracing::error!("Failed to connect to MongoDB at {}: {}", uri, e);
+            tracing::error!(error = %e, "Failed to connect to MongoDB");
+            record_db_error("connect", "admin");
             AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
         })?;
+
         let db = client.database(database);
-        tracing::info!(database = %database, "Successfully connected to MongoDB database");
+        let duration = start.elapsed();
+
+        record_db_operation("connect", "admin", duration.as_secs_f64());
+        tracing::info!(
+            duration_ms = duration.as_millis(),
+            "Successfully connected to MongoDB"
+        );
+
         Ok(Self { client, db })
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn initialize_indexes(&self) -> Result<(), AppError> {
         tracing::info!("Creating MongoDB indexes for genai-service");
+        let start = Instant::now();
 
         // Session indexes
         self.create_session_indexes().await?;
@@ -38,10 +54,16 @@ impl GenaiDb {
         // Usage indexes
         self.create_usage_indexes().await?;
 
-        tracing::info!("Successfully created all MongoDB indexes");
+        let duration = start.elapsed();
+        tracing::info!(
+            duration_ms = duration.as_millis(),
+            "Successfully created all MongoDB indexes"
+        );
+
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn create_session_indexes(&self) -> Result<(), AppError> {
         let sessions = self.sessions();
 
@@ -60,7 +82,8 @@ impl GenaiDb {
             .create_index(session_id_index, None)
             .await
             .map_err(|e| {
-                tracing::error!("Failed to create session_id index: {}", e);
+                tracing::error!(error = %e, index = "session_id_idx", "Failed to create index");
+                record_db_error("create_index", "sessions");
                 AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
             })?;
 
@@ -78,7 +101,8 @@ impl GenaiDb {
             .create_index(tenant_id_index, None)
             .await
             .map_err(|e| {
-                tracing::error!("Failed to create tenant_id index: {}", e);
+                tracing::error!(error = %e, index = "tenant_id_idx", "Failed to create index");
+                record_db_error("create_index", "sessions");
                 AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
             })?;
 
@@ -96,7 +120,8 @@ impl GenaiDb {
             .create_index(user_id_index, None)
             .await
             .map_err(|e| {
-                tracing::error!("Failed to create user_id index: {}", e);
+                tracing::error!(error = %e, index = "user_id_idx", "Failed to create index");
+                record_db_error("create_index", "sessions");
                 AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
             })?;
 
@@ -114,13 +139,15 @@ impl GenaiDb {
             .create_index(created_at_index, None)
             .await
             .map_err(|e| {
-                tracing::error!("Failed to create created_at index: {}", e);
+                tracing::error!(error = %e, index = "created_at_idx", "Failed to create index");
+                record_db_error("create_index", "sessions");
                 AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
             })?;
 
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn create_usage_indexes(&self) -> Result<(), AppError> {
         let usage = self.usage();
 
@@ -138,7 +165,8 @@ impl GenaiDb {
             .create_index(tenant_time_index, None)
             .await
             .map_err(|e| {
-                tracing::error!("Failed to create tenant_time index: {}", e);
+                tracing::error!(error = %e, index = "tenant_time_idx", "Failed to create index");
+                record_db_error("create_index", "usage");
                 AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
             })?;
 
@@ -156,7 +184,8 @@ impl GenaiDb {
             .create_index(user_time_index, None)
             .await
             .map_err(|e| {
-                tracing::error!("Failed to create user_time index: {}", e);
+                tracing::error!(error = %e, index = "user_time_idx", "Failed to create index");
+                record_db_error("create_index", "usage");
                 AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
             })?;
 
@@ -171,23 +200,33 @@ impl GenaiDb {
             .build();
 
         usage.create_index(model_index, None).await.map_err(|e| {
-            tracing::error!("Failed to create model index: {}", e);
+            tracing::error!(error = %e, index = "model_idx", "Failed to create index");
+            record_db_error("create_index", "usage");
             AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
         })?;
 
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     pub async fn health_check(&self) -> Result<(), AppError> {
-        self.client
+        let start = Instant::now();
+
+        let result = self
+            .client
             .database("admin")
             .run_command(doc! { "ping": 1 }, None)
             .await
             .map_err(|e| {
-                tracing::error!("MongoDB health check failed: {}", e);
+                tracing::error!(error = %e, "MongoDB health check failed");
+                record_db_error("ping", "admin");
                 AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
-            })?;
-        Ok(())
+            });
+
+        let duration = start.elapsed();
+        record_db_operation("ping", "admin", duration.as_secs_f64());
+
+        result.map(|_| ())
     }
 
     // Collection accessors
@@ -202,27 +241,56 @@ impl GenaiDb {
 
     // Session operations
 
+    #[tracing::instrument(skip(self, session), fields(session_id = %session.session_id))]
     pub async fn insert_session(&self, session: &Session) -> Result<(), AppError> {
-        self.sessions()
+        let start = Instant::now();
+
+        let result = self
+            .sessions()
             .insert_one(session, None)
             .await
             .map_err(|e| {
-                tracing::error!("Failed to insert session: {}", e);
+                tracing::error!(error = %e, "Failed to insert session");
+                record_db_error("insert", "sessions");
                 AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
-            })?;
-        Ok(())
+            });
+
+        let duration = start.elapsed();
+        record_db_operation("insert", "sessions", duration.as_secs_f64());
+
+        tracing::debug!(duration_ms = duration.as_millis(), "Session inserted");
+        result.map(|_| ())
     }
 
+    #[tracing::instrument(skip(self), fields(session_id = %session_id))]
     pub async fn find_session(&self, session_id: &str) -> Result<Option<Session>, AppError> {
-        self.sessions()
+        let start = Instant::now();
+
+        let result = self
+            .sessions()
             .find_one(doc! { "session_id": session_id }, None)
             .await
             .map_err(|e| {
-                tracing::error!("Failed to find session: {}", e);
+                tracing::error!(error = %e, "Failed to find session");
+                record_db_error("find_one", "sessions");
                 AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
-            })
+            });
+
+        let duration = start.elapsed();
+        record_db_operation("find_one", "sessions", duration.as_secs_f64());
+
+        if let Ok(ref session) = result {
+            tracing::debug!(
+                duration_ms = duration.as_millis(),
+                found = session.is_some(),
+                "Session lookup completed"
+            );
+        }
+
+        result
     }
 
+    #[tracing::instrument(skip(self), fields(session_id = %session_id))]
     pub async fn update_session(
         &self,
         session_id: &str,
@@ -230,9 +298,11 @@ impl GenaiDb {
         total_input_tokens: i32,
         total_output_tokens: i32,
     ) -> Result<(), AppError> {
+        let start = Instant::now();
         let now = BsonDateTime::now();
 
-        self.sessions()
+        let result = self
+            .sessions()
             .update_one(
                 doc! { "session_id": session_id },
                 doc! {
@@ -247,27 +317,52 @@ impl GenaiDb {
             )
             .await
             .map_err(|e| {
-                tracing::error!("Failed to update session: {}", e);
+                tracing::error!(error = %e, "Failed to update session");
+                record_db_error("update_one", "sessions");
                 AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
-            })?;
+            });
 
-        Ok(())
+        let duration = start.elapsed();
+        record_db_operation("update_one", "sessions", duration.as_secs_f64());
+
+        tracing::debug!(
+            duration_ms = duration.as_millis(),
+            message_count = message_count,
+            "Session updated"
+        );
+
+        result.map(|_| ())
     }
 
+    #[tracing::instrument(skip(self), fields(session_id = %session_id))]
     pub async fn delete_session(&self, session_id: &str) -> Result<bool, AppError> {
+        let start = Instant::now();
+
         let result = self
             .sessions()
             .delete_one(doc! { "session_id": session_id }, None)
             .await
             .map_err(|e| {
-                tracing::error!("Failed to delete session: {}", e);
+                tracing::error!(error = %e, "Failed to delete session");
+                record_db_error("delete_one", "sessions");
                 AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
             })?;
 
-        Ok(result.deleted_count > 0)
+        let duration = start.elapsed();
+        record_db_operation("delete_one", "sessions", duration.as_secs_f64());
+
+        let deleted = result.deleted_count > 0;
+        tracing::debug!(
+            duration_ms = duration.as_millis(),
+            deleted = deleted,
+            "Session delete completed"
+        );
+
+        Ok(deleted)
     }
 
     /// Add a message to an existing session and update usage.
+    #[tracing::instrument(skip(self, message), fields(session_id = %session_id, input_tokens, output_tokens))]
     pub async fn add_session_message(
         &self,
         session_id: &str,
@@ -275,15 +370,17 @@ impl GenaiDb {
         input_tokens: i32,
         output_tokens: i32,
     ) -> Result<(), AppError> {
+        let start = Instant::now();
         let now = BsonDateTime::now();
 
         // Convert message to BSON
         let message_doc = mongodb::bson::to_document(message).map_err(|e| {
-            tracing::error!("Failed to serialize message: {}", e);
+            tracing::error!(error = %e, "Failed to serialize message");
             AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
         })?;
 
-        self.sessions()
+        let result = self
+            .sessions()
             .update_one(
                 doc! { "session_id": session_id },
                 doc! {
@@ -299,23 +396,53 @@ impl GenaiDb {
             )
             .await
             .map_err(|e| {
-                tracing::error!("Failed to add message to session: {}", e);
+                tracing::error!(error = %e, "Failed to add message to session");
+                record_db_error("update_one", "sessions");
                 AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
-            })?;
+            });
 
-        Ok(())
+        let duration = start.elapsed();
+        record_db_operation("update_one", "sessions", duration.as_secs_f64());
+
+        tracing::debug!(
+            duration_ms = duration.as_millis(),
+            role = %message.role,
+            "Message added to session"
+        );
+
+        result.map(|_| ())
     }
 
     // Usage operations
 
+    #[tracing::instrument(skip(self, record), fields(
+        request_id = %record.request_id,
+        tenant_id = %record.tenant_id,
+        model = %record.model
+    ))]
     pub async fn record_usage(&self, record: &UsageRecord) -> Result<(), AppError> {
-        self.usage().insert_one(record, None).await.map_err(|e| {
-            tracing::error!("Failed to record usage: {}", e);
+        let start = Instant::now();
+
+        let result = self.usage().insert_one(record, None).await.map_err(|e| {
+            tracing::error!(error = %e, "Failed to record usage");
+            record_db_error("insert", "usage");
             AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
-        })?;
-        Ok(())
+        });
+
+        let duration = start.elapsed();
+        record_db_operation("insert", "usage", duration.as_secs_f64());
+
+        tracing::debug!(
+            duration_ms = duration.as_millis(),
+            input_tokens = record.input_tokens,
+            output_tokens = record.output_tokens,
+            "Usage recorded"
+        );
+
+        result.map(|_| ())
     }
 
+    #[tracing::instrument(skip(self), fields(tenant_id = ?tenant_id, user_id = ?user_id))]
     pub async fn get_usage(
         &self,
         tenant_id: Option<&str>,
@@ -323,6 +450,8 @@ impl GenaiDb {
         start_time: chrono::DateTime<chrono::Utc>,
         end_time: chrono::DateTime<chrono::Utc>,
     ) -> Result<Vec<UsageRecord>, AppError> {
+        let start = Instant::now();
+
         let mut filter = doc! {
             "timestamp": {
                 "$gte": BsonDateTime::from_millis(start_time.timestamp_millis()),
@@ -339,14 +468,25 @@ impl GenaiDb {
         }
 
         let cursor = self.usage().find(filter, None).await.map_err(|e| {
-            tracing::error!("Failed to query usage: {}", e);
+            tracing::error!(error = %e, "Failed to query usage");
+            record_db_error("find", "usage");
             AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
         })?;
 
         let records: Vec<UsageRecord> = cursor.try_collect().await.map_err(|e| {
-            tracing::error!("Failed to collect usage records: {}", e);
+            tracing::error!(error = %e, "Failed to collect usage records");
+            record_db_error("cursor_collect", "usage");
             AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
         })?;
+
+        let duration = start.elapsed();
+        record_db_operation("find", "usage", duration.as_secs_f64());
+
+        tracing::debug!(
+            duration_ms = duration.as_millis(),
+            record_count = records.len(),
+            "Usage query completed"
+        );
 
         Ok(records)
     }

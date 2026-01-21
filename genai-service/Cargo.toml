@@ -35,6 +35,9 @@ prost = { workspace = true }
 prost-types = { workspace = true }
 tokio-stream = "0.1"
 
+# Observability
+prometheus = "0.14.0"
+
 [build-dependencies]
 tonic-build = "0.12"
 

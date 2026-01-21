@@ -8,6 +8,10 @@ use crate::grpc::proto::{
     SessionMessage as ProtoSessionMessage, StreamComplete, TokenUsage,
 };
 use crate::models::{Session, SessionDocument, SessionMessage, UsageRecord};
+use crate::services::metrics::{
+    dec_grpc_in_flight, inc_grpc_in_flight, record_genai_request, record_grpc_request,
+    record_tokens,
+};
 use crate::services::providers::{
     DocumentContext, FinishReason as ProviderFinishReason, GenerationParams, ProviderError,
     StreamChunk,
@@ -17,6 +21,7 @@ use chrono::Utc;
 use futures::{Stream, StreamExt};
 use prost_types::Timestamp;
 use std::pin::Pin;
+use std::time::Instant;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
 
@@ -51,6 +56,16 @@ fn output_format_to_proto(format: OutputFormat) -> i32 {
     }
 }
 
+/// Convert output format to string for metrics.
+fn output_format_str(format: OutputFormat) -> &'static str {
+    match format {
+        OutputFormat::Text => "text",
+        OutputFormat::StructuredJson => "json",
+        OutputFormat::Audio => "audio",
+        OutputFormat::Video => "video",
+    }
+}
+
 /// Convert provider finish reason to proto enum.
 fn finish_reason_to_proto(reason: ProviderFinishReason) -> i32 {
     match reason {
@@ -61,18 +76,57 @@ fn finish_reason_to_proto(reason: ProviderFinishReason) -> i32 {
     }
 }
 
-/// Convert provider error to gRPC status.
-fn provider_error_to_status(error: ProviderError) -> Status {
-    match error {
-        ProviderError::NotConfigured(msg) => Status::failed_precondition(msg),
-        ProviderError::ApiError(msg) => Status::internal(format!("Provider API error: {}", msg)),
-        ProviderError::InvalidRequest(msg) => Status::invalid_argument(msg),
-        ProviderError::RateLimited => Status::resource_exhausted("Rate limited by AI provider"),
-        ProviderError::ContentFiltered => {
-            Status::invalid_argument("Content was filtered by AI provider safety settings")
-        }
-        ProviderError::NetworkError(msg) => Status::unavailable(format!("Network error: {}", msg)),
+/// Convert finish reason to string for metrics.
+fn finish_reason_str(reason: ProviderFinishReason) -> &'static str {
+    match reason {
+        ProviderFinishReason::Complete => "complete",
+        ProviderFinishReason::Length => "length",
+        ProviderFinishReason::ContentFilter => "content_filter",
+        ProviderFinishReason::Error => "error",
     }
+}
+
+/// Convert provider error to gRPC status with error classification.
+fn provider_error_to_status(error: ProviderError) -> Status {
+    let (code, message, error_type) = match &error {
+        ProviderError::NotConfigured(msg) => (
+            tonic::Code::FailedPrecondition,
+            msg.clone(),
+            "not_configured",
+        ),
+        ProviderError::ApiError(msg) => (
+            tonic::Code::Internal,
+            format!("Provider API error: {}", msg),
+            "api_error",
+        ),
+        ProviderError::InvalidRequest(msg) => {
+            (tonic::Code::InvalidArgument, msg.clone(), "invalid_request")
+        }
+        ProviderError::RateLimited => (
+            tonic::Code::ResourceExhausted,
+            "Rate limited by AI provider".to_string(),
+            "rate_limited",
+        ),
+        ProviderError::ContentFiltered => (
+            tonic::Code::InvalidArgument,
+            "Content was filtered by AI provider safety settings".to_string(),
+            "content_filtered",
+        ),
+        ProviderError::NetworkError(msg) => (
+            tonic::Code::Unavailable,
+            format!("Network error: {}", msg),
+            "network_error",
+        ),
+    };
+
+    tracing::error!(
+        error_type = error_type,
+        grpc_code = ?code,
+        error = %error,
+        "Provider error converted to gRPC status"
+    );
+
+    Status::new(code, message)
 }
 
 /// Convert proto document context to provider document context.
@@ -192,25 +246,57 @@ type ProcessStreamResult =
 impl GenAiService for GenaiGrpcService {
     type ProcessStreamStream = ProcessStreamResult;
 
-    #[tracing::instrument(skip(self, request), fields(prompt_len, output_format))]
+    #[tracing::instrument(
+        skip(self, request),
+        fields(
+            request_id,
+            tenant_id,
+            user_id,
+            model,
+            output_format,
+            prompt_len,
+            doc_count
+        )
+    )]
     async fn process(
         &self,
         request: Request<ProcessRequest>,
     ) -> Result<Response<ProcessResponse>, Status> {
+        let start = Instant::now();
+        let method = "Process";
+        inc_grpc_in_flight(method);
+
         let req = request.into_inner();
         let request_id = uuid::Uuid::new_v4().to_string();
 
+        // Record span fields
+        let span = tracing::Span::current();
+        span.record("request_id", &request_id);
+        if let Some(ref metadata) = req.metadata {
+            span.record("tenant_id", &metadata.tenant_id);
+            span.record("user_id", &metadata.user_id);
+        }
+        span.record("prompt_len", req.prompt.len());
+        span.record("doc_count", req.documents.len());
+
         // Validate request
         if req.prompt.is_empty() {
+            dec_grpc_in_flight(method);
+            record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
+            tracing::warn!(request_id = %request_id, "Empty prompt rejected");
             return Err(Status::invalid_argument("Prompt is required"));
         }
 
         let output_format = proto_to_output_format(req.output_format);
+        span.record("output_format", output_format_str(output_format));
 
         // For structured JSON, schema is required and must be valid JSON
         if output_format == OutputFormat::StructuredJson {
             match &req.output_schema {
                 None => {
+                    dec_grpc_in_flight(method);
+                    record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
+                    tracing::warn!(request_id = %request_id, "Missing output_schema for STRUCTURED_JSON");
                     return Err(Status::invalid_argument(
                         "output_schema is required for STRUCTURED_JSON output format",
                     ));
@@ -218,6 +304,13 @@ impl GenAiService for GenaiGrpcService {
                 Some(schema) => {
                     // Validate that the schema is valid JSON
                     if serde_json::from_str::<serde_json::Value>(schema).is_err() {
+                        dec_grpc_in_flight(method);
+                        record_grpc_request(
+                            method,
+                            "INVALID_ARGUMENT",
+                            start.elapsed().as_secs_f64(),
+                        );
+                        tracing::warn!(request_id = %request_id, "Invalid JSON schema");
                         return Err(Status::invalid_argument("output_schema must be valid JSON"));
                     }
                 }
@@ -230,9 +323,12 @@ impl GenAiService for GenaiGrpcService {
             .config
             .model_for_output(output_format)
             .to_string();
+        span.record("model", &model);
 
-        tracing::Span::current().record("prompt_len", req.prompt.len());
-        tracing::Span::current().record("output_format", format!("{:?}", output_format).as_str());
+        tracing::info!(
+            request_id = %request_id,
+            "Processing gRPC request"
+        );
 
         // Convert documents to provider format
         let documents: Vec<DocumentContext> = req
@@ -262,20 +358,25 @@ impl GenAiService for GenaiGrpcService {
         // Build generation params
         let params = build_generation_params(&req, output_format);
 
-        tracing::info!(
-            request_id = %request_id,
-            model = %model,
-            doc_count = enriched_documents.len(),
-            "Processing request with Gemini provider"
-        );
-
         // Call the provider
-        let provider_response = self
+        let provider_response = match self
             .state
             .text_provider
             .generate(&req.prompt, &enriched_documents, &params)
             .await
-            .map_err(provider_error_to_status)?;
+        {
+            Ok(response) => response,
+            Err(e) => {
+                dec_grpc_in_flight(method);
+                let status = provider_error_to_status(e);
+                record_grpc_request(
+                    method,
+                    status.code().description(),
+                    start.elapsed().as_secs_f64(),
+                );
+                return Err(status);
+            }
+        };
 
         // Build response based on output format
         let result = match output_format {
@@ -299,22 +400,33 @@ impl GenAiService for GenaiGrpcService {
             total_tokens: provider_response.input_tokens + provider_response.output_tokens,
         };
 
+        // Record metrics
+        record_tokens(
+            &model,
+            provider_response.input_tokens,
+            provider_response.output_tokens,
+        );
+        record_genai_request(
+            output_format_str(output_format),
+            &model,
+            finish_reason_str(provider_response.finish_reason),
+        );
+
+        let duration = start.elapsed();
+        dec_grpc_in_flight(method);
+        record_grpc_request(method, "OK", duration.as_secs_f64());
+
         tracing::info!(
             request_id = %request_id,
             input_tokens = provider_response.input_tokens,
             output_tokens = provider_response.output_tokens,
+            duration_ms = duration.as_millis(),
+            finish_reason = ?provider_response.finish_reason,
             "Request completed successfully"
         );
 
         // Record usage
         if let Some(ref metadata) = req.metadata {
-            let output_format_str = match output_format {
-                OutputFormat::Text => "text",
-                OutputFormat::StructuredJson => "json",
-                OutputFormat::Audio => "audio",
-                OutputFormat::Video => "video",
-            };
-
             let usage_record = UsageRecord::new(
                 request_id.clone(),
                 req.session_id.clone(),
@@ -323,7 +435,7 @@ impl GenAiService for GenaiGrpcService {
                 model.clone(),
                 provider_response.input_tokens,
                 provider_response.output_tokens,
-                output_format_str.to_string(),
+                output_format_str(output_format).to_string(),
                 metadata.tags.clone(),
             );
 
@@ -349,32 +461,70 @@ impl GenAiService for GenaiGrpcService {
         Ok(Response::new(response))
     }
 
-    #[tracing::instrument(skip(self, request))]
+    #[tracing::instrument(
+        skip(self, request),
+        fields(
+            request_id,
+            tenant_id,
+            user_id,
+            model,
+            output_format,
+            prompt_len,
+            doc_count
+        )
+    )]
     async fn process_stream(
         &self,
         request: Request<ProcessStreamRequest>,
     ) -> Result<Response<Self::ProcessStreamStream>, Status> {
+        let start = Instant::now();
+        let method = "ProcessStream";
+        inc_grpc_in_flight(method);
+
         let req = request.into_inner();
         let request_id = uuid::Uuid::new_v4().to_string();
 
+        // Record span fields
+        let span = tracing::Span::current();
+        span.record("request_id", &request_id);
+        if let Some(ref metadata) = req.metadata {
+            span.record("tenant_id", &metadata.tenant_id);
+            span.record("user_id", &metadata.user_id);
+        }
+        span.record("prompt_len", req.prompt.len());
+        span.record("doc_count", req.documents.len());
+
         // Validate request
         if req.prompt.is_empty() {
+            dec_grpc_in_flight(method);
+            record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
+            tracing::warn!(request_id = %request_id, "Empty prompt rejected");
             return Err(Status::invalid_argument("Prompt is required"));
         }
 
         let output_format = proto_to_output_format(req.output_format);
+        span.record("output_format", output_format_str(output_format));
 
         // For structured JSON, schema is required and must be valid JSON
         if output_format == OutputFormat::StructuredJson {
             match &req.output_schema {
                 None => {
+                    dec_grpc_in_flight(method);
+                    record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
+                    tracing::warn!(request_id = %request_id, "Missing output_schema for STRUCTURED_JSON");
                     return Err(Status::invalid_argument(
                         "output_schema is required for STRUCTURED_JSON output format",
                     ));
                 }
                 Some(schema) => {
-                    // Validate that the schema is valid JSON
                     if serde_json::from_str::<serde_json::Value>(schema).is_err() {
+                        dec_grpc_in_flight(method);
+                        record_grpc_request(
+                            method,
+                            "INVALID_ARGUMENT",
+                            start.elapsed().as_secs_f64(),
+                        );
+                        tracing::warn!(request_id = %request_id, "Invalid JSON schema");
                         return Err(Status::invalid_argument("output_schema must be valid JSON"));
                     }
                 }
@@ -386,6 +536,12 @@ impl GenAiService for GenaiGrpcService {
             .config
             .model_for_output(output_format)
             .to_string();
+        span.record("model", &model);
+
+        tracing::info!(
+            request_id = %request_id,
+            "Starting streaming gRPC request"
+        );
 
         // Convert documents to provider format
         let documents: Vec<DocumentContext> = req
@@ -415,20 +571,33 @@ impl GenAiService for GenaiGrpcService {
         // Build generation params
         let params = build_stream_generation_params(&req, output_format);
 
-        tracing::info!(
-            request_id = %request_id,
-            model = %model,
-            doc_count = enriched_documents.len(),
-            "Starting streaming request with Gemini provider"
-        );
-
         // Get streaming response from provider
-        let mut provider_stream = self
+        let mut provider_stream = match self
             .state
             .text_provider
             .generate_stream(&req.prompt, &enriched_documents, &params)
             .await
-            .map_err(provider_error_to_status)?;
+        {
+            Ok(stream) => stream,
+            Err(e) => {
+                dec_grpc_in_flight(method);
+                let status = provider_error_to_status(e);
+                record_grpc_request(
+                    method,
+                    status.code().description(),
+                    start.elapsed().as_secs_f64(),
+                );
+                return Err(status);
+            }
+        };
+
+        // Record initial connection time
+        let connect_duration = start.elapsed();
+        tracing::debug!(
+            request_id = %request_id,
+            duration_ms = connect_duration.as_millis(),
+            "Stream connection established"
+        );
 
         // Create channel for streaming responses
         let (tx, rx) = tokio::sync::mpsc::channel(32);
@@ -437,38 +606,79 @@ impl GenAiService for GenaiGrpcService {
         let session_id = req.session_id.clone();
         let model_clone = model.clone();
         let request_id_clone = request_id.clone();
+        let output_format_clone = output_format;
 
         // Spawn task to transform provider stream to gRPC stream
         tokio::spawn(async move {
+            let stream_start = Instant::now();
+            let mut chunk_count = 0u32;
+
             while let Some(chunk_result) = provider_stream.next().await {
                 let grpc_response = match chunk_result {
                     Ok(chunk) => match chunk {
-                        StreamChunk::Text(text) => Ok(ProcessStreamResponse {
-                            data: Some(
-                                crate::grpc::proto::process_stream_response::Data::TextChunk(text),
-                            ),
-                        }),
-                        StreamChunk::Audio(audio) => Ok(ProcessStreamResponse {
-                            data: Some(
-                                crate::grpc::proto::process_stream_response::Data::AudioChunk(
-                                    audio,
+                        StreamChunk::Text(text) => {
+                            chunk_count += 1;
+                            Ok(ProcessStreamResponse {
+                                data: Some(
+                                    crate::grpc::proto::process_stream_response::Data::TextChunk(
+                                        text,
+                                    ),
                                 ),
-                            ),
-                        }),
-                        StreamChunk::Video(video) => Ok(ProcessStreamResponse {
-                            data: Some(
-                                crate::grpc::proto::process_stream_response::Data::VideoChunk(
-                                    video,
+                            })
+                        }
+                        StreamChunk::Audio(audio) => {
+                            chunk_count += 1;
+                            Ok(ProcessStreamResponse {
+                                data: Some(
+                                    crate::grpc::proto::process_stream_response::Data::AudioChunk(
+                                        audio,
+                                    ),
                                 ),
-                            ),
-                        }),
+                            })
+                        }
+                        StreamChunk::Video(video) => {
+                            chunk_count += 1;
+                            Ok(ProcessStreamResponse {
+                                data: Some(
+                                    crate::grpc::proto::process_stream_response::Data::VideoChunk(
+                                        video,
+                                    ),
+                                ),
+                            })
+                        }
                         StreamChunk::Complete {
                             input_tokens,
                             output_tokens,
                             finish_reason,
                         } => {
+                            // Record metrics
+                            record_tokens(&model_clone, input_tokens, output_tokens);
+                            record_genai_request(
+                                output_format_str(output_format_clone),
+                                &model_clone,
+                                finish_reason_str(finish_reason),
+                            );
+
+                            let stream_duration = stream_start.elapsed();
+                            dec_grpc_in_flight("ProcessStream");
+                            record_grpc_request(
+                                "ProcessStream",
+                                "OK",
+                                stream_duration.as_secs_f64(),
+                            );
+
+                            tracing::info!(
+                                request_id = %request_id_clone,
+                                input_tokens = input_tokens,
+                                output_tokens = output_tokens,
+                                chunk_count = chunk_count,
+                                duration_ms = stream_duration.as_millis(),
+                                finish_reason = ?finish_reason,
+                                "Streaming request completed"
+                            );
+
                             let complete = StreamComplete {
-                                output_format: output_format_to_proto(output_format),
+                                output_format: output_format_to_proto(output_format_clone),
                                 model: model_clone.clone(),
                                 usage: Some(TokenUsage {
                                     input_tokens,
@@ -480,13 +690,6 @@ impl GenAiService for GenaiGrpcService {
                                 session_id: session_id.clone(),
                             };
 
-                            tracing::info!(
-                                request_id = %request_id_clone,
-                                input_tokens = input_tokens,
-                                output_tokens = output_tokens,
-                                "Streaming request completed"
-                            );
-
                             Ok(ProcessStreamResponse {
                                 data: Some(
                                     crate::grpc::proto::process_stream_response::Data::Complete(
@@ -497,6 +700,12 @@ impl GenAiService for GenaiGrpcService {
                         }
                     },
                     Err(e) => {
+                        dec_grpc_in_flight("ProcessStream");
+                        record_grpc_request(
+                            "ProcessStream",
+                            "INTERNAL",
+                            stream_start.elapsed().as_secs_f64(),
+                        );
                         tracing::error!(
                             request_id = %request_id_clone,
                             error = %e,
@@ -507,7 +716,11 @@ impl GenAiService for GenaiGrpcService {
                 };
 
                 if tx.send(grpc_response).await.is_err() {
-                    // Receiver dropped, stop processing
+                    tracing::debug!(
+                        request_id = %request_id_clone,
+                        "Client disconnected, stopping stream"
+                    );
+                    dec_grpc_in_flight("ProcessStream");
                     break;
                 }
             }
@@ -517,17 +730,28 @@ impl GenAiService for GenaiGrpcService {
         Ok(Response::new(Box::pin(stream) as Self::ProcessStreamStream))
     }
 
-    #[tracing::instrument(skip(self, request))]
+    #[tracing::instrument(skip(self, request), fields(tenant_id, user_id, session_id))]
     async fn create_session(
         &self,
         request: Request<CreateSessionRequest>,
     ) -> Result<Response<CreateSessionResponse>, Status> {
+        let start = Instant::now();
+        let method = "CreateSession";
+        inc_grpc_in_flight(method);
+
         let req = request.into_inner();
 
         // Extract metadata
-        let metadata = req
-            .metadata
-            .ok_or_else(|| Status::invalid_argument("metadata is required"))?;
+        let metadata = req.metadata.ok_or_else(|| {
+            dec_grpc_in_flight(method);
+            record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
+            tracing::warn!("CreateSession called without metadata");
+            Status::invalid_argument("metadata is required")
+        })?;
+
+        let span = tracing::Span::current();
+        span.record("tenant_id", &metadata.tenant_id);
+        span.record("user_id", &metadata.user_id);
 
         // Convert proto documents to session documents
         let documents: Vec<SessionDocument> = req
@@ -552,53 +776,73 @@ impl GenAiService for GenaiGrpcService {
             documents,
         );
 
-        tracing::info!(
-            session_id = %session.session_id,
-            tenant_id = %metadata.tenant_id,
-            user_id = %metadata.user_id,
-            "Creating session"
-        );
+        span.record("session_id", &session.session_id);
+
+        tracing::info!("Creating session");
 
         // Insert into database
-        self.state.db.insert_session(&session).await.map_err(|e| {
-            tracing::error!("Failed to create session: {}", e);
-            Status::internal(format!("Failed to create session: {}", e))
-        })?;
+        if let Err(e) = self.state.db.insert_session(&session).await {
+            dec_grpc_in_flight(method);
+            record_grpc_request(method, "INTERNAL", start.elapsed().as_secs_f64());
+            tracing::error!(error = %e, "Failed to create session");
+            return Err(Status::internal(format!("Failed to create session: {}", e)));
+        }
 
-        tracing::info!(session_id = %session.session_id, "Session created successfully");
+        let duration = start.elapsed();
+        dec_grpc_in_flight(method);
+        record_grpc_request(method, "OK", duration.as_secs_f64());
+
+        tracing::info!(
+            duration_ms = duration.as_millis(),
+            "Session created successfully"
+        );
 
         Ok(Response::new(CreateSessionResponse {
             session: Some(session_to_proto(&session)),
         }))
     }
 
-    #[tracing::instrument(skip(self, request))]
+    #[tracing::instrument(skip(self, request), fields(session_id))]
     async fn get_session(
         &self,
         request: Request<GetSessionRequest>,
     ) -> Result<Response<GetSessionResponse>, Status> {
+        let start = Instant::now();
+        let method = "GetSession";
+        inc_grpc_in_flight(method);
+
         let req = request.into_inner();
 
         if req.session_id.is_empty() {
+            dec_grpc_in_flight(method);
+            record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
+            tracing::warn!("GetSession called with empty session_id");
             return Err(Status::invalid_argument("session_id is required"));
         }
 
-        tracing::info!(
-            session_id = %req.session_id,
-            include_messages = req.include_messages,
-            "Getting session"
-        );
+        let span = tracing::Span::current();
+        span.record("session_id", &req.session_id);
 
-        let session = self
-            .state
-            .db
-            .find_session(&req.session_id)
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to get session: {}", e);
-                Status::internal(format!("Failed to get session: {}", e))
-            })?
-            .ok_or_else(|| Status::not_found(format!("Session not found: {}", req.session_id)))?;
+        tracing::info!(include_messages = req.include_messages, "Getting session");
+
+        let session = match self.state.db.find_session(&req.session_id).await {
+            Ok(Some(s)) => s,
+            Ok(None) => {
+                dec_grpc_in_flight(method);
+                record_grpc_request(method, "NOT_FOUND", start.elapsed().as_secs_f64());
+                tracing::warn!("Session not found");
+                return Err(Status::not_found(format!(
+                    "Session not found: {}",
+                    req.session_id
+                )));
+            }
+            Err(e) => {
+                dec_grpc_in_flight(method);
+                record_grpc_request(method, "INTERNAL", start.elapsed().as_secs_f64());
+                tracing::error!(error = %e, "Failed to get session");
+                return Err(Status::internal(format!("Failed to get session: {}", e)));
+            }
+        };
 
         // Convert messages if requested
         let messages = if req.include_messages {
@@ -611,77 +855,124 @@ impl GenAiService for GenaiGrpcService {
             vec![]
         };
 
+        let duration = start.elapsed();
+        dec_grpc_in_flight(method);
+        record_grpc_request(method, "OK", duration.as_secs_f64());
+
+        tracing::info!(
+            duration_ms = duration.as_millis(),
+            message_count = messages.len(),
+            "Session retrieved"
+        );
+
         Ok(Response::new(GetSessionResponse {
             session: Some(session_to_proto(&session)),
             messages,
         }))
     }
 
-    #[tracing::instrument(skip(self, request))]
+    #[tracing::instrument(skip(self, request), fields(session_id))]
     async fn delete_session(
         &self,
         request: Request<DeleteSessionRequest>,
     ) -> Result<Response<DeleteSessionResponse>, Status> {
+        let start = Instant::now();
+        let method = "DeleteSession";
+        inc_grpc_in_flight(method);
+
         let req = request.into_inner();
 
         if req.session_id.is_empty() {
+            dec_grpc_in_flight(method);
+            record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
+            tracing::warn!("DeleteSession called with empty session_id");
             return Err(Status::invalid_argument("session_id is required"));
         }
 
-        tracing::info!(session_id = %req.session_id, "Deleting session");
+        let span = tracing::Span::current();
+        span.record("session_id", &req.session_id);
 
-        let success = self
-            .state
-            .db
-            .delete_session(&req.session_id)
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to delete session: {}", e);
-                Status::internal(format!("Failed to delete session: {}", e))
-            })?;
+        tracing::info!("Deleting session");
+
+        let success = match self.state.db.delete_session(&req.session_id).await {
+            Ok(deleted) => deleted,
+            Err(e) => {
+                dec_grpc_in_flight(method);
+                record_grpc_request(method, "INTERNAL", start.elapsed().as_secs_f64());
+                tracing::error!(error = %e, "Failed to delete session");
+                return Err(Status::internal(format!("Failed to delete session: {}", e)));
+            }
+        };
 
         if !success {
+            dec_grpc_in_flight(method);
+            record_grpc_request(method, "NOT_FOUND", start.elapsed().as_secs_f64());
+            tracing::warn!("Session not found for deletion");
             return Err(Status::not_found(format!(
                 "Session not found: {}",
                 req.session_id
             )));
         }
 
-        tracing::info!(session_id = %req.session_id, "Session deleted successfully");
+        let duration = start.elapsed();
+        dec_grpc_in_flight(method);
+        record_grpc_request(method, "OK", duration.as_secs_f64());
+
+        tracing::info!(duration_ms = duration.as_millis(), "Session deleted");
 
         Ok(Response::new(DeleteSessionResponse { success: true }))
     }
 
-    #[tracing::instrument(skip(self, request))]
+    #[tracing::instrument(skip(self, request), fields(tenant_id, user_id))]
     async fn get_usage(
         &self,
         request: Request<GetUsageRequest>,
     ) -> Result<Response<GetUsageResponse>, Status> {
+        let start = Instant::now();
+        let method = "GetUsage";
+        inc_grpc_in_flight(method);
+
         let req = request.into_inner();
+
+        let span = tracing::Span::current();
+        if let Some(ref tid) = req.tenant_id {
+            span.record("tenant_id", tid);
+        }
+        if let Some(ref uid) = req.user_id {
+            span.record("user_id", uid);
+        }
 
         // Convert timestamps
         let start_time = req
             .start_time
             .as_ref()
             .and_then(|t| chrono::DateTime::from_timestamp(t.seconds, t.nanos as u32))
-            .ok_or_else(|| Status::invalid_argument("start_time is required"))?;
+            .ok_or_else(|| {
+                dec_grpc_in_flight(method);
+                record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
+                tracing::warn!("Invalid or missing start_time");
+                Status::invalid_argument("start_time is required")
+            })?;
 
         let end_time = req
             .end_time
             .as_ref()
             .and_then(|t| chrono::DateTime::from_timestamp(t.seconds, t.nanos as u32))
-            .ok_or_else(|| Status::invalid_argument("end_time is required"))?;
+            .ok_or_else(|| {
+                dec_grpc_in_flight(method);
+                record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
+                tracing::warn!("Invalid or missing end_time");
+                Status::invalid_argument("end_time is required")
+            })?;
 
         tracing::info!(
             start_time = %start_time,
             end_time = %end_time,
-            tenant_id = ?req.tenant_id,
-            user_id = ?req.user_id,
-            "Getting usage"
+            "Getting usage statistics"
         );
 
         // Query usage records
-        let records = self
+        let records = match self
             .state
             .db
             .get_usage(
@@ -691,10 +982,15 @@ impl GenAiService for GenaiGrpcService {
                 end_time,
             )
             .await
-            .map_err(|e| {
-                tracing::error!("Failed to get usage: {}", e);
-                Status::internal(format!("Failed to get usage: {}", e))
-            })?;
+        {
+            Ok(r) => r,
+            Err(e) => {
+                dec_grpc_in_flight(method);
+                record_grpc_request(method, "INTERNAL", start.elapsed().as_secs_f64());
+                tracing::error!(error = %e, "Failed to get usage");
+                return Err(Status::internal(format!("Failed to get usage: {}", e)));
+            }
+        };
 
         // Aggregate statistics
         let stats = crate::models::UsageStats::from_records(&records);
@@ -710,6 +1006,17 @@ impl GenAiService for GenaiGrpcService {
             })
             .collect();
 
+        let duration = start.elapsed();
+        dec_grpc_in_flight(method);
+        record_grpc_request(method, "OK", duration.as_secs_f64());
+
+        tracing::info!(
+            duration_ms = duration.as_millis(),
+            record_count = records.len(),
+            total_requests = stats.total_requests,
+            "Usage statistics retrieved"
+        );
+
         Ok(Response::new(GetUsageResponse {
             total_input_tokens: stats.total_input_tokens,
             total_output_tokens: stats.total_output_tokens,
@@ -724,6 +1031,12 @@ impl GenAiService for GenaiGrpcService {
         &self,
         _request: Request<ListModelsRequest>,
     ) -> Result<Response<ListModelsResponse>, Status> {
+        let start = Instant::now();
+        let method = "ListModels";
+        inc_grpc_in_flight(method);
+
+        tracing::debug!("Listing available models");
+
         // Return configured models
         let models = vec![
             ModelInfo {
@@ -757,6 +1070,16 @@ impl GenAiService for GenaiGrpcService {
                 context_window: 0,
             },
         ];
+
+        let duration = start.elapsed();
+        dec_grpc_in_flight(method);
+        record_grpc_request(method, "OK", duration.as_secs_f64());
+
+        tracing::debug!(
+            duration_ms = duration.as_millis(),
+            model_count = models.len(),
+            "Models listed"
+        );
 
         Ok(Response::new(ListModelsResponse { models }))
     }

@@ -1448,6 +1448,7 @@ dependencies = [
  "dotenvy",
  "futures",
  "mongodb",
+ "prometheus",
  "prost 0.13.5",
  "prost-types",
  "reqwest",
