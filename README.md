@@ -17,10 +17,10 @@ Production-ready Rust microservices with gRPC interfaces and full observability 
               │  │   :50051     │  │   :50052     │  │   :50053     │  │
               │  └──────────────┘  └──────────────┘  └──────────────┘  │
               │                                                         │
-              │  ┌──────────────┐                                       │
-              │  │payment-svc   │     Internal Network (gRPC only)      │
-              │  │   :50054     │                                       │
-              │  └──────────────┘                                       │
+              │  ┌──────────────┐  ┌──────────────┐                     │
+              │  │payment-svc   │  │ genai-svc    │  Internal Network   │
+              │  │   :50054     │  │   :50055     │  (gRPC only)        │
+              │  └──────────────┘  └──────────────┘                     │
               └─────────────────────────────────────────────────────────┘
 ```
 
@@ -32,6 +32,7 @@ Production-ready Rust microservices with gRPC interfaces and full observability 
 | document-service | 50052 | Document storage with streaming | [README](./document-service/README.md) |
 | notification-service | 50053 | Email, SMS, push notifications | [README](./notification-service/README.md) |
 | payment-service | 50054 | Razorpay, UPI payments | [README](./payment-service/README.md) |
+| genai-service | 50055 | Generative AI with Gemini | [README](./genai-service/README.md) |
 | secure-frontend | 8080 | BFF with REST API for clients | - |
 | service-core | - | Shared middleware and utilities | - |
 
@@ -52,6 +53,7 @@ cp .env.example .env.dev
 # - Document gRPC: localhost:50052
 # - Notification gRPC: localhost:50053
 # - Payment gRPC: localhost:50054
+# - GenAI gRPC: localhost:50055
 ```
 
 ## gRPC Usage
