@@ -216,6 +216,44 @@ services:
     networks:
       - micros-net
 
+  genai-service:
+    build:
+      context: .
+      dockerfile: genai-service/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-genai-service
+    ports:
+      - "${GENAI_SERVICE_HEALTH_PORT:-9010}:8080"
+      - "${GENAI_SERVICE_GRPC_PORT:-50055}:8081"
+    environment:
+      - APP__PORT=8080
+      - GRPC_PORT=8081
+      - ENVIRONMENT=${ENVIRONMENT:-dev}
+      - MONGODB_URI=${GENAI_MONGODB_URI:-mongodb://host.docker.internal:27017}
+      - MONGODB_DATABASE=${GENAI_MONGODB_DATABASE:-genai_db}
+      - RUST_LOG=${LOG_LEVEL:-info}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      # Model Configuration
+      - GENAI_TEXT_MODEL=${GENAI_TEXT_MODEL:-gemini-2.0-flash}
+      - GENAI_AUDIO_MODEL=${GENAI_AUDIO_MODEL:-gemini-2.0-flash}
+      - GENAI_VIDEO_MODEL=${GENAI_VIDEO_MODEL:-veo-2}
+      - GENAI_DEFAULT_CONTENT_THRESHOLD_BYTES=${GENAI_DEFAULT_CONTENT_THRESHOLD_BYTES:-1048576}
+      # Google API
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      # Document Service
+      - DOCUMENT_SERVICE_GRPC_URL=${DOCUMENT_SERVICE_GRPC_URL:-http://document-service:8081}
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=8080"
+      - "prometheus.io/path=/health"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    networks:
+      - micros-net
+
   payment-service:
     build:
       context: .

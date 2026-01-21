@@ -1,0 +1,401 @@
+syntax = "proto3";
+
+package micros.genai.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// GenAIService provides generative AI capabilities.
+// Simple transactional API: prompt + documents → result in requested format.
+service GenAIService {
+  // Process a prompt and return result (non-streaming).
+  rpc Process(ProcessRequest) returns (ProcessResponse);
+
+  // Process a prompt and stream the result.
+  rpc ProcessStream(ProcessStreamRequest) returns (stream ProcessStreamResponse);
+
+  // Create a new conversation session.
+  rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);
+
+  // Get an existing session.
+  rpc GetSession(GetSessionRequest) returns (GetSessionResponse);
+
+  // Delete a session.
+  rpc DeleteSession(DeleteSessionRequest) returns (DeleteSessionResponse);
+
+  // Get usage statistics.
+  rpc GetUsage(GetUsageRequest) returns (GetUsageResponse);
+
+  // List available models.
+  rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
+}
+
+// ProcessRequest for non-streaming operations.
+message ProcessRequest {
+  // The prompt/instruction.
+  string prompt = 1;
+
+  // Optional document context (from document-service).
+  repeated DocumentContext documents = 2;
+
+  // Desired output format.
+  OutputFormat output_format = 3;
+
+  // JSON schema (required if output_format is STRUCTURED_JSON).
+  optional string output_schema = 4;
+
+  // Optional session ID for conversation context.
+  optional string session_id = 5;
+
+  // Generation parameters.
+  optional GenerationParams params = 6;
+
+  // Request metadata (tenant, user).
+  RequestMetadata metadata = 7;
+}
+
+// ProcessStreamRequest for streaming operations.
+message ProcessStreamRequest {
+  // The prompt/instruction.
+  string prompt = 1;
+
+  // Optional document context (from document-service).
+  repeated DocumentContext documents = 2;
+
+  // Desired output format.
+  OutputFormat output_format = 3;
+
+  // JSON schema (required if output_format is STRUCTURED_JSON).
+  optional string output_schema = 4;
+
+  // Optional session ID for conversation context.
+  optional string session_id = 5;
+
+  // Generation parameters.
+  optional GenerationParams params = 6;
+
+  // Request metadata (tenant, user).
+  RequestMetadata metadata = 7;
+}
+
+// DocumentContext for document-aware AI operations.
+message DocumentContext {
+  // Document ID from document-service.
+  string document_id = 1;
+
+  // Signed URL for access.
+  string signed_url = 2;
+
+  // MIME type (e.g., "application/pdf", "image/png").
+  string mime_type = 3;
+
+  // Optional: pre-extracted text (skip fetching if provided).
+  optional string text_content = 4;
+}
+
+// OutputFormat determines the response type.
+enum OutputFormat {
+  OUTPUT_FORMAT_UNSPECIFIED = 0;
+  OUTPUT_FORMAT_TEXT = 1;            // Free-form text
+  OUTPUT_FORMAT_STRUCTURED_JSON = 2; // JSON conforming to output_schema
+  OUTPUT_FORMAT_AUDIO = 3;           // Audio bytes (e.g., TTS)
+  OUTPUT_FORMAT_VIDEO = 4;           // Video bytes
+}
+
+// GenerationParams for controlling output.
+message GenerationParams {
+  // Temperature (0.0 - 2.0).
+  optional float temperature = 1;
+
+  // Top-p sampling.
+  optional float top_p = 2;
+
+  // Stop sequences.
+  repeated string stop_sequences = 3;
+
+  // Content size threshold in bytes (default: 1MB = 1048576).
+  // If total document size exceeds this, service uses max token output.
+  optional int64 content_size_threshold_bytes = 4;
+
+  // Audio-specific: voice for TTS output.
+  optional string voice = 5;
+
+  // Audio-specific: format ("mp3", "wav", etc.).
+  optional string audio_format = 6;
+
+  // Video-specific: format ("mp4", etc.).
+  optional string video_format = 7;
+
+  // Video-specific: duration in seconds.
+  optional int32 duration_seconds = 8;
+}
+
+// RequestMetadata for multi-tenancy and tracking.
+message RequestMetadata {
+  // Tenant ID.
+  string tenant_id = 1;
+
+  // User ID.
+  string user_id = 2;
+
+  // Optional tags for categorization.
+  map<string, string> tags = 3;
+}
+
+// ProcessResponse for non-streaming requests.
+message ProcessResponse {
+  // The result (interpretation depends on output_format).
+  oneof result {
+    // Free-form text result.
+    string text = 1;
+
+    // Structured JSON (as string, conforms to output_schema).
+    string json = 2;
+
+    // Audio bytes.
+    bytes audio = 3;
+
+    // Video bytes.
+    bytes video = 4;
+  }
+
+  // Output format used.
+  OutputFormat output_format = 5;
+
+  // Model that was auto-selected and used.
+  string model = 6;
+
+  // Token usage (input + output tokens consumed).
+  TokenUsage usage = 7;
+
+  // Finish reason.
+  FinishReason finish_reason = 8;
+
+  // Request ID for correlation.
+  string request_id = 9;
+
+  // Session ID (if session was used/created).
+  optional string session_id = 10;
+}
+
+// TokenUsage returned with every response.
+message TokenUsage {
+  // Tokens consumed by prompt + documents.
+  int32 input_tokens = 1;
+
+  // Tokens generated in response.
+  int32 output_tokens = 2;
+
+  // input_tokens + output_tokens.
+  int32 total_tokens = 3;
+}
+
+// FinishReason indicates why generation stopped.
+enum FinishReason {
+  FINISH_REASON_UNSPECIFIED = 0;
+  FINISH_REASON_COMPLETE = 1;
+  FINISH_REASON_LENGTH = 2;
+  FINISH_REASON_CONTENT_FILTER = 3;
+  FINISH_REASON_ERROR = 4;
+}
+
+// ProcessStreamResponse for streaming requests.
+message ProcessStreamResponse {
+  oneof data {
+    // Text chunk (for TEXT or STRUCTURED_JSON).
+    string text_chunk = 1;
+
+    // Audio chunk (for AUDIO).
+    bytes audio_chunk = 2;
+
+    // Video chunk (for VIDEO).
+    bytes video_chunk = 3;
+
+    // Final completion message.
+    StreamComplete complete = 4;
+  }
+}
+
+// StreamComplete signals end of stream with final metadata.
+message StreamComplete {
+  // Output format used.
+  OutputFormat output_format = 1;
+
+  // Model used.
+  string model = 2;
+
+  // Token usage.
+  TokenUsage usage = 3;
+
+  // Finish reason.
+  FinishReason finish_reason = 4;
+
+  // Request ID.
+  string request_id = 5;
+
+  // Session ID.
+  optional string session_id = 6;
+}
+
+// Session management messages.
+
+message CreateSessionRequest {
+  // Optional title.
+  optional string title = 1;
+
+  // System prompt for this session.
+  optional string system_prompt = 2;
+
+  // Persistent document context for all requests in session.
+  repeated DocumentContext documents = 3;
+
+  // Request metadata.
+  RequestMetadata metadata = 4;
+}
+
+message CreateSessionResponse {
+  Session session = 1;
+}
+
+message Session {
+  // Session ID.
+  string id = 1;
+
+  // Optional title.
+  optional string title = 2;
+
+  // System prompt.
+  optional string system_prompt = 3;
+
+  // Attached documents.
+  repeated DocumentContext documents = 4;
+
+  // Number of messages in session.
+  int32 message_count = 5;
+
+  // Total token usage for session.
+  TokenUsage total_usage = 6;
+
+  // When the session was created.
+  google.protobuf.Timestamp created_at = 7;
+
+  // When the session was last updated.
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message GetSessionRequest {
+  // Session ID.
+  string session_id = 1;
+
+  // Include full message history?
+  bool include_messages = 2;
+}
+
+message GetSessionResponse {
+  // The session.
+  Session session = 1;
+
+  // Messages if requested.
+  repeated SessionMessage messages = 2;
+}
+
+message SessionMessage {
+  // Role: "user" or "assistant".
+  string role = 1;
+
+  // Message content.
+  string content = 2;
+
+  // Output format used.
+  OutputFormat output_format = 3;
+
+  // When the message was created.
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+message DeleteSessionRequest {
+  // Session ID.
+  string session_id = 1;
+}
+
+message DeleteSessionResponse {
+  // Whether deletion was successful.
+  bool success = 1;
+}
+
+// Usage tracking messages.
+
+message GetUsageRequest {
+  // Start of time range.
+  google.protobuf.Timestamp start_time = 1;
+
+  // End of time range.
+  google.protobuf.Timestamp end_time = 2;
+
+  // Filter by tenant.
+  optional string tenant_id = 3;
+
+  // Filter by user.
+  optional string user_id = 4;
+}
+
+message GetUsageResponse {
+  // Total input tokens.
+  int64 total_input_tokens = 1;
+
+  // Total output tokens.
+  int64 total_output_tokens = 2;
+
+  // Total tokens.
+  int64 total_tokens = 3;
+
+  // Total requests.
+  int32 total_requests = 4;
+
+  // Usage by model.
+  repeated ModelUsage by_model = 5;
+}
+
+message ModelUsage {
+  // Model ID.
+  string model = 1;
+
+  // Tokens used.
+  int64 tokens = 2;
+
+  // Request count.
+  int32 requests = 3;
+}
+
+// Model listing messages.
+
+message ListModelsRequest {}
+
+message ListModelsResponse {
+  repeated ModelInfo models = 1;
+}
+
+message ModelInfo {
+  // Model ID.
+  string id = 1;
+
+  // Display name.
+  string name = 2;
+
+  // Provider (e.g., "google").
+  string provider = 3;
+
+  // Supports vision/image input.
+  bool supports_vision = 4;
+
+  // Supports audio output.
+  bool supports_audio_output = 5;
+
+  // Supports video output.
+  bool supports_video_output = 6;
+
+  // Supports streaming.
+  bool supports_streaming = 7;
+
+  // Context window size.
+  int32 context_window = 8;
+}

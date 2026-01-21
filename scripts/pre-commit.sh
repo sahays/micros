@@ -65,6 +65,9 @@ if [ -n "$STAGED_RS_FILES" ]; then
     if echo "$STAGED_RS_FILES" | grep -q "document-service/"; then
         SERVICES_WITH_CHANGES+=("document-service")
     fi
+    if echo "$STAGED_RS_FILES" | grep -q "genai-service/"; then
+        SERVICES_WITH_CHANGES+=("genai-service")
+    fi
     if echo "$STAGED_RS_FILES" | grep -q "notification-service/"; then
         SERVICES_WITH_CHANGES+=("notification-service")
     fi

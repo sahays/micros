@@ -422,16 +422,16 @@ genai-service/
 
 ## Stories
 
-- [ ] Story 1: Project Setup & Health Endpoint
-- [ ] Story 2: Gemini Provider & Process (text output)
-- [ ] Story 3: ProcessStream (streaming text)
-- [ ] Story 4: Document Fetching & Context Integration
-- [ ] Story 5: Structured JSON Output with Schema Validation
-- [ ] Story 6: Audio Output via Gemini TTS
-- [ ] Story 7: Video Output via Veo
-- [ ] Story 8: Session Management (MongoDB)
-- [ ] Story 9: Usage Tracking & Token Reporting
-- [ ] Story 10: Docker & Observability
+- [x] Story 1: Project Setup & Health Endpoint
+- [x] Story 2: Gemini Provider & Process (text output)
+- [x] Story 3: ProcessStream (streaming text)
+- [x] Story 4: Document Fetching & Context Integration
+- [x] Story 5: Structured JSON Output with Schema Validation
+- [ ] ~~Story 6: Audio Output via Gemini TTS~~ (not required)
+- [ ] ~~Story 7: Video Output via Veo~~ (not required)
+- [x] Story 8: Session Management (MongoDB)
+- [x] Story 9: Usage Tracking & Token Reporting
+- [x] Story 10: Docker & Observability
 
 ---
 
