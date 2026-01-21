@@ -165,6 +165,18 @@ Complete KYC with verification response.
 3. Admin reviews linked users across tenants
 4. Admin can merge identities or flag as fraud
 
+## Edge Cases
+
+- **1000 users named "Anil Kumar" register:** Each gets separate identity (name is not a unique identifier; resolution uses email/phone/Aadhaar)
+- **Same email in two tenants:** Same identity, two user accounts linked to it
+- **Same name, different email/phone:** Completely separate identities
+- **User changes email:** Old email attribute marked inactive, new email added, identity unchanged
+- **Two identities later found to share Aadhaar:** Flag for admin review, merge if confirmed same person
+- **User deletes account in Tenant A:** User unlinked from identity; identity persists if other users linked
+- **Fraudster creates 50 accounts with unique emails:** 50 separate identities until KYC reveals same Aadhaar, then flagged
+- **Married name change:** Add new name attribute, keep old; both searchable, identity unchanged
+- **Phone number recycled by carrier:** New user gets new identity; old user's phone attribute expires after verification failure
+
 ## Authorization Integration
 
 Services can enforce identity requirements:
