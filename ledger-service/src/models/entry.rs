@@ -92,6 +92,7 @@ pub struct PostEntry {
 }
 
 /// Transaction groups multiple entries by journal_id.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
     pub journal_id: Uuid,
@@ -104,6 +105,7 @@ pub struct Transaction {
 }
 
 /// Statement line with running balance.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StatementLine {
     pub entry_id: Uuid,
@@ -116,6 +118,7 @@ pub struct StatementLine {
 }
 
 /// Account statement for a date range.
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Statement {
     pub account_id: Uuid,

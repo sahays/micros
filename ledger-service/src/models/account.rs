@@ -20,7 +20,7 @@ pub enum AccountType {
 
 impl AccountType {
     /// Convert from string representation.
-    pub fn from_str(s: &str) -> Self {
+    pub fn from_string(s: &str) -> Self {
         match s {
             "asset" => Self::Asset,
             "liability" => Self::Liability,
@@ -106,6 +106,7 @@ impl Account {
 }
 
 /// Account with calculated balance (for queries).
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountWithBalance {
     pub account: Account,

@@ -10,6 +10,10 @@ use std::time::Duration;
 use tracing::{info, instrument};
 use uuid::Uuid;
 
+/// Statement data returned by get_statement query.
+/// Contains: (currency, opening_balance, closing_balance, entries)
+type StatementData = (String, Decimal, Decimal, Vec<LedgerEntry>);
+
 /// Database connection pool wrapper.
 #[derive(Clone)]
 pub struct Database {
@@ -183,7 +187,7 @@ impl Database {
             .with_label_values(&["list_accounts"])
             .start_timer();
 
-        let limit = page_size.min(100).max(1) as i64;
+        let limit = page_size.clamp(1, 100) as i64;
 
         // Build dynamic query based on filters
         let accounts = if let Some(cursor) = page_token {
@@ -373,7 +377,7 @@ impl Database {
             // For normal-credit accounts (liability/equity/revenue), balance should stay <= 0
             let new_balance = current + impact;
 
-            let account_type = AccountType::from_str(&account.account_type);
+            let account_type = AccountType::from_string(&account.account_type);
             let is_debit_normal = matches!(account_type, AccountType::Asset | AccountType::Expense);
 
             if is_debit_normal && new_balance < Decimal::ZERO {
@@ -544,7 +548,7 @@ impl Database {
             .with_label_values(&["list_transactions"])
             .start_timer();
 
-        let limit = page_size.min(100).max(1) as i64;
+        let limit = page_size.clamp(1, 100) as i64;
 
         // P3: Get distinct journal_ids ordered by effective_date DESC, posted_utc DESC
         // Use a subquery to get the first entry's timestamp for each journal
@@ -680,7 +684,7 @@ impl Database {
 
         // P2: Adjust sign based on account type
         // For credit-normal accounts, negate to show positive balance
-        let account_type = AccountType::from_str(&account.account_type);
+        let account_type = AccountType::from_string(&account.account_type);
         let is_debit_normal = matches!(account_type, AccountType::Asset | AccountType::Expense);
         let balance = if is_debit_normal { raw } else { -raw };
 
@@ -732,7 +736,7 @@ impl Database {
         account_id: Uuid,
         start_date: NaiveDate,
         end_date: NaiveDate,
-    ) -> Result<Option<(String, Decimal, Decimal, Vec<LedgerEntry>)>, AppError> {
+    ) -> Result<Option<StatementData>, AppError> {
         let timer = DB_QUERY_DURATION
             .with_label_values(&["get_statement"])
             .start_timer();
