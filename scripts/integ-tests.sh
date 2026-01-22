@@ -277,8 +277,9 @@ run_pg_tests() {
         local cmd="cargo test -p ${service}"
 
         # Add --ignored for services with #[ignore] tests
+        # Use --test-threads=1 to prevent race conditions (tests share database)
         if [ "$service" = "ledger-service" ] || [ "$service" = "auth-service" ]; then
-            cmd="$cmd -- --ignored"
+            cmd="$cmd -- --ignored --test-threads=1"
         fi
 
         if [ ${#CARGO_ARGS[@]} -gt 0 ]; then

@@ -25,6 +25,18 @@ use tonic::{Request, Response, Status};
 use tracing::{info, instrument, warn};
 use uuid::Uuid;
 
+/// Format a Decimal as a normalized string (remove trailing zeros).
+fn format_decimal(d: &Decimal) -> String {
+    let s = d.to_string();
+    // Remove trailing zeros after decimal point
+    if s.contains('.') {
+        let trimmed = s.trim_end_matches('0').trim_end_matches('.');
+        trimmed.to_string()
+    } else {
+        s
+    }
+}
+
 /// LedgerService implementation.
 pub struct LedgerServiceImpl {
     db: Arc<Database>,
@@ -68,7 +80,7 @@ impl LedgerServiceImpl {
                 seconds: t.timestamp(),
                 nanos: t.timestamp_subsec_nanos() as i32,
             }),
-            balance: balance.map(|b| b.to_string()).unwrap_or_default(),
+            balance: balance.map(|b| format_decimal(&b)).unwrap_or_default(),
         }
     }
 
@@ -78,7 +90,7 @@ impl LedgerServiceImpl {
             entry_id: entry.entry_id.to_string(),
             journal_id: entry.journal_id.to_string(),
             account_id: entry.account_id.to_string(),
-            amount: entry.amount.to_string(),
+            amount: format_decimal(&entry.amount),
             direction: match entry.direction.as_str() {
                 "debit" => ProtoDirection::Debit as i32,
                 "credit" => ProtoDirection::Credit as i32,
@@ -782,7 +794,7 @@ impl LedgerService for LedgerServiceImpl {
                     .inc();
                 Ok(Response::new(GetBalanceResponse {
                     account_id: account_id.to_string(),
-                    balance: balance.to_string(),
+                    balance: format_decimal(&balance),
                     currency,
                     as_of_date: as_of_date
                         .unwrap_or_else(|| chrono::Utc::now().date_naive())
@@ -873,7 +885,7 @@ impl LedgerService for LedgerServiceImpl {
                 .iter()
                 .map(|(account_id, balance, currency)| GetBalanceResponse {
                     account_id: account_id.to_string(),
-                    balance: balance.to_string(),
+                    balance: format_decimal(balance),
                     currency: currency.clone(),
                     as_of_date: as_of_str.clone(),
                 })
@@ -971,8 +983,8 @@ impl LedgerService for LedgerServiceImpl {
                                 "credit" => ProtoDirection::Credit as i32,
                                 _ => ProtoDirection::Unspecified as i32,
                             },
-                            amount: e.amount.to_string(),
-                            running_balance: running.to_string(),
+                            amount: format_decimal(&e.amount),
+                            running_balance: format_decimal(&running),
                             metadata: e
                                 .metadata
                                 .as_ref()
@@ -985,8 +997,8 @@ impl LedgerService for LedgerServiceImpl {
                 Ok(Response::new(GetStatementResponse {
                     account_id: account_id.to_string(),
                     currency,
-                    opening_balance: opening_balance.to_string(),
-                    closing_balance: closing_balance.to_string(),
+                    opening_balance: format_decimal(&opening_balance),
+                    closing_balance: format_decimal(&closing_balance),
                     lines,
                 }))
             }

@@ -97,6 +97,16 @@ pub struct Application {
 impl Application {
     /// Build the application with the given configuration.
     pub async fn build(config: LedgerConfig) -> Result<Self, AppError> {
+        Self::build_internal(config, true).await
+    }
+
+    /// Build the application without running migrations.
+    /// Use this in tests when migrations are already applied by the test harness.
+    pub async fn build_without_migrations(config: LedgerConfig) -> Result<Self, AppError> {
+        Self::build_internal(config, false).await
+    }
+
+    async fn build_internal(config: LedgerConfig, run_migrations: bool) -> Result<Self, AppError> {
         // Connect to database
         let db = Database::new(
             &config.database.url,
@@ -109,11 +119,13 @@ impl Application {
             e
         })?;
 
-        // Run migrations
-        db.run_migrations().await.map_err(|e| {
-            tracing::error!(error = %e, "Failed to run migrations");
-            e
-        })?;
+        // Run migrations only if requested
+        if run_migrations {
+            db.run_migrations().await.map_err(|e| {
+                tracing::error!(error = %e, "Failed to run migrations");
+                e
+            })?;
+        }
 
         let db = Arc::new(db);
 

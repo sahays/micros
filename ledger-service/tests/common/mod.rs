@@ -45,7 +45,8 @@ pub async fn spawn_app() -> (LedgerServiceClient<Channel>, Uuid) {
         },
     };
 
-    let app = Application::build(config)
+    // Use build_without_migrations since integ-tests.sh already ran migrations
+    let app = Application::build_without_migrations(config)
         .await
         .expect("Failed to build application");
 
