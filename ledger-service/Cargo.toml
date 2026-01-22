@@ -52,6 +52,7 @@ tonic-build = "0.12"
 
 [dev-dependencies]
 tokio-test = "0.4"
+serial_test = "3.0"  # For tests that need database isolation
 
 [lib]
 name = "ledger_service"

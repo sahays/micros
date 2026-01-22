@@ -4,7 +4,7 @@
 # This script replaces cargo test for integration tests that need a database.
 # It:
 # 1. Creates a fresh PostgreSQL test database
-# 2. Runs database migrations
+# 2. Runs database migrations for all services
 # 3. Executes cargo test for specified packages
 # 4. Cleans up the test database after tests complete
 # 5. Handles interrupts gracefully (Ctrl+C)
@@ -16,11 +16,13 @@
 #   --all                   Run all workspace tests (default if no -p specified)
 #   --lib                   Run only library tests (no integration tests)
 #   --ignored               Run only ignored tests (database tests)
+#   --skip-db               Skip database setup (for non-DB tests)
 #   --                      Pass remaining args to cargo test
 #
 # Examples:
 #   ./scripts/integ-tests.sh                           # Run all tests
 #   ./scripts/integ-tests.sh -p auth-service           # Run auth-service tests
+#   ./scripts/integ-tests.sh -p ledger-service         # Run ledger-service tests
 #   ./scripts/integ-tests.sh -p auth-service --ignored # Run database tests only
 #   ./scripts/integ-tests.sh -- --test-threads=1       # Pass args to cargo
 
@@ -41,6 +43,7 @@ export TEST_DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD_ENCODED}@${DB_HOST
 
 # Track if we've created the database
 DB_CREATED=false
+SKIP_DB=false
 
 # Colors for output
 RED='\033[0;31m'
@@ -71,6 +74,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --ignored)
             CARGO_ARGS+=("--ignored")
+            shift
+            ;;
+        --skip-db)
+            SKIP_DB=true
             shift
             ;;
         --)
@@ -135,9 +142,10 @@ check_postgres() {
         log_error "Cannot connect to PostgreSQL at ${DB_HOST}:${DB_PORT}"
         log_error "Make sure PostgreSQL is running and accessible"
         log_error "You can configure connection with: DB_HOST, DB_PORT, DB_USER, DB_PASSWORD"
-        exit 1
+        return 1
     fi
     log_info "PostgreSQL connection successful"
+    return 0
 }
 
 # Create test database
@@ -155,31 +163,65 @@ create_database() {
     log_info "Test database created"
 }
 
-# Run migrations
+# Run migrations for a specific service
+run_service_migrations() {
+    local service=$1
+    local migrations_dir="${service}/migrations"
+
+    if [ ! -d "$migrations_dir" ]; then
+        return 0
+    fi
+
+    log_info "Running migrations for ${service}..."
+
+    # Run migrations using sqlx (if available) or direct SQL
+    if command -v sqlx &> /dev/null; then
+        (
+            cd "${service}"
+            DATABASE_URL="${TEST_DATABASE_URL}" sqlx migrate run 2>&1 || {
+                log_warn "sqlx migrate failed for ${service}, trying direct SQL"
+                cd ..
+                run_migrations_sql "$service"
+            }
+        )
+    else
+        run_migrations_sql "$service"
+    fi
+
+    log_info "${service} migrations completed"
+}
+
+# Run migrations using direct SQL (fallback)
+run_migrations_sql() {
+    local service=$1
+    local migrations_dir="${service}/migrations"
+
+    # Run migration files directly in order
+    for migration in $(ls "${migrations_dir}"/*.sql 2>/dev/null | sort); do
+        if [ -f "$migration" ]; then
+            log_info "  Applying: $(basename "$migration")"
+            PGPASSWORD="${DB_PASSWORD}" psql -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -d "${DB_NAME}" \
+                -f "$migration" >/dev/null 2>&1 || {
+                log_warn "  Migration may have already been applied: $(basename "$migration")"
+            }
+        fi
+    done
+}
+
+# Run all migrations
 run_migrations() {
     log_step "Running database migrations..."
 
-    # Check if migrations directory exists
-    if [ -d "auth-service/migrations" ]; then
-        # Run migrations using sqlx (if available) or direct SQL
-        if command -v sqlx &> /dev/null; then
-            cd auth-service
-            DATABASE_URL="${TEST_DATABASE_URL}" sqlx migrate run
-            cd ..
-        else
-            # Fallback: run migration files directly in order
-            for migration in $(ls auth-service/migrations/*.sql 2>/dev/null | sort); do
-                if [ -f "$migration" ]; then
-                    log_info "Applying migration: $(basename "$migration")"
-                    PGPASSWORD="${DB_PASSWORD}" psql -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -d "${DB_NAME}" \
-                        -f "$migration" >/dev/null
-                fi
-            done
+    # Services with PostgreSQL migrations (order matters for dependencies)
+    local pg_services=("auth-service" "ledger-service")
+
+    for service in "${pg_services[@]}"; do
+        if [ -d "${service}/migrations" ]; then
+            run_service_migrations "$service"
         fi
-        log_info "Migrations completed"
-    else
-        log_warn "No migrations directory found at auth-service/migrations"
-    fi
+    done
+
+    log_info "All migrations completed"
 }
 
 # Run tests
@@ -229,10 +271,15 @@ main() {
 
     echo ""
 
-    check_postgres
-    create_database
-    run_migrations
-    run_tests
+    if [ "$SKIP_DB" = true ]; then
+        log_info "Skipping database setup (--skip-db)"
+        run_tests
+    else
+        check_postgres || exit 1
+        create_database
+        run_migrations
+        run_tests
+    fi
 }
 
 main

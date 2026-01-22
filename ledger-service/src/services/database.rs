@@ -149,6 +149,26 @@ impl Database {
         Ok(account)
     }
 
+    /// P1: Get an account with its current balance.
+    #[instrument(skip(self), fields(tenant_id = %tenant_id, account_id = %account_id))]
+    pub async fn get_account_with_balance(
+        &self,
+        tenant_id: Uuid,
+        account_id: Uuid,
+    ) -> Result<Option<(Account, Decimal)>, AppError> {
+        let account = self.get_account(tenant_id, account_id).await?;
+        let account = match account {
+            Some(a) => a,
+            None => return Ok(None),
+        };
+
+        // Get balance
+        let balance_result = self.get_balance(tenant_id, account_id, None).await?;
+        let balance = balance_result.map(|(b, _)| b).unwrap_or(Decimal::ZERO);
+
+        Ok(Some((account, balance)))
+    }
+
     /// List accounts for a tenant with optional filters.
     #[instrument(skip(self), fields(tenant_id = %tenant_id))]
     pub async fn list_accounts(
@@ -217,7 +237,10 @@ impl Database {
     // -------------------------------------------------------------------------
 
     /// Post a new transaction (multiple entries in a single journal).
-    /// Validates that debits equal credits before inserting.
+    /// Validates that debits equal credits, all accounts belong to tenant,
+    /// all accounts have same currency, and no account would go negative
+    /// (unless allow_negative is set).
+    /// Returns (journal_id, entries, currency).
     #[instrument(skip(self, entries, metadata), fields(tenant_id = %tenant_id, entry_count = entries.len()))]
     pub async fn post_transaction(
         &self,
@@ -226,7 +249,7 @@ impl Database {
         effective_date: NaiveDate,
         idempotency_key: Option<&str>,
         metadata: Option<serde_json::Value>,
-    ) -> Result<(Uuid, Vec<LedgerEntry>), AppError> {
+    ) -> Result<(Uuid, Vec<LedgerEntry>, String), AppError> {
         let timer = DB_QUERY_DURATION
             .with_label_values(&["post_transaction"])
             .start_timer();
@@ -236,6 +259,51 @@ impl Database {
             return Err(AppError::BadRequest(anyhow::anyhow!(
                 "Transaction must have at least 2 entries"
             )));
+        }
+
+        // Collect unique account IDs for validation
+        let account_ids: Vec<Uuid> = entries.iter().map(|e| e.account_id).collect();
+
+        // P0: Validate all accounts exist and belong to tenant
+        // P1: Also fetch accounts to check currency consistency and allow_negative
+        let accounts: Vec<Account> = sqlx::query_as::<_, Account>(
+            r#"
+            SELECT account_id, tenant_id, account_type, account_code, currency, allow_negative, metadata, created_utc, closed_utc
+            FROM accounts
+            WHERE tenant_id = $1 AND account_id = ANY($2)
+            "#,
+        )
+        .bind(tenant_id)
+        .bind(&account_ids)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to fetch accounts: {}", e)))?;
+
+        // Build a map for quick lookup
+        let account_map: std::collections::HashMap<Uuid, &Account> =
+            accounts.iter().map(|a| (a.account_id, a)).collect();
+
+        // Validate all accounts exist and belong to tenant
+        for entry in entries {
+            if !account_map.contains_key(&entry.account_id) {
+                return Err(AppError::BadRequest(anyhow::anyhow!(
+                    "Account {} does not exist or does not belong to tenant",
+                    entry.account_id
+                )));
+            }
+        }
+
+        // P1: Validate currency consistency - all accounts must have same currency
+        let first_currency = &accounts[0].currency;
+        for account in &accounts {
+            if account.currency != *first_currency {
+                return Err(AppError::BadRequest(anyhow::anyhow!(
+                    "Currency mismatch: account {} has currency {} but expected {}",
+                    account.account_id,
+                    account.currency,
+                    first_currency
+                )));
+            }
         }
 
         // Validate double-entry: sum of debits must equal sum of credits
@@ -262,13 +330,81 @@ impl Database {
             )));
         }
 
-        // Check idempotency
+        // P1: Validate negative balance constraints
+        // Calculate impact on each account and check if resulting balance would go negative
+        for entry in entries {
+            let account = account_map.get(&entry.account_id).unwrap();
+
+            // Skip check if account allows negative balances
+            if account.allow_negative {
+                continue;
+            }
+
+            // Get current balance
+            let current_balance: Option<Decimal> = sqlx::query_scalar(
+                r#"
+                SELECT COALESCE(
+                    SUM(CASE WHEN direction = 'debit' THEN amount ELSE -amount END),
+                    0
+                )
+                FROM ledger_entries
+                WHERE tenant_id = $1 AND account_id = $2
+                "#,
+            )
+            .bind(tenant_id)
+            .bind(entry.account_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| {
+                AppError::DatabaseError(anyhow::anyhow!("Failed to get balance: {}", e))
+            })?;
+
+            let current = current_balance.unwrap_or(Decimal::ZERO);
+
+            // Calculate impact based on account type and direction
+            // Asset/Expense: debit increases, credit decreases (normal debit balance)
+            // Liability/Equity/Revenue: credit increases, debit decreases (normal credit balance)
+            let impact = match entry.direction {
+                Direction::Debit => entry.amount,
+                Direction::Credit => -entry.amount,
+            };
+
+            // For normal-debit accounts (asset/expense), balance should stay >= 0
+            // For normal-credit accounts (liability/equity/revenue), balance should stay <= 0
+            let new_balance = current + impact;
+
+            let account_type = AccountType::from_str(&account.account_type);
+            let is_debit_normal = matches!(account_type, AccountType::Asset | AccountType::Expense);
+
+            if is_debit_normal && new_balance < Decimal::ZERO {
+                return Err(AppError::BadRequest(anyhow::anyhow!(
+                    "Insufficient balance in account {}: current {}, would become {}",
+                    entry.account_id,
+                    current,
+                    new_balance
+                )));
+            } else if !is_debit_normal && new_balance > Decimal::ZERO {
+                // Credit-normal accounts should not have debit balance
+                return Err(AppError::BadRequest(anyhow::anyhow!(
+                    "Insufficient balance in account {}: current {}, would become {}",
+                    entry.account_id,
+                    current,
+                    new_balance
+                )));
+            }
+        }
+
+        // Check idempotency - use transaction to handle race condition
+        let mut tx = self.pool.begin().await.map_err(|e| {
+            AppError::DatabaseError(anyhow::anyhow!("Failed to begin transaction: {}", e))
+        })?;
+
         if let Some(key) = idempotency_key {
             let existing = sqlx::query_scalar::<_, Uuid>(
                 "SELECT journal_id FROM ledger_entries WHERE idempotency_key = $1 LIMIT 1",
             )
             .bind(key)
-            .fetch_optional(&self.pool)
+            .fetch_optional(&mut *tx)
             .await
             .map_err(|e| {
                 AppError::DatabaseError(anyhow::anyhow!("Failed to check idempotency: {}", e))
@@ -276,19 +412,14 @@ impl Database {
 
             if let Some(journal_id) = existing {
                 // Return existing transaction
+                tx.rollback().await.ok();
                 let entries = self.get_entries_by_journal(tenant_id, journal_id).await?;
                 timer.observe_duration();
-                return Ok((journal_id, entries));
+                return Ok((journal_id, entries, first_currency.clone()));
             }
         }
 
         let journal_id = Uuid::new_v4();
-
-        // Insert all entries in a single transaction
-        let mut tx = self.pool.begin().await.map_err(|e| {
-            AppError::DatabaseError(anyhow::anyhow!("Failed to begin transaction: {}", e))
-        })?;
-
         let mut inserted_entries = Vec::with_capacity(entries.len());
 
         for (i, entry) in entries.iter().enumerate() {
@@ -296,7 +427,7 @@ impl Database {
             // Only first entry gets the idempotency key
             let key = if i == 0 { idempotency_key } else { None };
 
-            let inserted = sqlx::query_as::<_, LedgerEntry>(
+            let result = sqlx::query_as::<_, LedgerEntry>(
                 r#"
                 INSERT INTO ledger_entries (entry_id, tenant_id, journal_id, account_id, amount, direction, effective_date, idempotency_key, metadata)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -313,12 +444,42 @@ impl Database {
             .bind(key)
             .bind(&metadata)
             .fetch_one(&mut *tx)
-            .await
-            .map_err(|e| {
-                AppError::DatabaseError(anyhow::anyhow!("Failed to insert entry: {}", e))
-            })?;
+            .await;
 
-            inserted_entries.push(inserted);
+            match result {
+                Ok(inserted) => inserted_entries.push(inserted),
+                Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
+                    // P2: Idempotency key race condition - another request won
+                    // Roll back and return the existing transaction
+                    tx.rollback().await.ok();
+                    if let Some(key) = idempotency_key {
+                        let existing_journal = sqlx::query_scalar::<_, Uuid>(
+                            "SELECT journal_id FROM ledger_entries WHERE idempotency_key = $1 LIMIT 1",
+                        )
+                        .bind(key)
+                        .fetch_optional(&self.pool)
+                        .await
+                        .map_err(|e| {
+                            AppError::DatabaseError(anyhow::anyhow!("Failed to fetch existing: {}", e))
+                        })?;
+
+                        if let Some(jid) = existing_journal {
+                            let entries = self.get_entries_by_journal(tenant_id, jid).await?;
+                            timer.observe_duration();
+                            return Ok((jid, entries, first_currency.clone()));
+                        }
+                    }
+                    return Err(AppError::Conflict(anyhow::anyhow!(
+                        "Duplicate idempotency key"
+                    )));
+                }
+                Err(e) => {
+                    return Err(AppError::DatabaseError(anyhow::anyhow!(
+                        "Failed to insert entry: {}",
+                        e
+                    )));
+                }
+            }
         }
 
         tx.commit().await.map_err(|e| {
@@ -334,7 +495,7 @@ impl Database {
             "Transaction posted"
         );
 
-        Ok((journal_id, inserted_entries))
+        Ok((journal_id, inserted_entries, first_currency.clone()))
     }
 
     /// Get all entries for a journal.
@@ -368,6 +529,7 @@ impl Database {
     }
 
     /// List transactions (grouped by journal_id) with optional filters.
+    /// P3: Orders by effective_date DESC, posted_utc DESC (most recent first).
     #[instrument(skip(self), fields(tenant_id = %tenant_id))]
     pub async fn list_transactions(
         &self,
@@ -384,18 +546,32 @@ impl Database {
 
         let limit = page_size.min(100).max(1) as i64;
 
-        // First get distinct journal_ids
+        // P3: Get distinct journal_ids ordered by effective_date DESC, posted_utc DESC
+        // Use a subquery to get the first entry's timestamp for each journal
         let journal_ids: Vec<Uuid> = if let Some(cursor) = page_token {
+            // For cursor pagination with descending order, we use a subquery to get
+            // the cursor's effective_date/posted_utc and then filter for earlier entries
             sqlx::query_scalar(
                 r#"
-                SELECT DISTINCT journal_id
-                FROM ledger_entries
-                WHERE tenant_id = $1
-                  AND ($2::uuid IS NULL OR account_id = $2)
-                  AND ($3::date IS NULL OR effective_date >= $3)
-                  AND ($4::date IS NULL OR effective_date <= $4)
-                  AND journal_id > $5
-                ORDER BY journal_id
+                WITH journal_order AS (
+                    SELECT DISTINCT ON (journal_id)
+                        journal_id,
+                        effective_date,
+                        posted_utc
+                    FROM ledger_entries
+                    WHERE tenant_id = $1
+                      AND ($2::uuid IS NULL OR account_id = $2)
+                      AND ($3::date IS NULL OR effective_date >= $3)
+                      AND ($4::date IS NULL OR effective_date <= $4)
+                    ORDER BY journal_id, posted_utc
+                ),
+                cursor_pos AS (
+                    SELECT effective_date, posted_utc FROM journal_order WHERE journal_id = $5
+                )
+                SELECT jo.journal_id
+                FROM journal_order jo, cursor_pos cp
+                WHERE (jo.effective_date, jo.posted_utc, jo.journal_id) < (cp.effective_date, cp.posted_utc, $5)
+                ORDER BY jo.effective_date DESC, jo.posted_utc DESC, jo.journal_id DESC
                 LIMIT $6
                 "#,
             )
@@ -410,13 +586,20 @@ impl Database {
         } else {
             sqlx::query_scalar(
                 r#"
-                SELECT DISTINCT journal_id
-                FROM ledger_entries
-                WHERE tenant_id = $1
-                  AND ($2::uuid IS NULL OR account_id = $2)
-                  AND ($3::date IS NULL OR effective_date >= $3)
-                  AND ($4::date IS NULL OR effective_date <= $4)
-                ORDER BY journal_id
+                SELECT journal_id
+                FROM (
+                    SELECT DISTINCT ON (journal_id)
+                        journal_id,
+                        effective_date,
+                        posted_utc
+                    FROM ledger_entries
+                    WHERE tenant_id = $1
+                      AND ($2::uuid IS NULL OR account_id = $2)
+                      AND ($3::date IS NULL OR effective_date >= $3)
+                      AND ($4::date IS NULL OR effective_date <= $4)
+                    ORDER BY journal_id, posted_utc
+                ) sub
+                ORDER BY effective_date DESC, posted_utc DESC, journal_id DESC
                 LIMIT $5
                 "#,
             )
@@ -449,9 +632,9 @@ impl Database {
     // -------------------------------------------------------------------------
 
     /// Get balance for an account as of a specific date.
-    /// Balance = SUM(debits) - SUM(credits)
-    /// For Asset/Expense accounts: positive balance means debit balance
-    /// For Liability/Equity/Revenue accounts: positive balance means credit balance (stored as negative)
+    /// P2: Balance calculation considers account type:
+    /// - Asset/Expense (debit-normal): balance = debits - credits (positive = normal)
+    /// - Liability/Equity/Revenue (credit-normal): balance = credits - debits (positive = normal)
     #[instrument(skip(self), fields(tenant_id = %tenant_id, account_id = %account_id))]
     pub async fn get_balance(
         &self,
@@ -463,7 +646,7 @@ impl Database {
             .with_label_values(&["get_balance"])
             .start_timer();
 
-        // First get the account to verify it exists and get currency
+        // First get the account to verify it exists and get currency/type
         let account = self.get_account(tenant_id, account_id).await?;
         let account = match account {
             Some(a) => a,
@@ -473,7 +656,8 @@ impl Database {
         // Calculate balance from entries
         let as_of = as_of_date.unwrap_or_else(|| chrono::Utc::now().date_naive());
 
-        let balance: Option<Decimal> = sqlx::query_scalar(
+        // Calculate raw balance (debits - credits)
+        let raw_balance: Option<Decimal> = sqlx::query_scalar(
             r#"
             SELECT COALESCE(
                 SUM(CASE WHEN direction = 'debit' THEN amount ELSE -amount END),
@@ -492,9 +676,17 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get balance: {}", e)))?;
 
+        let raw = raw_balance.unwrap_or(Decimal::ZERO);
+
+        // P2: Adjust sign based on account type
+        // For credit-normal accounts, negate to show positive balance
+        let account_type = AccountType::from_str(&account.account_type);
+        let is_debit_normal = matches!(account_type, AccountType::Asset | AccountType::Expense);
+        let balance = if is_debit_normal { raw } else { -raw };
+
         timer.observe_duration();
 
-        Ok(Some((balance.unwrap_or(Decimal::ZERO), account.currency)))
+        Ok(Some((balance, account.currency)))
     }
 
     /// Get balances for multiple accounts.
@@ -515,8 +707,9 @@ impl Database {
         let mut results = Vec::with_capacity(account_ids.len());
 
         for account_id in account_ids {
-            if let Some((balance, currency)) =
-                self.get_balance(tenant_id, *account_id, Some(as_of)).await?
+            if let Some((balance, currency)) = self
+                .get_balance(tenant_id, *account_id, Some(as_of))
+                .await?
             {
                 results.push((*account_id, balance, currency));
             }

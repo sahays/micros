@@ -31,7 +31,7 @@ pub static TRANSACTIONS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
     register_counter_vec!(
         "ledger_transactions_total",
         "Total number of transactions posted",
-        &["status"]  // ok, error - not tenant_id to avoid cardinality explosion
+        &["status"] // ok, error - not tenant_id to avoid cardinality explosion
     )
     .expect("Failed to register transactions_total")
 });
@@ -41,7 +41,7 @@ pub static ERRORS_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
     register_counter_vec!(
         "ledger_errors_total",
         "Total number of errors by type",
-        &["error_type"]  // db_error, validation_error, etc.
+        &["error_type"] // db_error, validation_error, etc.
     )
     .expect("Failed to register errors_total")
 });
@@ -67,6 +67,27 @@ pub static DB_QUERY_DURATION: Lazy<HistogramVec> = Lazy::new(|| {
     .expect("Failed to register db_query_duration")
 });
 
+/// P3: Ledger entries counter by direction.
+pub static ENTRIES_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "ledger_entries_total",
+        "Total number of ledger entries posted",
+        &["direction"] // debit, credit
+    )
+    .expect("Failed to register entries_total")
+});
+
+/// P3: Total monetary amount processed (in base units).
+/// Note: Only useful for single-currency systems; multi-currency requires separate tracking.
+pub static AMOUNT_TOTAL: Lazy<CounterVec> = Lazy::new(|| {
+    register_counter_vec!(
+        "ledger_amount_total",
+        "Total monetary amount processed by direction",
+        &["direction", "currency"] // currency label for multi-currency support
+    )
+    .expect("Failed to register amount_total")
+});
+
 /// Initialize all metrics (forces lazy initialization).
 pub fn init_metrics() {
     Lazy::force(&GRPC_REQUESTS_TOTAL);
@@ -75,6 +96,8 @@ pub fn init_metrics() {
     Lazy::force(&ACCOUNTS_CREATED);
     Lazy::force(&DB_QUERY_DURATION);
     Lazy::force(&ERRORS_TOTAL);
+    Lazy::force(&ENTRIES_TOTAL);
+    Lazy::force(&AMOUNT_TOTAL);
 }
 
 /// Get metrics in Prometheus text format.

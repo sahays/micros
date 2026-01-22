@@ -11,11 +11,13 @@ use crate::grpc::proto::{
 };
 use crate::models::{Account, AccountType, CreateAccount, Direction, LedgerEntry, PostEntry};
 use crate::services::metrics::{
-    ACCOUNTS_CREATED, GRPC_REQUESTS_TOTAL, GRPC_REQUEST_DURATION, TRANSACTIONS_TOTAL,
+    ACCOUNTS_CREATED, AMOUNT_TOTAL, ENTRIES_TOTAL, GRPC_REQUESTS_TOTAL, GRPC_REQUEST_DURATION,
+    TRANSACTIONS_TOTAL,
 };
 use crate::services::Database;
 use chrono::NaiveDate;
 use prost_types::Timestamp;
+use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -35,20 +37,19 @@ impl LedgerServiceImpl {
     }
 
     /// Convert domain Account to proto Account.
-    fn account_to_proto(account: &Account) -> ProtoAccount {
+    /// P1: Now accepts optional balance to include in response.
+    fn account_to_proto(account: &Account, balance: Option<Decimal>) -> ProtoAccount {
         ProtoAccount {
             account_id: account.account_id.to_string(),
             tenant_id: account.tenant_id.to_string(),
-            account_type: AccountType::from_proto(
-                match account.account_type.as_str() {
-                    "asset" => 1,
-                    "liability" => 2,
-                    "equity" => 3,
-                    "revenue" => 4,
-                    "expense" => 5,
-                    _ => 0,
-                }
-            )
+            account_type: AccountType::from_proto(match account.account_type.as_str() {
+                "asset" => 1,
+                "liability" => 2,
+                "equity" => 3,
+                "revenue" => 4,
+                "expense" => 5,
+                _ => 0,
+            })
             .map(|t| t.to_proto())
             .unwrap_or(0),
             account_code: account.account_code.clone(),
@@ -67,7 +68,7 @@ impl LedgerServiceImpl {
                 seconds: t.timestamp(),
                 nanos: t.timestamp_subsec_nanos() as i32,
             }),
-            balance: String::new(), // Balance is calculated, not stored
+            balance: balance.map(|b| b.to_string()).unwrap_or_default(),
         }
     }
 
@@ -134,7 +135,10 @@ impl LedgerServiceImpl {
 
 #[tonic::async_trait]
 impl LedgerService for LedgerServiceImpl {
-    #[instrument(skip(self, request), fields(service = "ledger-service", method = "CreateAccount"))]
+    #[instrument(
+        skip(self, request),
+        fields(service = "ledger-service", method = "CreateAccount")
+    )]
     async fn create_account(
         &self,
         request: Request<CreateAccountRequest>,
@@ -231,11 +235,14 @@ impl LedgerService for LedgerServiceImpl {
         );
 
         Ok(Response::new(CreateAccountResponse {
-            account: Some(Self::account_to_proto(&account)),
+            account: Some(Self::account_to_proto(&account, Some(Decimal::ZERO))),
         }))
     }
 
-    #[instrument(skip(self, request), fields(service = "ledger-service", method = "GetAccount"))]
+    #[instrument(
+        skip(self, request),
+        fields(service = "ledger-service", method = "GetAccount")
+    )]
     async fn get_account(
         &self,
         request: Request<GetAccountRequest>,
@@ -261,9 +268,10 @@ impl LedgerService for LedgerServiceImpl {
             Status::invalid_argument("Invalid account_id format")
         })?;
 
-        let account = self
+        // P1: Use get_account_with_balance to return balance
+        let result = self
             .db
-            .get_account(tenant_id, account_id)
+            .get_account_with_balance(tenant_id, account_id)
             .await
             .map_err(|e| {
                 warn!(error = %e, "Failed to get account");
@@ -275,13 +283,13 @@ impl LedgerService for LedgerServiceImpl {
 
         timer.observe_duration();
 
-        match account {
-            Some(acc) => {
+        match result {
+            Some((acc, balance)) => {
                 GRPC_REQUESTS_TOTAL
                     .with_label_values(&["GetAccount", "ok"])
                     .inc();
                 Ok(Response::new(GetAccountResponse {
-                    account: Some(Self::account_to_proto(&acc)),
+                    account: Some(Self::account_to_proto(&acc, Some(balance))),
                 }))
             }
             None => {
@@ -293,7 +301,10 @@ impl LedgerService for LedgerServiceImpl {
         }
     }
 
-    #[instrument(skip(self, request), fields(service = "ledger-service", method = "ListAccounts"))]
+    #[instrument(
+        skip(self, request),
+        fields(service = "ledger-service", method = "ListAccounts")
+    )]
     async fn list_accounts(
         &self,
         request: Request<ListAccountsRequest>,
@@ -338,7 +349,11 @@ impl LedgerService for LedgerServiceImpl {
             })?)
         };
 
-        let page_size = if req.page_size <= 0 { 20 } else { req.page_size };
+        let page_size = if req.page_size <= 0 {
+            20
+        } else {
+            req.page_size
+        };
 
         let accounts = self
             .db
@@ -366,12 +381,19 @@ impl LedgerService for LedgerServiceImpl {
         };
 
         Ok(Response::new(ListAccountsResponse {
-            accounts: accounts.iter().map(Self::account_to_proto).collect(),
+            // Note: Balance is None for list queries - use GetBalances for balance info
+            accounts: accounts
+                .iter()
+                .map(|a| Self::account_to_proto(a, None))
+                .collect(),
             next_page_token: next_page_token.unwrap_or_default(),
         }))
     }
 
-    #[instrument(skip(self, request), fields(service = "ledger-service", method = "PostTransaction"))]
+    #[instrument(
+        skip(self, request),
+        fields(service = "ledger-service", method = "PostTransaction")
+    )]
     async fn post_transaction(
         &self,
         request: Request<PostTransactionRequest>,
@@ -463,9 +485,15 @@ impl LedgerService for LedgerServiceImpl {
         };
 
         // Post the transaction
-        let (journal_id, inserted_entries) = self
+        let (journal_id, inserted_entries, currency) = self
             .db
-            .post_transaction(tenant_id, &entries, effective_date, idempotency_key, metadata)
+            .post_transaction(
+                tenant_id,
+                &entries,
+                effective_date,
+                idempotency_key,
+                metadata,
+            )
             .await
             .map_err(|e| {
                 warn!(error = %e, "Failed to post transaction");
@@ -485,6 +513,18 @@ impl LedgerService for LedgerServiceImpl {
             .inc();
         TRANSACTIONS_TOTAL.with_label_values(&["ok"]).inc();
 
+        // P3: Record entry and amount metrics
+        for entry in &entries {
+            let direction_str = entry.direction.as_str();
+            ENTRIES_TOTAL.with_label_values(&[direction_str]).inc();
+            // Convert Decimal to f64 for counter (counters only accept f64)
+            if let Some(amount_f64) = entry.amount.to_f64() {
+                AMOUNT_TOTAL
+                    .with_label_values(&[direction_str, &currency])
+                    .inc_by(amount_f64);
+            }
+        }
+
         timer.observe_duration();
 
         info!(
@@ -502,7 +542,10 @@ impl LedgerService for LedgerServiceImpl {
         }))
     }
 
-    #[instrument(skip(self, request), fields(service = "ledger-service", method = "GetTransaction"))]
+    #[instrument(
+        skip(self, request),
+        fields(service = "ledger-service", method = "GetTransaction")
+    )]
     async fn get_transaction(
         &self,
         request: Request<GetTransactionRequest>,
@@ -554,11 +597,16 @@ impl LedgerService for LedgerServiceImpl {
             .inc();
 
         Ok(Response::new(GetTransactionResponse {
-            transaction: Some(Self::entries_to_transaction(tenant_id, journal_id, &entries)),
+            transaction: Some(Self::entries_to_transaction(
+                tenant_id, journal_id, &entries,
+            )),
         }))
     }
 
-    #[instrument(skip(self, request), fields(service = "ledger-service", method = "ListTransactions"))]
+    #[instrument(
+        skip(self, request),
+        fields(service = "ledger-service", method = "ListTransactions")
+    )]
     async fn list_transactions(
         &self,
         request: Request<ListTransactionsRequest>,
@@ -628,11 +676,17 @@ impl LedgerService for LedgerServiceImpl {
             })?)
         };
 
-        let page_size = if req.page_size <= 0 { 20 } else { req.page_size };
+        let page_size = if req.page_size <= 0 {
+            20
+        } else {
+            req.page_size
+        };
 
         let transactions = self
             .db
-            .list_transactions(tenant_id, account_id, start_date, end_date, page_size, page_token)
+            .list_transactions(
+                tenant_id, account_id, start_date, end_date, page_size, page_token,
+            )
             .await
             .map_err(|e| {
                 warn!(error = %e, "Failed to list transactions");
@@ -664,7 +718,10 @@ impl LedgerService for LedgerServiceImpl {
         }))
     }
 
-    #[instrument(skip(self, request), fields(service = "ledger-service", method = "GetBalance"))]
+    #[instrument(
+        skip(self, request),
+        fields(service = "ledger-service", method = "GetBalance")
+    )]
     async fn get_balance(
         &self,
         request: Request<GetBalanceRequest>,
@@ -741,7 +798,10 @@ impl LedgerService for LedgerServiceImpl {
         }
     }
 
-    #[instrument(skip(self, request), fields(service = "ledger-service", method = "GetBalances"))]
+    #[instrument(
+        skip(self, request),
+        fields(service = "ledger-service", method = "GetBalances")
+    )]
     async fn get_balances(
         &self,
         request: Request<GetBalancesRequest>,
@@ -821,7 +881,10 @@ impl LedgerService for LedgerServiceImpl {
         }))
     }
 
-    #[instrument(skip(self, request), fields(service = "ledger-service", method = "GetStatement"))]
+    #[instrument(
+        skip(self, request),
+        fields(service = "ledger-service", method = "GetStatement")
+    )]
     async fn get_statement(
         &self,
         request: Request<GetStatementRequest>,
@@ -866,9 +929,7 @@ impl LedgerService for LedgerServiceImpl {
             GRPC_REQUESTS_TOTAL
                 .with_label_values(&["GetStatement", "invalid_argument"])
                 .inc();
-            return Err(Status::invalid_argument(
-                "end_date must be >= start_date",
-            ));
+            return Err(Status::invalid_argument("end_date must be >= start_date"));
         }
 
         let result = self

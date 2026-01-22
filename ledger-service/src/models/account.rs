@@ -19,6 +19,18 @@ pub enum AccountType {
 }
 
 impl AccountType {
+    /// Convert from string representation.
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "asset" => Self::Asset,
+            "liability" => Self::Liability,
+            "equity" => Self::Equity,
+            "revenue" => Self::Revenue,
+            "expense" => Self::Expense,
+            _ => Self::Asset, // Default fallback
+        }
+    }
+
     /// Convert from proto enum value.
     pub fn from_proto(value: i32) -> Option<Self> {
         match value {
