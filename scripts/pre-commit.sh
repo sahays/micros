@@ -1,23 +1,27 @@
 #!/bin/bash
-# pre-commit.sh - Pre-commit checks for staged files
+# pre-commit.sh - Pre-commit checks for all services
+#
+# Ensures every commit is:
+# - Properly formatted (cargo fmt)
+# - Lint-free (cargo clippy)
+# - Fully tested (unit tests + integration tests)
 #
 # Runs:
 # - cargo fmt --check (formatting)
 # - cargo clippy (linting)
 # - cargo test --lib (unit tests)
-# - Integration tests (if database is available)
 # - buf lint (proto files)
+# - Integration tests for ALL services (requires PostgreSQL + MongoDB)
 #
 # Environment variables:
-#   SKIP_INTEG_TESTS=1  - Skip integration tests (faster commits)
-#   DB_HOST, DB_PORT, DB_USER, DB_PASSWORD - Database connection (for integ tests)
+#   SKIP_INTEG_TESTS=1  - Skip integration tests (faster commits, use sparingly)
 
 set -e
 
-# Ensure cargo is in PATH (common locations)
+# Ensure cargo is in PATH
 export PATH="$HOME/.cargo/bin:$PATH"
 
-# Load environment variables from .env.test for local tests
+# Load environment variables from .env.test if exists
 if [ -f ".env.test" ]; then
     export $(grep -v '^#' .env.test | xargs 2>/dev/null) || true
 fi
@@ -54,14 +58,13 @@ echo ""
 # All services in the monorepo
 ALL_SERVICES=("auth-service" "service-core" "document-service" "genai-service" "notification-service" "ledger-service" "payment-service")
 
-# Check only staged rust files
+# Check only staged rust files for formatting/linting
 STAGED_RS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.rs$' || true)
 
-# Track which services have changes
+# Track which services have changes (for targeted fmt/clippy)
 SERVICES_WITH_CHANGES=()
 
 if [ -n "$STAGED_RS_FILES" ]; then
-    # Detect which services have changes
     for service in "${ALL_SERVICES[@]}"; do
         if echo "$STAGED_RS_FILES" | grep -q "^${service}/"; then
             if [ -d "$service" ]; then
@@ -74,7 +77,7 @@ if [ -n "$STAGED_RS_FILES" ]; then
         log_info "Staged Rust files detected in: ${SERVICES_WITH_CHANGES[*]}"
         echo ""
 
-        # Run checks for each service with changes
+        # Run formatting and linting for services with changes
         for service in "${SERVICES_WITH_CHANGES[@]}"; do
             log_step "Checking $service..."
 
@@ -96,7 +99,7 @@ if [ -n "$STAGED_RS_FILES" ]; then
                 exit 1
             fi
 
-            # Unit tests only (fast, no database required)
+            # Unit tests only (fast)
             echo "  Running unit tests..."
             if ! cargo test --lib --jobs 2 2>&1 | grep -v "^warning: profiles for the non root package"; then
                 log_error "Unit tests failed."
@@ -116,7 +119,6 @@ STAGED_PROTO_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.p
 if [ -n "$STAGED_PROTO_FILES" ]; then
     log_step "Checking proto files..."
 
-    # Check if buf is installed
     if command -v buf &> /dev/null; then
         cd proto
         if ! buf lint; then
@@ -132,52 +134,20 @@ if [ -n "$STAGED_PROTO_FILES" ]; then
     echo ""
 fi
 
-# Integration tests section
+# Integration tests - run for ALL services
 if [ "$SKIP_INTEG_TESTS" = "1" ]; then
     log_warn "Skipping integration tests (SKIP_INTEG_TESTS=1)"
+    log_warn "Note: Use sparingly - commits should be fully tested"
 else
-    log_step "Running integration tests..."
+    log_step "Running integration tests for ALL services..."
+    echo ""
 
-    # Check if we have any PostgreSQL-dependent services with changes
-    PG_SERVICES_CHANGED=()
-    for service in "${SERVICES_WITH_CHANGES[@]}"; do
-        if [ "$service" = "auth-service" ] || [ "$service" = "ledger-service" ]; then
-            PG_SERVICES_CHANGED+=("$service")
-        fi
-    done
-
-    if [ ${#PG_SERVICES_CHANGED[@]} -gt 0 ]; then
-        # Check if PostgreSQL is available
-        DB_HOST="${DB_HOST:-localhost}"
-        DB_PORT="${DB_PORT:-5432}"
-        DB_USER="${DB_USER:-postgres}"
-        DB_PASSWORD="${DB_PASSWORD:-pass@word1}"
-
-        if PGPASSWORD="${DB_PASSWORD}" psql -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -d postgres -c "SELECT 1;" >/dev/null 2>&1; then
-            log_info "PostgreSQL available, running integration tests for: ${PG_SERVICES_CHANGED[*]}"
-
-            # Build the package arguments
-            PKG_ARGS=""
-            for service in "${PG_SERVICES_CHANGED[@]}"; do
-                PKG_ARGS="$PKG_ARGS -p $service"
-            done
-
-            # Run integration tests
-            if ! ./scripts/integ-tests.sh $PKG_ARGS; then
-                log_error "Integration tests failed."
-                exit 1
-            fi
-            log_info "Integration tests passed"
-        else
-            log_warn "PostgreSQL not available at ${DB_HOST}:${DB_PORT}"
-            log_warn "Skipping integration tests. To run them:"
-            log_warn "  1. Start PostgreSQL"
-            log_warn "  2. Set DB_HOST, DB_PORT, DB_USER, DB_PASSWORD if needed"
-            log_warn "  3. Or run manually: ./scripts/integ-tests.sh"
-        fi
-    else
-        log_info "No PostgreSQL-dependent services changed, skipping database tests"
+    if ! ./scripts/integ-tests.sh; then
+        log_error "Integration tests failed."
+        exit 1
     fi
+
+    log_info "All integration tests passed"
     echo ""
 fi
 

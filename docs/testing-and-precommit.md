@@ -2,30 +2,34 @@
 
 ## Pre-Commit Hook
 
-The pre-commit hook runs automatically on `git commit` and checks only staged files.
+The pre-commit hook ensures every commit is properly formatted, lint-free, and fully tested across ALL services.
 
 **Install:**
 ```bash
 ln -s ../../scripts/pre-commit.sh .git/hooks/pre-commit
 ```
 
-**What it checks:**
-- `cargo fmt --check` - formatting
-- `cargo clippy` - linting
-- `cargo test --lib` - unit tests
-- `buf lint` - proto files (if buf installed)
-- Integration tests (if PostgreSQL available)
+**What it runs:**
+1. `cargo fmt --check` - formatting (changed services only)
+2. `cargo clippy` - linting (changed services only)
+3. `cargo test --lib` - unit tests (changed services only)
+4. `buf lint` - proto files (if changed)
+5. **Integration tests for ALL services** (PostgreSQL + MongoDB required)
 
-**Services checked:** auth-service, service-core, document-service, genai-service, notification-service, ledger-service, payment-service
-
-**Skip integration tests:**
+**Skip integration tests (use sparingly):**
 ```bash
 SKIP_INTEG_TESTS=1 git commit -m "message"
 ```
 
+## Database Requirements
+
+Both databases must be running for commits:
+- **PostgreSQL**: localhost:5432 (auth-service, ledger-service)
+- **MongoDB**: localhost:27017 (document-service, genai-service, notification-service)
+
 ## Integration Tests
 
-Integration tests require a PostgreSQL database. The `integ-tests.sh` script handles database setup and teardown.
+The `integ-tests.sh` script handles database setup, migrations, and test execution.
 
 **Run all integration tests:**
 ```bash
@@ -35,17 +39,7 @@ Integration tests require a PostgreSQL database. The `integ-tests.sh` script han
 **Run for specific service:**
 ```bash
 ./scripts/integ-tests.sh -p ledger-service
-./scripts/integ-tests.sh -p auth-service
-```
-
-**Run only database tests (ignored tests):**
-```bash
-./scripts/integ-tests.sh -p ledger-service --ignored
-```
-
-**Skip database setup (for non-DB tests):**
-```bash
-./scripts/integ-tests.sh --skip-db
+./scripts/integ-tests.sh -p document-service
 ```
 
 **Pass args to cargo test:**
@@ -53,62 +47,56 @@ Integration tests require a PostgreSQL database. The `integ-tests.sh` script han
 ./scripts/integ-tests.sh -- --test-threads=1
 ```
 
-## Database Configuration
+## Service Database Mapping
 
-Integration tests use environment variables for database connection:
+| Service | Database | Test Pattern |
+|---------|----------|--------------|
+| auth-service | PostgreSQL | `#[ignore]` tests |
+| ledger-service | PostgreSQL | `#[ignore]` tests |
+| document-service | MongoDB | Regular tests |
+| genai-service | MongoDB | Regular tests |
+| notification-service | MongoDB | Regular tests |
 
-| Variable | Default |
-|----------|---------|
-| `DB_HOST` | localhost |
-| `DB_PORT` | 5432 |
-| `DB_USER` | postgres |
-| `DB_PASSWORD` | pass@word1 |
-
-Or create `.env.test` in the repo root with these values.
-
-## Test Database Lifecycle
+## PostgreSQL Test Lifecycle
 
 1. Creates timestamped database: `micros_test_<timestamp>`
 2. Runs migrations for auth-service and ledger-service
 3. Exports `TEST_DATABASE_URL` for tests
-4. Drops database on exit (including Ctrl+C)
+4. Runs tests with `--ignored` flag
+5. Drops database on exit (including Ctrl+C)
 
-## Writing Integration Tests
+## MongoDB Test Lifecycle
 
-Tests requiring a database should use the `#[ignore]` attribute:
+1. Each test creates its own database (e.g., `document_test_<uuid>`)
+2. Tests clean up their own databases
+3. No global setup/teardown needed
 
-```rust
-#[tokio::test]
-#[ignore]
-async fn test_with_database() {
-    let url = std::env::var("TEST_DATABASE_URL").unwrap();
-    // ...
-}
-```
+## Environment Variables
 
-Run with `--ignored` flag or via `integ-tests.sh`.
-
-## Unit Tests
-
-Unit tests run without database and should not use `#[ignore]`:
-
-```bash
-cargo test -p ledger-service --lib
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_HOST` | localhost | PostgreSQL host |
+| `DB_PORT` | 5432 | PostgreSQL port |
+| `DB_USER` | postgres | PostgreSQL user |
+| `DB_PASSWORD` | pass@word1 | PostgreSQL password |
+| `MONGODB_URI` | mongodb://localhost:27017 | MongoDB connection |
 
 ## Troubleshooting
 
 **Pre-commit fails on formatting:**
-The hook auto-runs `cargo fmt` to fix issues. Re-stage the formatted files and commit again.
+The hook auto-runs `cargo fmt`. Re-stage files and commit again.
 
-**Cannot connect to PostgreSQL:**
-Ensure PostgreSQL is running and credentials match. Check with:
+**PostgreSQL not available:**
 ```bash
 PGPASSWORD=pass@word1 psql -h localhost -U postgres -c "SELECT 1;"
 ```
 
-**Tests timeout or hang:**
-Run with single thread to isolate issues:
+**MongoDB not available:**
+```bash
+mongosh --eval "db.runCommand({ping:1})"
+```
+
+**Tests timeout:**
 ```bash
 ./scripts/integ-tests.sh -- --test-threads=1
 ```

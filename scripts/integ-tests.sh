@@ -1,62 +1,68 @@
 #!/bin/bash
 # integ-tests.sh - Run integration tests with database setup/teardown
 #
-# This script replaces cargo test for integration tests that need a database.
-# It:
-# 1. Creates a fresh PostgreSQL test database
-# 2. Runs database migrations for all services
-# 3. Executes cargo test for specified packages
-# 4. Cleans up the test database after tests complete
-# 5. Handles interrupts gracefully (Ctrl+C)
+# This script runs integration tests for all services that require databases.
+# It handles both PostgreSQL (auth-service, ledger-service) and MongoDB
+# (document-service, genai-service, notification-service) services.
 #
 # Usage: ./scripts/integ-tests.sh [options]
 #
 # Options:
 #   -p, --package <name>    Run tests for specific package (can be repeated)
 #   --all                   Run all workspace tests (default if no -p specified)
-#   --lib                   Run only library tests (no integration tests)
-#   --ignored               Run only ignored tests (database tests)
-#   --skip-db               Skip database setup (for non-DB tests)
 #   --                      Pass remaining args to cargo test
+#
+# Database requirements:
+#   - PostgreSQL: localhost:5432 (for auth-service, ledger-service)
+#   - MongoDB: localhost:27017 (for document-service, genai-service, notification-service)
 #
 # Examples:
 #   ./scripts/integ-tests.sh                           # Run all tests
 #   ./scripts/integ-tests.sh -p auth-service           # Run auth-service tests
 #   ./scripts/integ-tests.sh -p ledger-service         # Run ledger-service tests
-#   ./scripts/integ-tests.sh -p auth-service --ignored # Run database tests only
-#   ./scripts/integ-tests.sh -- --test-threads=1       # Pass args to cargo
+#   ./scripts/integ-tests.sh -p document-service       # Run document-service tests
 
 set -e
 
-# Configuration
-DB_HOST="${DB_HOST:-localhost}"
-DB_PORT="${DB_PORT:-5432}"
-DB_USER="${DB_USER:-postgres}"
-DB_PASSWORD="${DB_PASSWORD:-pass@word1}"
-DB_NAME="${DB_NAME:-micros_test_$(date +%s)}"
+# PostgreSQL Configuration
+PG_HOST="${DB_HOST:-localhost}"
+PG_PORT="${DB_PORT:-5432}"
+PG_USER="${DB_USER:-postgres}"
+PG_PASSWORD="${DB_PASSWORD:-pass@word1}"
+PG_DB_NAME="${DB_NAME:-micros_test_$(date +%s)}"
+
+# MongoDB Configuration
+MONGO_HOST="${MONGO_HOST:-localhost}"
+MONGO_PORT="${MONGO_PORT:-27017}"
+MONGO_URI="${MONGODB_URI:-mongodb://${MONGO_HOST}:${MONGO_PORT}}"
 
 # URL-encode the password (@ becomes %40)
-DB_PASSWORD_ENCODED="${DB_PASSWORD//@/%40}"
+PG_PASSWORD_ENCODED="${PG_PASSWORD//@/%40}"
 
 # Export for tests
-export TEST_DATABASE_URL="postgres://${DB_USER}:${DB_PASSWORD_ENCODED}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
+export TEST_DATABASE_URL="postgres://${PG_USER}:${PG_PASSWORD_ENCODED}@${PG_HOST}:${PG_PORT}/${PG_DB_NAME}"
+export MONGODB_URI="${MONGO_URI}"
 
-# Track if we've created the database
-DB_CREATED=false
-SKIP_DB=false
+# Track database states
+PG_DB_CREATED=false
+PG_AVAILABLE=false
+MONGO_AVAILABLE=false
+
+# Services by database type
+PG_SERVICES=("auth-service" "ledger-service")
+MONGO_SERVICES=("document-service" "genai-service" "notification-service")
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 # Parse arguments
 PACKAGES=()
 RUN_ALL=false
 CARGO_ARGS=()
-TEST_TYPE=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -66,18 +72,6 @@ while [[ $# -gt 0 ]]; do
             ;;
         --all)
             RUN_ALL=true
-            shift
-            ;;
-        --lib)
-            TEST_TYPE="--lib"
-            shift
-            ;;
-        --ignored)
-            CARGO_ARGS+=("--ignored")
-            shift
-            ;;
-        --skip-db)
-            SKIP_DB=true
             shift
             ;;
         --)
@@ -117,78 +111,104 @@ log_step() {
 cleanup() {
     local exit_code=$?
 
-    if [ "$DB_CREATED" = true ]; then
-        log_info "Dropping test database: ${DB_NAME}"
-        PGPASSWORD="${DB_PASSWORD}" psql -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -d postgres \
-            -c "DROP DATABASE IF EXISTS ${DB_NAME};" 2>/dev/null || true
+    if [ "$PG_DB_CREATED" = true ]; then
+        log_info "Dropping PostgreSQL test database: ${PG_DB_NAME}"
+        PGPASSWORD="${PG_PASSWORD}" psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d postgres \
+            -c "DROP DATABASE IF EXISTS ${PG_DB_NAME};" 2>/dev/null || true
     fi
 
     if [ $exit_code -ne 0 ]; then
         log_error "Tests failed with exit code: $exit_code"
     else
-        log_info "Tests completed successfully"
+        log_info "All tests completed successfully"
     fi
 
     exit $exit_code
 }
 
-# Set up trap for cleanup on exit, interrupt, or termination
+# Set up trap for cleanup
 trap cleanup EXIT INT TERM
 
-# Check if PostgreSQL is accessible
+# Check PostgreSQL availability
 check_postgres() {
     log_step "Checking PostgreSQL connection..."
-    if ! PGPASSWORD="${DB_PASSWORD}" psql -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -d postgres -c "SELECT 1;" >/dev/null 2>&1; then
-        log_error "Cannot connect to PostgreSQL at ${DB_HOST}:${DB_PORT}"
-        log_error "Make sure PostgreSQL is running and accessible"
-        log_error "You can configure connection with: DB_HOST, DB_PORT, DB_USER, DB_PASSWORD"
+    if PGPASSWORD="${PG_PASSWORD}" psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d postgres -c "SELECT 1;" >/dev/null 2>&1; then
+        log_info "PostgreSQL available at ${PG_HOST}:${PG_PORT}"
+        PG_AVAILABLE=true
+        return 0
+    else
+        log_warn "PostgreSQL not available at ${PG_HOST}:${PG_PORT}"
         return 1
     fi
-    log_info "PostgreSQL connection successful"
-    return 0
 }
 
-# Create test database
-create_database() {
-    log_step "Creating test database: ${DB_NAME}"
-
-    # Drop if exists and create fresh
-    PGPASSWORD="${DB_PASSWORD}" psql -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -d postgres \
-        -c "DROP DATABASE IF EXISTS ${DB_NAME};" 2>/dev/null || true
-
-    PGPASSWORD="${DB_PASSWORD}" psql -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -d postgres \
-        -c "CREATE DATABASE ${DB_NAME};"
-
-    DB_CREATED=true
-    log_info "Test database created"
-}
-
-# Run migrations for a specific service
-run_service_migrations() {
-    local service=$1
-    local migrations_dir="${service}/migrations"
-
-    if [ ! -d "$migrations_dir" ]; then
-        return 0
-    fi
-
-    log_info "Running migrations for ${service}..."
-
-    # Run migrations using sqlx (if available) or direct SQL
-    if command -v sqlx &> /dev/null; then
-        (
-            cd "${service}"
-            DATABASE_URL="${TEST_DATABASE_URL}" sqlx migrate run 2>&1 || {
-                log_warn "sqlx migrate failed for ${service}, trying direct SQL"
-                cd ..
-                run_migrations_sql "$service"
-            }
-        )
+# Check MongoDB availability
+check_mongo() {
+    log_step "Checking MongoDB connection..."
+    if command -v mongosh &> /dev/null; then
+        if mongosh "${MONGO_URI}" --eval "db.runCommand({ping:1})" --quiet >/dev/null 2>&1; then
+            log_info "MongoDB available at ${MONGO_URI}"
+            MONGO_AVAILABLE=true
+            return 0
+        fi
+    elif command -v mongo &> /dev/null; then
+        if mongo "${MONGO_URI}" --eval "db.runCommand({ping:1})" --quiet >/dev/null 2>&1; then
+            log_info "MongoDB available at ${MONGO_URI}"
+            MONGO_AVAILABLE=true
+            return 0
+        fi
     else
-        run_migrations_sql "$service"
+        # Try with nc as fallback
+        if nc -z "${MONGO_HOST}" "${MONGO_PORT}" 2>/dev/null; then
+            log_info "MongoDB port open at ${MONGO_HOST}:${MONGO_PORT} (assuming available)"
+            MONGO_AVAILABLE=true
+            return 0
+        fi
     fi
+    log_warn "MongoDB not available at ${MONGO_URI}"
+    return 1
+}
 
-    log_info "${service} migrations completed"
+# Create PostgreSQL test database
+create_pg_database() {
+    log_step "Creating PostgreSQL test database: ${PG_DB_NAME}"
+
+    PGPASSWORD="${PG_PASSWORD}" psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d postgres \
+        -c "DROP DATABASE IF EXISTS ${PG_DB_NAME};" 2>/dev/null || true
+
+    PGPASSWORD="${PG_PASSWORD}" psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d postgres \
+        -c "CREATE DATABASE ${PG_DB_NAME};"
+
+    PG_DB_CREATED=true
+    log_info "PostgreSQL test database created"
+}
+
+# Run migrations for PostgreSQL services
+run_pg_migrations() {
+    log_step "Running PostgreSQL migrations..."
+
+    for service in "${PG_SERVICES[@]}"; do
+        if [ -d "${service}/migrations" ]; then
+            log_info "Running migrations for ${service}..."
+
+            if command -v sqlx &> /dev/null; then
+                (
+                    cd "${service}"
+                    DATABASE_URL="${TEST_DATABASE_URL}" sqlx migrate run 2>&1 || {
+                        log_warn "sqlx migrate failed for ${service}, trying direct SQL"
+                        cd ..
+                        run_migrations_sql "$service"
+                    }
+                )
+            else
+                run_migrations_sql "$service"
+            fi
+
+            log_info "${service} migrations completed"
+        fi
+    done
+
+    log_info "All PostgreSQL migrations completed"
 }
 
 # Run migrations using direct SQL (fallback)
@@ -196,11 +216,10 @@ run_migrations_sql() {
     local service=$1
     local migrations_dir="${service}/migrations"
 
-    # Run migration files directly in order
     for migration in $(ls "${migrations_dir}"/*.sql 2>/dev/null | sort); do
         if [ -f "$migration" ]; then
             log_info "  Applying: $(basename "$migration")"
-            PGPASSWORD="${DB_PASSWORD}" psql -h "${DB_HOST}" -p "${DB_PORT}" -U "${DB_USER}" -d "${DB_NAME}" \
+            PGPASSWORD="${PG_PASSWORD}" psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d "${PG_DB_NAME}" \
                 -f "$migration" >/dev/null 2>&1 || {
                 log_warn "  Migration may have already been applied: $(basename "$migration")"
             }
@@ -208,77 +227,152 @@ run_migrations_sql() {
     done
 }
 
-# Run all migrations
-run_migrations() {
-    log_step "Running database migrations..."
-
-    # Services with PostgreSQL migrations (order matters for dependencies)
-    local pg_services=("auth-service" "ledger-service")
-
-    for service in "${pg_services[@]}"; do
-        if [ -d "${service}/migrations" ]; then
-            run_service_migrations "$service"
+# Check if package is in list
+is_in_list() {
+    local item="$1"
+    shift
+    local list=("$@")
+    for i in "${list[@]}"; do
+        if [ "$i" = "$item" ]; then
+            return 0
         fi
     done
-
-    log_info "All migrations completed"
+    return 1
 }
 
-# Run tests
-run_tests() {
-    log_step "Running tests..."
-    log_info "TEST_DATABASE_URL: postgres://${DB_USER}:****@${DB_HOST}:${DB_PORT}/${DB_NAME}"
-
-    # Build cargo test command
-    local cmd="cargo test"
+# Determine which services to test
+get_services_to_test() {
+    local pg_to_test=()
+    local mongo_to_test=()
 
     if [ "$RUN_ALL" = true ]; then
-        cmd="$cmd --workspace"
+        pg_to_test=("${PG_SERVICES[@]}")
+        mongo_to_test=("${MONGO_SERVICES[@]}")
     else
         for pkg in "${PACKAGES[@]}"; do
-            cmd="$cmd -p $pkg"
+            if is_in_list "$pkg" "${PG_SERVICES[@]}"; then
+                pg_to_test+=("$pkg")
+            elif is_in_list "$pkg" "${MONGO_SERVICES[@]}"; then
+                mongo_to_test+=("$pkg")
+            fi
         done
     fi
 
-    if [ -n "$TEST_TYPE" ]; then
-        cmd="$cmd $TEST_TYPE"
+    echo "${pg_to_test[*]}|${mongo_to_test[*]}"
+}
+
+# Run tests for PostgreSQL services
+run_pg_tests() {
+    local services=("$@")
+
+    if [ ${#services[@]} -eq 0 ]; then
+        return 0
     fi
 
-    # Add -- separator if we have cargo args
-    if [ ${#CARGO_ARGS[@]} -gt 0 ]; then
-        cmd="$cmd -- ${CARGO_ARGS[*]}"
+    log_step "Running PostgreSQL service tests: ${services[*]}"
+
+    for service in "${services[@]}"; do
+        log_info "Testing ${service}..."
+
+        local cmd="cargo test -p ${service}"
+
+        # Add --ignored for services with #[ignore] tests
+        if [ "$service" = "ledger-service" ] || [ "$service" = "auth-service" ]; then
+            cmd="$cmd -- --ignored"
+        fi
+
+        if [ ${#CARGO_ARGS[@]} -gt 0 ]; then
+            cmd="$cmd ${CARGO_ARGS[*]}"
+        fi
+
+        log_info "Running: $cmd"
+        eval $cmd
+    done
+}
+
+# Run tests for MongoDB services
+run_mongo_tests() {
+    local services=("$@")
+
+    if [ ${#services[@]} -eq 0 ]; then
+        return 0
     fi
 
-    log_info "Running: $cmd"
-    eval $cmd
+    log_step "Running MongoDB service tests: ${services[*]}"
+
+    for service in "${services[@]}"; do
+        log_info "Testing ${service}..."
+
+        local cmd="cargo test -p ${service}"
+
+        if [ ${#CARGO_ARGS[@]} -gt 0 ]; then
+            cmd="$cmd -- ${CARGO_ARGS[*]}"
+        fi
+
+        log_info "Running: $cmd"
+        eval $cmd
+    done
 }
 
 # Main execution
 main() {
     echo ""
     echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}  Integration Tests with Database Setup${NC}"
+    echo -e "${GREEN}  Integration Tests${NC}"
     echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
     echo ""
 
-    log_info "Database: ${DB_NAME} on ${DB_HOST}:${DB_PORT}"
+    # Get services to test
+    local services_result
+    services_result=$(get_services_to_test)
+    local pg_services_str="${services_result%%|*}"
+    local mongo_services_str="${services_result##*|}"
+
+    # Convert to arrays
+    read -ra pg_services_to_test <<< "$pg_services_str"
+    read -ra mongo_services_to_test <<< "$mongo_services_str"
 
     if [ "$RUN_ALL" = true ]; then
-        log_info "Packages: all workspace packages"
+        log_info "Running: all services"
     else
-        log_info "Packages: ${PACKAGES[*]}"
+        log_info "Running: ${PACKAGES[*]}"
     fi
-
     echo ""
 
-    if [ "$SKIP_DB" = true ]; then
-        log_info "Skipping database setup (--skip-db)"
-        run_tests
-    else
-        check_postgres || exit 1
-        create_database
-        run_migrations
-        run_tests
+    local has_failures=false
+
+    # PostgreSQL services
+    if [ ${#pg_services_to_test[@]} -gt 0 ] && [ -n "${pg_services_to_test[0]}" ]; then
+        log_info "PostgreSQL services to test: ${pg_services_to_test[*]}"
+
+        if check_postgres; then
+            create_pg_database
+            run_pg_migrations
+            log_info "TEST_DATABASE_URL: postgres://${PG_USER}:****@${PG_HOST}:${PG_PORT}/${PG_DB_NAME}"
+            run_pg_tests "${pg_services_to_test[@]}" || has_failures=true
+        else
+            log_error "PostgreSQL required for: ${pg_services_to_test[*]}"
+            has_failures=true
+        fi
+        echo ""
+    fi
+
+    # MongoDB services
+    if [ ${#mongo_services_to_test[@]} -gt 0 ] && [ -n "${mongo_services_to_test[0]}" ]; then
+        log_info "MongoDB services to test: ${mongo_services_to_test[*]}"
+
+        if check_mongo; then
+            log_info "MONGODB_URI: ${MONGO_URI}"
+            run_mongo_tests "${mongo_services_to_test[@]}" || has_failures=true
+        else
+            log_error "MongoDB required for: ${mongo_services_to_test[*]}"
+            has_failures=true
+        fi
+        echo ""
+    fi
+
+    if [ "$has_failures" = true ]; then
+        exit 1
     fi
 }
 
