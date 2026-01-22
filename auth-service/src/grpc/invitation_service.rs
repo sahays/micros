@@ -49,13 +49,12 @@ fn hash_token(token: &str) -> String {
 }
 
 /// Hash a password using argon2.
-fn hash_password(password: &str) -> Result<String, Status> {
+fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
     argon2
         .hash_password(password.as_bytes(), &salt)
         .map(|h| h.to_string())
-        .map_err(|e| Status::internal(format!("Password hashing failed: {}", e)))
 }
 
 #[tonic::async_trait]
@@ -224,7 +223,8 @@ impl InvitationService for InvitationServiceImpl {
             .map_err(|e| e.into_status())?;
 
         // Create user identity with password
-        let password_hash = hash_password(&req.password)?;
+        let password_hash = hash_password(&req.password)
+            .map_err(|e| Status::internal(format!("Password hashing failed: {}", e)))?;
         let identity = UserIdentity::new_password(user_id, password_hash);
 
         self.state

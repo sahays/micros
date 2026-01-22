@@ -92,16 +92,26 @@ if [ -n "$STAGED_RS_FILES" ]; then
                 exit 1
             fi
 
-            # Clippy check
-            echo "  Running clippy..."
-            if ! cargo clippy --jobs 2 -- -D warnings 2>&1 | grep -v "^warning: profiles for the non root package"; then
+            # Clippy check (strict mode: all warnings as errors)
+            echo "  Running clippy (strict)..."
+            set +e
+            clippy_output=$(cargo clippy --jobs 2 -- -D warnings -D clippy::all 2>&1)
+            clippy_exit=$?
+            set -e
+            echo "$clippy_output" | grep -v "^warning: profiles for the non root package" || true
+            if [ $clippy_exit -ne 0 ]; then
                 log_error "Clippy check failed."
                 exit 1
             fi
 
             # Unit tests only (fast)
             echo "  Running unit tests..."
-            if ! cargo test --lib --jobs 2 2>&1 | grep -v "^warning: profiles for the non root package"; then
+            set +e
+            test_output=$(cargo test --lib --jobs 2 2>&1)
+            test_exit=$?
+            set -e
+            echo "$test_output" | grep -v "^warning: profiles for the non root package" || true
+            if [ $test_exit -ne 0 ]; then
                 log_error "Unit tests failed."
                 exit 1
             fi

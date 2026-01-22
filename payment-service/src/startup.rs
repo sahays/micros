@@ -75,17 +75,15 @@ impl Application {
         let db = client.database(&config.database.db_name);
 
         // Connect to Redis
-        let redis = redis::Client::open(config.redis.url.expose_secret().as_str()).map_err(|e| {
-            tracing::error!("Failed to connect to Redis: {}", e);
-            AppError::InternalError(e.into())
-        })?;
+        let redis =
+            redis::Client::open(config.redis.url.expose_secret().as_str()).map_err(|e| {
+                tracing::error!("Failed to connect to Redis: {}", e);
+                AppError::InternalError(e.into())
+            })?;
 
         let signature_config = SignatureConfig {
             require_signatures: config.signature.enabled,
-            excluded_paths: vec![
-                "/health".to_string(),
-                "/ready".to_string(),
-            ],
+            excluded_paths: vec!["/health".to_string(), "/ready".to_string()],
         };
 
         let repository = PaymentRepository::new(&db);
@@ -93,7 +91,7 @@ impl Application {
         // Initialize indexes for tenant-scoped queries
         repository.init_indexes().await.map_err(|e| {
             tracing::error!("Failed to initialize database indexes: {}", e);
-            AppError::DatabaseError(e.into())
+            AppError::DatabaseError(e)
         })?;
 
         // Initialize Razorpay client
@@ -188,7 +186,9 @@ impl Application {
         let reflection_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
             .build_v1()
-            .map_err(|e| std::io::Error::other(format!("Failed to build reflection service: {}", e)))?;
+            .map_err(|e| {
+                std::io::Error::other(format!("Failed to build reflection service: {}", e))
+            })?;
 
         let incoming = tokio_stream::wrappers::TcpListenerStream::new(self.grpc_listener);
         let grpc_server = GrpcServer::builder()

@@ -274,20 +274,17 @@ run_pg_tests() {
     for service in "${services[@]}"; do
         log_info "Testing ${service}..."
 
-        local cmd="cargo test -p ${service}"
-
-        # Add --ignored for services with #[ignore] tests
-        # Use --test-threads=1 to prevent race conditions (tests share database)
-        if [ "$service" = "ledger-service" ] || [ "$service" = "auth-service" ]; then
-            cmd="$cmd -- --ignored --test-threads=1"
-        fi
+        # PostgreSQL services use #[ignore] for integration tests to separate
+        # them from unit tests. We run with --ignored to include these.
+        # --test-threads=1 prevents race conditions when tests share a database.
+        local extra_args=("--ignored" "--test-threads=1")
 
         if [ ${#CARGO_ARGS[@]} -gt 0 ]; then
-            cmd="$cmd ${CARGO_ARGS[*]}"
+            extra_args+=("${CARGO_ARGS[@]}")
         fi
 
-        log_info "Running: $cmd"
-        eval $cmd
+        log_info "Running: cargo test -p ${service} -- ${extra_args[*]}"
+        cargo test -p "${service}" -- "${extra_args[@]}"
     done
 }
 
@@ -304,14 +301,13 @@ run_mongo_tests() {
     for service in "${services[@]}"; do
         log_info "Testing ${service}..."
 
-        local cmd="cargo test -p ${service}"
-
         if [ ${#CARGO_ARGS[@]} -gt 0 ]; then
-            cmd="$cmd -- ${CARGO_ARGS[*]}"
+            log_info "Running: cargo test -p ${service} -- ${CARGO_ARGS[*]}"
+            cargo test -p "${service}" -- "${CARGO_ARGS[@]}"
+        else
+            log_info "Running: cargo test -p ${service}"
+            cargo test -p "${service}"
         fi
-
-        log_info "Running: $cmd"
-        eval $cmd
     done
 }
 

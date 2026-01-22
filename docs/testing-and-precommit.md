@@ -11,7 +11,7 @@ ln -s ../../scripts/pre-commit.sh .git/hooks/pre-commit
 
 **What it runs:**
 1. `cargo fmt --check` - formatting (changed services only)
-2. `cargo clippy` - linting (changed services only)
+2. `cargo clippy -D warnings -D clippy::all` - strict linting (changed services only)
 3. `cargo test --lib` - unit tests (changed services only)
 4. `buf lint` - proto files (if changed)
 5. **Integration tests for ALL services** (PostgreSQL + MongoDB required)
@@ -62,7 +62,7 @@ The `integ-tests.sh` script handles database setup, migrations, and test executi
 1. Creates timestamped database: `micros_test_<timestamp>`
 2. Runs migrations for auth-service and ledger-service
 3. Exports `TEST_DATABASE_URL` for tests
-4. Runs tests with `--ignored` flag
+4. Runs tests with `--ignored --test-threads=1` (sequential to prevent race conditions)
 5. Drops database on exit (including Ctrl+C)
 
 ## MongoDB Test Lifecycle
@@ -96,7 +96,8 @@ PGPASSWORD=pass@word1 psql -h localhost -U postgres -c "SELECT 1;"
 mongosh --eval "db.runCommand({ping:1})"
 ```
 
-**Tests timeout:**
+**Tests failing with race conditions:**
+PostgreSQL tests already run with `--test-threads=1`. For MongoDB tests:
 ```bash
-./scripts/integ-tests.sh -- --test-threads=1
+./scripts/integ-tests.sh -p document-service -- --test-threads=1
 ```

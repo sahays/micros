@@ -1,7 +1,6 @@
 //! Account model for double-entry ledger.
 
 use chrono::{DateTime, Utc};
-use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use uuid::Uuid;
@@ -103,14 +102,6 @@ impl Account {
             _ => None,
         }
     }
-}
-
-/// Account with calculated balance (for queries).
-#[allow(dead_code)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AccountWithBalance {
-    pub account: Account,
-    pub balance: Decimal,
 }
 
 /// Input for creating a new account.

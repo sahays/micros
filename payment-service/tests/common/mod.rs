@@ -27,7 +27,7 @@ impl TestApp {
         let config = Config {
             server: ServerConfig {
                 host: "127.0.0.1".to_string(),
-                port: 0, // Random port
+                port: 0,      // Random port
                 grpc_port: 0, // Will be http_port + 1
             },
             database: DatabaseConfig {

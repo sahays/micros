@@ -94,7 +94,11 @@ impl Config {
             .unwrap_or_else(|_| "https://api.razorpay.com/v1".to_string());
 
         Ok(Self {
-            server: ServerConfig { host, port, grpc_port },
+            server: ServerConfig {
+                host,
+                port,
+                grpc_port,
+            },
             database: DatabaseConfig {
                 url: Secret::new(db_url),
                 db_name,

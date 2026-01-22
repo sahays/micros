@@ -29,6 +29,9 @@ impl PaymentGrpcService {
     }
 
     /// Extract tenant context from gRPC metadata.
+    /// Note: tonic::Status is 176 bytes but is the standard gRPC error type.
+    /// Boxing would make this non-idiomatic for tonic-based services.
+    #[allow(clippy::result_large_err)]
     fn extract_tenant_context(
         request: &Request<impl std::any::Any>,
     ) -> Result<TenantContext, Status> {
@@ -225,8 +228,8 @@ impl PaymentService for PaymentGrpcService {
         let _uuid = Uuid::parse_str(&req.transaction_id)
             .map_err(|_| Status::invalid_argument("Invalid transaction ID"))?;
 
-        let new_status =
-            proto_to_status(req.status).ok_or_else(|| Status::invalid_argument("Invalid status"))?;
+        let new_status = proto_to_status(req.status)
+            .ok_or_else(|| Status::invalid_argument("Invalid status"))?;
 
         tracing::info!(
             transaction_id = %req.transaction_id,
@@ -507,9 +510,7 @@ impl PaymentService for PaymentGrpcService {
         );
 
         // Generate UPI link
-        let vpa = req
-            .vpa
-            .unwrap_or_else(|| self.state.config.upi.vpa.clone());
+        let vpa = req.vpa.unwrap_or_else(|| self.state.config.upi.vpa.clone());
         let merchant_name = req
             .merchant_name
             .unwrap_or_else(|| self.state.config.upi.merchant_name.clone());
@@ -569,10 +570,14 @@ impl PaymentService for PaymentGrpcService {
         }
 
         // Parse the webhook event
-        let event = self.state.razorpay.parse_webhook_event(&req.body).map_err(|e| {
-            tracing::error!(error = %e, "Failed to parse webhook event");
-            Status::invalid_argument("Invalid webhook payload")
-        })?;
+        let event = self
+            .state
+            .razorpay
+            .parse_webhook_event(&req.body)
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to parse webhook event");
+                Status::invalid_argument("Invalid webhook payload")
+            })?;
 
         tracing::info!(
             event_type = %event.event,

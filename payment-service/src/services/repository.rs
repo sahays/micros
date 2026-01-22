@@ -1,10 +1,7 @@
 use crate::models::{PaymentMethod, Transaction, TransactionStatus};
 use anyhow::Result;
 use mongodb::options::IndexOptions;
-use mongodb::{
-    bson::doc,
-    Collection, Database, IndexModel,
-};
+use mongodb::{bson::doc, Collection, Database, IndexModel};
 
 #[derive(Clone)]
 pub struct PaymentRepository {
