@@ -1,0 +1,212 @@
+syntax = "proto3";
+
+package micros.ledger.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// LedgerService provides double-entry accounting operations.
+service LedgerService {
+  // Account management
+  rpc CreateAccount(CreateAccountRequest) returns (CreateAccountResponse);
+  rpc GetAccount(GetAccountRequest) returns (GetAccountResponse);
+  rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse);
+
+  // Transaction operations
+  rpc PostTransaction(PostTransactionRequest) returns (PostTransactionResponse);
+  rpc GetTransaction(GetTransactionRequest) returns (GetTransactionResponse);
+  rpc ListTransactions(ListTransactionsRequest) returns (ListTransactionsResponse);
+
+  // Balance queries
+  rpc GetBalance(GetBalanceRequest) returns (GetBalanceResponse);
+  rpc GetBalances(GetBalancesRequest) returns (GetBalancesResponse);
+
+  // Statements
+  rpc GetStatement(GetStatementRequest) returns (GetStatementResponse);
+}
+
+// Account types following standard accounting categories.
+enum AccountType {
+  ACCOUNT_TYPE_UNSPECIFIED = 0;
+  ACCOUNT_TYPE_ASSET = 1;
+  ACCOUNT_TYPE_LIABILITY = 2;
+  ACCOUNT_TYPE_EQUITY = 3;
+  ACCOUNT_TYPE_REVENUE = 4;
+  ACCOUNT_TYPE_EXPENSE = 5;
+}
+
+// Entry direction.
+enum Direction {
+  DIRECTION_UNSPECIFIED = 0;
+  DIRECTION_DEBIT = 1;
+  DIRECTION_CREDIT = 2;
+}
+
+// Account represents a ledger account.
+message Account {
+  string account_id = 1;
+  string tenant_id = 2;
+  AccountType account_type = 3;
+  string account_code = 4;
+  string currency = 5;
+  bool allow_negative = 6;
+  string metadata = 7; // JSON string
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp closed_at = 9;
+  string balance = 10; // Decimal as string
+}
+
+// LedgerEntry represents a single entry in the ledger.
+message LedgerEntry {
+  string entry_id = 1;
+  string journal_id = 2;
+  string account_id = 3;
+  string amount = 4; // Decimal as string (always positive)
+  Direction direction = 5;
+  string effective_date = 6; // YYYY-MM-DD
+  google.protobuf.Timestamp posted_at = 7;
+  string metadata = 8; // JSON string
+}
+
+// Transaction groups entries by journal_id.
+message Transaction {
+  string journal_id = 1;
+  string tenant_id = 2;
+  repeated LedgerEntry entries = 3;
+  string effective_date = 4;
+  google.protobuf.Timestamp posted_at = 5;
+  string idempotency_key = 6;
+  string metadata = 7;
+}
+
+// CreateAccount
+message CreateAccountRequest {
+  string tenant_id = 1;
+  AccountType account_type = 2;
+  string account_code = 3;
+  string currency = 4;
+  bool allow_negative = 5;
+  string metadata = 6;
+}
+
+message CreateAccountResponse {
+  Account account = 1;
+}
+
+// GetAccount
+message GetAccountRequest {
+  string tenant_id = 1;
+  string account_id = 2;
+}
+
+message GetAccountResponse {
+  Account account = 1;
+}
+
+// ListAccounts
+message ListAccountsRequest {
+  string tenant_id = 1;
+  AccountType account_type = 2; // Optional filter
+  string currency = 3; // Optional filter
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+message ListAccountsResponse {
+  repeated Account accounts = 1;
+  string next_page_token = 2;
+}
+
+// PostTransaction
+message PostTransactionEntry {
+  string account_id = 1;
+  string amount = 2; // Decimal as string
+  Direction direction = 3;
+}
+
+message PostTransactionRequest {
+  string tenant_id = 1;
+  repeated PostTransactionEntry entries = 2;
+  string effective_date = 3; // YYYY-MM-DD, defaults to today
+  string idempotency_key = 4;
+  string metadata = 5;
+}
+
+message PostTransactionResponse {
+  Transaction transaction = 1;
+}
+
+// GetTransaction
+message GetTransactionRequest {
+  string tenant_id = 1;
+  string journal_id = 2;
+}
+
+message GetTransactionResponse {
+  Transaction transaction = 1;
+}
+
+// ListTransactions
+message ListTransactionsRequest {
+  string tenant_id = 1;
+  string account_id = 2; // Optional filter
+  string start_date = 3; // YYYY-MM-DD
+  string end_date = 4; // YYYY-MM-DD
+  int32 page_size = 5;
+  string page_token = 6;
+}
+
+message ListTransactionsResponse {
+  repeated Transaction transactions = 1;
+  string next_page_token = 2;
+}
+
+// GetBalance
+message GetBalanceRequest {
+  string tenant_id = 1;
+  string account_id = 2;
+  string as_of_date = 3; // YYYY-MM-DD, optional (defaults to today)
+}
+
+message GetBalanceResponse {
+  string account_id = 1;
+  string balance = 2; // Decimal as string
+  string currency = 3;
+  string as_of_date = 4;
+}
+
+// GetBalances (batch)
+message GetBalancesRequest {
+  string tenant_id = 1;
+  repeated string account_ids = 2;
+  string as_of_date = 3;
+}
+
+message GetBalancesResponse {
+  repeated GetBalanceResponse balances = 1;
+}
+
+// GetStatement
+message StatementLine {
+  string entry_id = 1;
+  string journal_id = 2;
+  string effective_date = 3;
+  Direction direction = 4;
+  string amount = 5;
+  string running_balance = 6;
+  string metadata = 7;
+}
+
+message GetStatementRequest {
+  string tenant_id = 1;
+  string account_id = 2;
+  string start_date = 3;
+  string end_date = 4;
+}
+
+message GetStatementResponse {
+  string account_id = 1;
+  string currency = 2;
+  string opening_balance = 3;
+  string closing_balance = 4;
+  repeated StatementLine lines = 5;
+}
