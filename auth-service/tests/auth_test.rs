@@ -28,7 +28,6 @@ async fn create_test_tenant(pool: &sqlx::PgPool, label: &str) -> (Uuid, String) 
 }
 
 #[tokio::test]
-#[ignore] // Requires PostgreSQL
 async fn register_new_user_succeeds() {
     // Arrange
     let app = TestApp::spawn().await.expect("Failed to spawn test app");
@@ -79,7 +78,6 @@ async fn register_new_user_succeeds() {
 }
 
 #[tokio::test]
-#[ignore] // Requires PostgreSQL
 async fn register_duplicate_email_fails() {
     // Arrange
     let app = TestApp::spawn().await.expect("Failed to spawn test app");
@@ -120,7 +118,6 @@ async fn register_duplicate_email_fails() {
 }
 
 #[tokio::test]
-#[ignore] // Requires PostgreSQL
 async fn login_with_valid_credentials_succeeds() {
     // Arrange
     let app = TestApp::spawn().await.expect("Failed to spawn test app");
@@ -173,7 +170,6 @@ async fn login_with_valid_credentials_succeeds() {
 }
 
 #[tokio::test]
-#[ignore] // Requires PostgreSQL
 async fn login_with_wrong_password_fails() {
     // Arrange
     let app = TestApp::spawn().await.expect("Failed to spawn test app");
@@ -220,7 +216,6 @@ async fn login_with_wrong_password_fails() {
 }
 
 #[tokio::test]
-#[ignore] // Requires PostgreSQL
 async fn login_with_nonexistent_user_fails() {
     // Arrange
     let app = TestApp::spawn().await.expect("Failed to spawn test app");
@@ -250,7 +245,6 @@ async fn login_with_nonexistent_user_fails() {
 }
 
 #[tokio::test]
-#[ignore] // Requires PostgreSQL
 async fn refresh_token_returns_new_tokens() {
     // Arrange
     let app = TestApp::spawn().await.expect("Failed to spawn test app");
@@ -308,7 +302,6 @@ async fn refresh_token_returns_new_tokens() {
 }
 
 #[tokio::test]
-#[ignore] // Requires PostgreSQL
 async fn logout_invalidates_session() {
     // Arrange
     let app = TestApp::spawn().await.expect("Failed to spawn test app");

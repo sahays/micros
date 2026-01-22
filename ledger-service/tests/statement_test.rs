@@ -12,7 +12,6 @@ use ledger_service::grpc::proto::{
 
 /// Story 005, Task 1: Get statement with entries
 #[tokio::test]
-#[ignore]
 async fn get_statement_with_entries() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -94,7 +93,6 @@ async fn get_statement_with_entries() {
 
 /// Story 005, Task 2: Statement with opening balance from prior period
 #[tokio::test]
-#[ignore]
 async fn get_statement_with_opening_balance() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -174,7 +172,6 @@ async fn get_statement_with_opening_balance() {
 
 /// Story 005, Task 3: Statement with running balance
 #[tokio::test]
-#[ignore]
 async fn get_statement_with_running_balance() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -278,7 +275,6 @@ async fn get_statement_with_running_balance() {
 
 /// Story 005, Task 4: Empty statement (no transactions in period)
 #[tokio::test]
-#[ignore]
 async fn get_statement_empty_period() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -333,7 +329,6 @@ async fn get_statement_empty_period() {
 
 /// Story 005, Task 4: Statement not found for non-existent account
 #[tokio::test]
-#[ignore]
 async fn get_statement_account_not_found() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -352,7 +347,6 @@ async fn get_statement_account_not_found() {
 
 /// Story 005, Task 4: Reject invalid date range (end before start)
 #[tokio::test]
-#[ignore]
 async fn get_statement_invalid_date_range() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -382,7 +376,6 @@ async fn get_statement_invalid_date_range() {
 
 /// Story 005: Statement tenant isolation
 #[tokio::test]
-#[ignore]
 async fn get_statement_tenant_isolation() {
     let (mut client, _) = spawn_app().await;
 

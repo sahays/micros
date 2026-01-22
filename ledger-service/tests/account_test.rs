@@ -12,7 +12,6 @@ use uuid::Uuid;
 
 /// Story 002, Task 1: Create account with valid parameters
 #[tokio::test]
-#[ignore] // Requires database - run with integ-tests.sh
 async fn create_account_with_valid_parameters() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -37,7 +36,6 @@ async fn create_account_with_valid_parameters() {
 
 /// Story 002, Task 1: Create account with all account types
 #[tokio::test]
-#[ignore]
 async fn create_account_with_all_types() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -119,7 +117,6 @@ async fn create_account_with_all_types() {
 
 /// Story 002, Task 1: Reject duplicate account code within same tenant
 #[tokio::test]
-#[ignore]
 async fn reject_duplicate_account_code_same_tenant() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -152,7 +149,6 @@ async fn reject_duplicate_account_code_same_tenant() {
 
 /// Story 002, Task 1: Allow same account code in different tenants
 #[tokio::test]
-#[ignore]
 async fn allow_same_account_code_different_tenant() {
     let (mut client, _tenant1) = spawn_app().await;
 
@@ -188,7 +184,6 @@ async fn allow_same_account_code_different_tenant() {
 
 /// Story 002, Task 1: Reject invalid currency code
 #[tokio::test]
-#[ignore]
 async fn reject_invalid_currency_code() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -209,7 +204,6 @@ async fn reject_invalid_currency_code() {
 
 /// Story 002, Task 2: Get account by ID
 #[tokio::test]
-#[ignore]
 async fn get_account_by_id() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -241,7 +235,6 @@ async fn get_account_by_id() {
 
 /// Story 002, Task 2: Get account returns not found for wrong tenant
 #[tokio::test]
-#[ignore]
 async fn get_account_wrong_tenant_returns_not_found() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -272,7 +265,6 @@ async fn get_account_wrong_tenant_returns_not_found() {
 
 /// Story 002, Task 3: List accounts with pagination
 #[tokio::test]
-#[ignore]
 async fn list_accounts_with_pagination() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -334,7 +326,6 @@ async fn list_accounts_with_pagination() {
 
 /// Story 002, Task 3: Filter accounts by type
 #[tokio::test]
-#[ignore]
 async fn list_accounts_filter_by_type() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -385,7 +376,6 @@ async fn list_accounts_filter_by_type() {
 
 /// Story 002, Task 3: Filter accounts by currency
 #[tokio::test]
-#[ignore]
 async fn list_accounts_filter_by_currency() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -440,7 +430,6 @@ async fn list_accounts_filter_by_currency() {
 
 /// Story 002, Task 3: Tenant isolation in list accounts
 #[tokio::test]
-#[ignore]
 async fn list_accounts_tenant_isolation() {
     let (mut client, _) = spawn_app().await;
 

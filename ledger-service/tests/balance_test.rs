@@ -13,7 +13,6 @@ use uuid::Uuid;
 
 /// Story 004, Task 1: Get balance for asset account (debit-normal)
 #[tokio::test]
-#[ignore]
 async fn get_balance_asset_account() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -61,7 +60,6 @@ async fn get_balance_asset_account() {
 
 /// Story 004, Task 1: Get balance for liability account (credit-normal)
 #[tokio::test]
-#[ignore]
 async fn get_balance_liability_account() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -108,7 +106,6 @@ async fn get_balance_liability_account() {
 
 /// Story 004, Task 1: Get balance for revenue account (credit-normal)
 #[tokio::test]
-#[ignore]
 async fn get_balance_revenue_account() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -155,7 +152,6 @@ async fn get_balance_revenue_account() {
 
 /// Story 004, Task 1: Get balance for expense account (debit-normal)
 #[tokio::test]
-#[ignore]
 async fn get_balance_expense_account() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -233,7 +229,6 @@ async fn get_balance_expense_account() {
 
 /// Story 004, Task 2: Get balance as of historical date
 #[tokio::test]
-#[ignore]
 async fn get_balance_as_of_date() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -306,7 +301,6 @@ async fn get_balance_as_of_date() {
 
 /// Story 004, Task 2: Balance of zero for account with no transactions
 #[tokio::test]
-#[ignore]
 async fn get_balance_no_transactions() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -327,7 +321,6 @@ async fn get_balance_no_transactions() {
 
 /// Story 004, Task 2: Balance not found for non-existent account
 #[tokio::test]
-#[ignore]
 async fn get_balance_not_found() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -348,7 +341,6 @@ async fn get_balance_not_found() {
 
 /// Story 004, Task 3: Get balances for multiple accounts
 #[tokio::test]
-#[ignore]
 async fn get_balances_multiple_accounts() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -450,7 +442,6 @@ async fn get_balances_multiple_accounts() {
 
 /// Story 004, Task 3: Get balances skips non-existent accounts
 #[tokio::test]
-#[ignore]
 async fn get_balances_skips_non_existent() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -483,7 +474,6 @@ async fn get_balances_skips_non_existent() {
 
 /// Story 004: Verify balance reflects account type (debit-normal vs credit-normal)
 #[tokio::test]
-#[ignore]
 async fn balance_reflects_account_type() {
     let (mut client, tenant_id) = spawn_app().await;
 

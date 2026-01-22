@@ -49,10 +49,10 @@ The `integ-tests.sh` script handles database setup, migrations, and test executi
 
 ## Service Database Mapping
 
-| Service | Database | Test Pattern |
-|---------|----------|--------------|
-| auth-service | PostgreSQL | `#[ignore]` tests |
-| ledger-service | PostgreSQL | `#[ignore]` tests |
+| Service | Database | Test Count |
+|---------|----------|------------|
+| auth-service | PostgreSQL | 22 tests |
+| ledger-service | PostgreSQL | 42 tests |
 | document-service | MongoDB | Regular tests |
 | genai-service | MongoDB | Regular tests |
 | notification-service | MongoDB | Regular tests |
@@ -62,7 +62,7 @@ The `integ-tests.sh` script handles database setup, migrations, and test executi
 1. Creates timestamped database: `micros_test_<timestamp>`
 2. Runs migrations for auth-service and ledger-service
 3. Exports `TEST_DATABASE_URL` for tests
-4. Runs tests with `--ignored --test-threads=1` (sequential to prevent race conditions)
+4. Runs tests with `--test-threads=1` (sequential to prevent race conditions)
 5. Drops database on exit (including Ctrl+C)
 
 ## MongoDB Test Lifecycle

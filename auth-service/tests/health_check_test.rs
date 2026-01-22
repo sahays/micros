@@ -5,7 +5,6 @@ mod common;
 use common::TestApp;
 
 #[tokio::test]
-#[ignore] // Requires PostgreSQL and Redis
 async fn health_check_returns_200() {
     // Arrange
     let app = TestApp::spawn().await.expect("Failed to spawn test app");

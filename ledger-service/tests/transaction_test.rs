@@ -13,7 +13,6 @@ use uuid::Uuid;
 
 /// Story 003, Task 1: Post valid two-entry transaction
 #[tokio::test]
-#[ignore]
 async fn post_valid_two_entry_transaction() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -60,7 +59,6 @@ async fn post_valid_two_entry_transaction() {
 
 /// Story 003, Task 1: Reject transaction with unbalanced entries
 #[tokio::test]
-#[ignore]
 async fn reject_unbalanced_transaction() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -111,7 +109,6 @@ async fn reject_unbalanced_transaction() {
 
 /// Story 003, Task 1: Reject transaction with single entry
 #[tokio::test]
-#[ignore]
 async fn reject_single_entry_transaction() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -145,7 +142,6 @@ async fn reject_single_entry_transaction() {
 
 /// Story 003, Task 1: Reject transaction with zero amount
 #[tokio::test]
-#[ignore]
 async fn reject_zero_amount_transaction() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -195,7 +191,6 @@ async fn reject_zero_amount_transaction() {
 
 /// Story 003, Task 1: Reject transaction with negative amount
 #[tokio::test]
-#[ignore]
 async fn reject_negative_amount_transaction() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -245,7 +240,6 @@ async fn reject_negative_amount_transaction() {
 
 /// Story 003, Task 2: Reject cross-tenant account reference
 #[tokio::test]
-#[ignore]
 async fn reject_cross_tenant_account_reference() {
     let (mut client, _) = spawn_app().await;
 
@@ -304,7 +298,6 @@ async fn reject_cross_tenant_account_reference() {
 
 /// Story 003, Task 2: Reject transaction with non-existent account
 #[tokio::test]
-#[ignore]
 async fn reject_non_existent_account() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -345,7 +338,6 @@ async fn reject_non_existent_account() {
 
 /// Story 003, Task 2: Reject transaction with mismatched currencies
 #[tokio::test]
-#[ignore]
 async fn reject_mismatched_currencies() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -396,7 +388,6 @@ async fn reject_mismatched_currencies() {
 
 /// Story 003, Task 3: Idempotency key returns same transaction
 #[tokio::test]
-#[ignore]
 async fn idempotency_key_returns_same_transaction() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -462,7 +453,6 @@ async fn idempotency_key_returns_same_transaction() {
 
 /// Story 003, Task 4: Reject transaction that would make asset account negative
 #[tokio::test]
-#[ignore]
 async fn reject_negative_balance_asset_account() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -518,7 +508,6 @@ async fn reject_negative_balance_asset_account() {
 
 /// Story 003, Task 4: Allow negative balance when allow_negative is true
 #[tokio::test]
-#[ignore]
 async fn allow_negative_balance_when_enabled() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -571,7 +560,6 @@ async fn allow_negative_balance_when_enabled() {
 
 /// Story 003, Task 5: Get transaction by journal ID
 #[tokio::test]
-#[ignore]
 async fn get_transaction_by_journal_id() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -624,7 +612,6 @@ async fn get_transaction_by_journal_id() {
 
 /// Story 003, Task 5: Get transaction wrong tenant returns not found
 #[tokio::test]
-#[ignore]
 async fn get_transaction_wrong_tenant_not_found() {
     let (mut client, tenant_id) = spawn_app().await;
 
@@ -676,7 +663,6 @@ async fn get_transaction_wrong_tenant_not_found() {
 
 /// Story 003, Task 6: List transactions with filters
 #[tokio::test]
-#[ignore]
 async fn list_transactions_with_filters() {
     let (mut client, tenant_id) = spawn_app().await;
 

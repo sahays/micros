@@ -9,7 +9,6 @@ use serde_json::json;
 use uuid::Uuid;
 
 #[tokio::test]
-#[ignore] // Requires PostgreSQL
 async fn create_org_node_succeeds() {
     // Arrange
     let app = TestApp::spawn().await.expect("Failed to spawn test app");
@@ -56,7 +55,6 @@ async fn create_org_node_succeeds() {
 }
 
 #[tokio::test]
-#[ignore] // Requires PostgreSQL
 async fn create_child_org_node_succeeds() {
     // Arrange
     let app = TestApp::spawn().await.expect("Failed to spawn test app");
@@ -120,7 +118,6 @@ async fn create_child_org_node_succeeds() {
 }
 
 #[tokio::test]
-#[ignore] // Requires PostgreSQL
 async fn get_org_node_returns_node() {
     // Arrange
     let app = TestApp::spawn().await.expect("Failed to spawn test app");
@@ -176,7 +173,6 @@ async fn get_org_node_returns_node() {
 }
 
 #[tokio::test]
-#[ignore] // Requires PostgreSQL
 async fn list_tenant_org_nodes_returns_all_nodes() {
     // Arrange
     let app = TestApp::spawn().await.expect("Failed to spawn test app");
@@ -230,7 +226,6 @@ async fn list_tenant_org_nodes_returns_all_nodes() {
 }
 
 #[tokio::test]
-#[ignore] // Requires PostgreSQL
 async fn get_org_descendants_returns_subtree() {
     // Arrange
     let app = TestApp::spawn().await.expect("Failed to spawn test app");

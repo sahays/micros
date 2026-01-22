@@ -41,7 +41,6 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    #[ignore] // Requires running PostgreSQL
     async fn test_create_pool() {
         let url = std::env::var("TEST_DATABASE_URL").unwrap_or_else(|_| {
             "postgres://postgres:pass%40word1@localhost:5432/auth_test".to_string()

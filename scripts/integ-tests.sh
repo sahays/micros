@@ -274,10 +274,8 @@ run_pg_tests() {
     for service in "${services[@]}"; do
         log_info "Testing ${service}..."
 
-        # PostgreSQL services use #[ignore] for integration tests to separate
-        # them from unit tests. We run with --ignored to include these.
         # --test-threads=1 prevents race conditions when tests share a database.
-        local extra_args=("--ignored" "--test-threads=1")
+        local extra_args=("--test-threads=1")
 
         if [ ${#CARGO_ARGS[@]} -gt 0 ]; then
             extra_args+=("${CARGO_ARGS[@]}")
