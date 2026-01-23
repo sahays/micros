@@ -1,79 +1,92 @@
 # Story: Statements
 
-- [ ] **Status: Planning**
+- [x] **Status: Complete**
 - **Epic:** [001-invoicing-service](../epics/001-invoicing-service.md)
 
 ## Summary
 
-Implement GenerateStatement and GetStatement gRPC methods for customer account statements.
+Implement GenerateStatement gRPC method for on-demand customer account statements.
+
+## Design Decision
+
+**Statements are ephemeral** - generated on-demand, not stored. This simplifies implementation:
+- No statement storage table needed
+- No cache invalidation complexity
+- Always reflects current data
+- PDF can be generated separately via GenerateStatementPdf
 
 ## Tasks
 
-- [ ] Define proto messages: Statement, StatementLine, GenerateStatementRequest/Response
-- [ ] Define proto messages: GetStatementRequest/Response
-- [ ] Implement GenerateStatement handler
-- [ ] Implement GetStatement handler
-- [ ] Implement opening balance calculation
-- [ ] Implement statement line aggregation
-- [ ] Implement statement caching (optional)
+- [x] Define proto messages: Statement, StatementLine, GenerateStatementRequest/Response
+- [x] Implement GenerateStatement handler
+- [x] Implement opening balance calculation (pre-period invoice/payment aggregation)
+- [x] Implement statement line aggregation (invoices and receipts in period)
+- [x] Calculate running balance for each line
 
-## gRPC Methods
+## gRPC Method
 
 ### GenerateStatement
 **Input:** tenant_id, customer_id, period_start, period_end
 **Output:** statement
 
-**Behavior:**
-1. Calculate opening balance (sum of all invoices - payments before period_start)
-2. Fetch invoices issued in period
-3. Fetch receipts received in period
-4. Calculate closing balance
-5. Store statement record
-6. Return statement with lines
+**Algorithm:**
+1. Calculate opening balance:
+   - Sum all issued invoices before period_start
+   - Subtract all payments before period_start
+2. Fetch invoices issued within [period_start, period_end]
+3. Fetch receipts recorded within [period_start, period_end]
+4. Merge and sort by date
+5. Calculate running balance for each line
+6. Return statement with all fields populated
 
-### GetStatement
-**Input:** tenant_id, statement_id
-**Output:** statement
+**Status:** ✅ Implemented
 
 ## Statement Structure
 
 **Statement:**
-- statement_id
 - tenant_id
 - customer_id
-- statement_date (generation date)
+- customer_name
+- billing_address
+- currency
 - period_start
 - period_end
 - opening_balance
-- total_invoiced (sum of invoices in period)
-- total_paid (sum of receipts in period)
-- closing_balance (opening + invoiced - paid)
-- currency
+- closing_balance
+- total_debits (sum of invoices in period)
+- total_credits (sum of payments/credit notes in period)
 - lines[]
+- generated_at
 
 **StatementLine:**
 - date
-- type (invoice, payment)
-- reference (invoice_number or receipt_number)
+- document_type (invoice, credit_note, payment)
+- document_number
 - description
-- amount (positive for invoices, negative for payments)
-- running_balance
+- debit (invoice amounts)
+- credit (payment/credit note amounts)
+- balance (running balance)
 
 ## Acceptance Criteria
 
-- [ ] GenerateStatement calculates correct opening balance
-- [ ] GenerateStatement includes all invoices in period
-- [ ] GenerateStatement includes all payments in period
-- [ ] GenerateStatement calculates correct closing balance
-- [ ] Statement lines ordered by date
-- [ ] Statement lines show running balance
-- [ ] GetStatement returns cached statement
-- [ ] Statements are tenant and customer isolated
+- [x] GenerateStatement calculates correct opening balance
+- [x] GenerateStatement includes all issued invoices in period
+- [x] GenerateStatement includes all payments in period
+- [x] GenerateStatement calculates correct closing balance
+- [x] Statement lines ordered by date ascending
+- [x] Running balance calculated correctly for each line
+- [x] Credit notes appear as credits (negative effect on balance)
+- [x] Statements are tenant and customer isolated
+- [x] Invalid date range returns INVALID_ARGUMENT
+- [x] Invalid customer ID returns INVALID_ARGUMENT
 
 ## Integration Tests
 
-- [ ] Generate statement for customer with activity
-- [ ] Generate statement for customer with no activity
-- [ ] Opening balance includes prior period invoices/payments
-- [ ] Statement lines sorted chronologically
-- [ ] Running balance calculated correctly
+- [x] Generate statement for customer with invoices and payments
+- [x] Generate statement for customer with no activity in period
+- [x] Opening balance correctly reflects prior period activity
+- [x] Statement lines sorted chronologically
+- [x] Closing balance = opening + debits - credits
+- [x] Running balance tracked correctly
+- [x] Invalid date range returns error
+- [x] Invalid customer ID returns error

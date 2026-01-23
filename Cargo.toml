@@ -3,6 +3,7 @@ members = [
     "auth-service",
     "document-service",
     "genai-service",
+    "invoicing-service",
     "ledger-service",
     "notification-service",
     "payment-service",

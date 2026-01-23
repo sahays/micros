@@ -49,7 +49,7 @@ PG_AVAILABLE=false
 MONGO_AVAILABLE=false
 
 # Services by database type
-PG_SERVICES=("auth-service" "ledger-service")
+PG_SERVICES=("auth-service" "ledger-service" "invoicing-service")
 MONGO_SERVICES=("document-service" "genai-service" "notification-service")
 
 # Colors for output

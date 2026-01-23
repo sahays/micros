@@ -1,20 +1,24 @@
 # Story: Tax Rates
 
-- [ ] **Status: Planning**
+- [x] **Status: Complete**
 - **Epic:** [001-invoicing-service](../epics/001-invoicing-service.md)
 
 ## Summary
 
-Implement CreateTaxRate and ListTaxRates gRPC methods for managing configurable tax rates.
+Implement CreateTaxRate, GetTaxRate, ListTaxRates, and UpdateTaxRate gRPC methods for managing configurable tax rates.
 
 ## Tasks
 
-- [ ] Define proto messages: TaxRate, CreateTaxRateRequest/Response
-- [ ] Define proto messages: ListTaxRatesRequest/Response
-- [ ] Implement CreateTaxRate handler
-- [ ] Implement ListTaxRates handler with filters
-- [ ] Implement tax rate effective date logic
-- [ ] Implement tax rate deactivation (soft delete)
+- [x] Define proto messages: TaxRate, CreateTaxRateRequest/Response
+- [x] Define proto messages: GetTaxRateRequest/Response
+- [x] Define proto messages: ListTaxRatesRequest/Response
+- [x] Define proto messages: UpdateTaxRateRequest/Response
+- [x] Implement CreateTaxRate handler
+- [x] Implement GetTaxRate handler
+- [x] Implement ListTaxRates handler with filters
+- [x] Implement UpdateTaxRate handler
+- [x] Implement tax rate effective date logic
+- [x] Implement tax rate deactivation (soft delete)
 
 ## gRPC Methods
 
@@ -29,6 +33,14 @@ Implement CreateTaxRate and ListTaxRates gRPC methods for managing configurable 
 - effective_from is valid date
 - effective_to > effective_from if provided
 
+**Status:** ✅ Implemented
+
+### GetTaxRate
+**Input:** tenant_id, tax_rate_id
+**Output:** tax_rate
+
+**Status:** ✅ Implemented
+
 ### ListTaxRates
 **Input:** tenant_id, is_active (optional), as_of_date (optional), page_size, page_token
 **Output:** tax_rates[], next_page_token
@@ -36,6 +48,14 @@ Implement CreateTaxRate and ListTaxRates gRPC methods for managing configurable 
 **Filtering:**
 - is_active filters by active status
 - as_of_date filters to rates effective on that date
+
+**Status:** ✅ Implemented
+
+### UpdateTaxRate
+**Input:** tenant_id, tax_rate_id, name, rate, calculation, effective_from, effective_to, active
+**Output:** tax_rate
+
+**Status:** ✅ Implemented
 
 ## Tax Types
 
@@ -53,19 +73,24 @@ Implement CreateTaxRate and ListTaxRates gRPC methods for managing configurable 
 
 ## Acceptance Criteria
 
-- [ ] CreateTaxRate creates rate with valid data
-- [ ] CreateTaxRate rejects invalid rate values
-- [ ] CreateTaxRate rejects invalid date ranges
-- [ ] ListTaxRates returns tenant's tax rates
-- [ ] ListTaxRates filters by active status
-- [ ] ListTaxRates filters by effective date
-- [ ] Tax rates are immutable once used in invoices
-- [ ] Deactivation prevents use in new line items
+- [x] CreateTaxRate creates rate with valid data
+- [x] CreateTaxRate rejects invalid rate values
+- [x] CreateTaxRate rejects invalid date ranges
+- [x] GetTaxRate returns tax rate by ID
+- [x] GetTaxRate returns NOT_FOUND for missing rate
+- [x] ListTaxRates returns tenant's tax rates
+- [x] ListTaxRates filters by active status
+- [x] ListTaxRates filters by effective date
+- [x] UpdateTaxRate modifies existing rate
+- [x] Deactivation prevents use in new line items
 
 ## Integration Tests
 
-- [ ] Create tax rate with valid data succeeds
-- [ ] Create tax rate with rate > 1 returns INVALID_ARGUMENT
-- [ ] List active tax rates returns only active
-- [ ] List rates as of date returns effective rates
-- [ ] Deactivated rate not returned in active list
+- [x] Create tax rate with valid data succeeds
+- [x] Create tax rate with end date succeeds
+- [x] Get tax rate returns created rate
+- [x] Get nonexistent rate returns NOT_FOUND
+- [x] List tax rates returns tenant's rates
+- [x] List active tax rates filters inactive
+- [x] Update tax rate succeeds
+- [x] Deactivated rate not returned in active list

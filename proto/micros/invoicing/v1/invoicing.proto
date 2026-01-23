@@ -1,0 +1,458 @@
+syntax = "proto3";
+
+package micros.invoicing.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// InvoicingService provides invoice, receipt, and statement operations.
+service InvoicingService {
+  // Invoice management
+  rpc CreateInvoice(CreateInvoiceRequest) returns (CreateInvoiceResponse);
+  rpc GetInvoice(GetInvoiceRequest) returns (GetInvoiceResponse);
+  rpc UpdateInvoice(UpdateInvoiceRequest) returns (UpdateInvoiceResponse);
+  rpc ListInvoices(ListInvoicesRequest) returns (ListInvoicesResponse);
+  rpc IssueInvoice(IssueInvoiceRequest) returns (IssueInvoiceResponse);
+  rpc VoidInvoice(VoidInvoiceRequest) returns (VoidInvoiceResponse);
+  rpc DeleteInvoice(DeleteInvoiceRequest) returns (DeleteInvoiceResponse);
+
+  // Line item management
+  rpc AddLineItem(AddLineItemRequest) returns (AddLineItemResponse);
+  rpc UpdateLineItem(UpdateLineItemRequest) returns (UpdateLineItemResponse);
+  rpc RemoveLineItem(RemoveLineItemRequest) returns (RemoveLineItemResponse);
+
+  // Payment and receipts
+  rpc RecordPayment(RecordPaymentRequest) returns (RecordPaymentResponse);
+  rpc GetReceipt(GetReceiptRequest) returns (GetReceiptResponse);
+  rpc ListReceipts(ListReceiptsRequest) returns (ListReceiptsResponse);
+
+  // Statements
+  rpc GenerateStatement(GenerateStatementRequest) returns (GenerateStatementResponse);
+
+  // Tax rate management
+  rpc CreateTaxRate(CreateTaxRateRequest) returns (CreateTaxRateResponse);
+  rpc GetTaxRate(GetTaxRateRequest) returns (GetTaxRateResponse);
+  rpc ListTaxRates(ListTaxRatesRequest) returns (ListTaxRatesResponse);
+  rpc UpdateTaxRate(UpdateTaxRateRequest) returns (UpdateTaxRateResponse);
+
+  // PDF generation
+  rpc GenerateInvoicePdf(GenerateInvoicePdfRequest) returns (GenerateInvoicePdfResponse);
+  rpc GenerateReceiptPdf(GenerateReceiptPdfRequest) returns (GenerateReceiptPdfResponse);
+  rpc GenerateStatementPdf(GenerateStatementPdfRequest) returns (GenerateStatementPdfResponse);
+}
+
+// Invoice types
+enum InvoiceType {
+  INVOICE_TYPE_UNSPECIFIED = 0;
+  INVOICE_TYPE_STANDARD = 1;
+  INVOICE_TYPE_CREDIT_NOTE = 2;
+  INVOICE_TYPE_PROFORMA = 3;
+}
+
+// Invoice lifecycle states
+enum InvoiceStatus {
+  INVOICE_STATUS_UNSPECIFIED = 0;
+  INVOICE_STATUS_DRAFT = 1;
+  INVOICE_STATUS_ISSUED = 2;
+  INVOICE_STATUS_PAID = 3;
+  INVOICE_STATUS_VOID = 4;
+  INVOICE_STATUS_OVERDUE = 5;
+}
+
+// Tax calculation method
+enum TaxCalculation {
+  TAX_CALCULATION_UNSPECIFIED = 0;
+  TAX_CALCULATION_EXCLUSIVE = 1; // Tax added on top of price
+  TAX_CALCULATION_INCLUSIVE = 2; // Tax included in price
+}
+
+// Customer billing address
+message Address {
+  string line1 = 1;
+  string line2 = 2;
+  string city = 3;
+  string state = 4;
+  string postal_code = 5;
+  string country = 6;
+}
+
+// Tax rate configuration
+message TaxRate {
+  string tax_rate_id = 1;
+  string tenant_id = 2;
+  string name = 3; // e.g., "GST 18%", "VAT 20%"
+  string rate = 4; // Decimal as string, e.g., "0.18"
+  TaxCalculation calculation = 5;
+  string effective_from = 6; // YYYY-MM-DD
+  string effective_to = 7; // YYYY-MM-DD, optional
+  bool active = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+// Line item on an invoice
+message LineItem {
+  string line_item_id = 1;
+  string invoice_id = 2;
+  string description = 3;
+  string quantity = 4; // Decimal as string
+  string unit_price = 5; // Decimal as string
+  string tax_rate_id = 6; // Optional, links to TaxRate
+  string tax_amount = 7; // Decimal as string, calculated
+  string subtotal = 8; // Decimal as string, quantity * unit_price
+  string total = 9; // Decimal as string, subtotal + tax_amount
+  string ledger_account_id = 10; // Revenue account for this line item
+  int32 sort_order = 11;
+}
+
+// Invoice document
+message Invoice {
+  string invoice_id = 1;
+  string tenant_id = 2;
+  string invoice_number = 3; // e.g., INV-202601-0042
+  InvoiceType invoice_type = 4;
+  InvoiceStatus status = 5;
+  string customer_id = 6;
+  string customer_name = 7;
+  Address billing_address = 8;
+  string currency = 9;
+  string issue_date = 10; // YYYY-MM-DD
+  string due_date = 11; // YYYY-MM-DD
+  repeated LineItem line_items = 12;
+  string subtotal = 13; // Decimal as string, sum of line subtotals
+  string tax_total = 14; // Decimal as string, sum of line tax_amounts
+  string total = 15; // Decimal as string, subtotal + tax_total
+  string amount_paid = 16; // Decimal as string
+  string amount_due = 17; // Decimal as string, total - amount_paid
+  string notes = 18;
+  string reference_invoice_id = 19; // For credit notes
+  string journal_id = 20; // Ledger transaction ID when issued
+  string metadata = 21; // JSON string
+  google.protobuf.Timestamp created_at = 22;
+  google.protobuf.Timestamp issued_at = 23;
+  google.protobuf.Timestamp voided_at = 24;
+}
+
+// Payment receipt
+message Receipt {
+  string receipt_id = 1;
+  string tenant_id = 2;
+  string receipt_number = 3; // e.g., RCP-202601-0015
+  string invoice_id = 4;
+  string customer_id = 5;
+  string amount = 6; // Decimal as string
+  string currency = 7;
+  string payment_method = 8; // e.g., "bank_transfer", "cash", "card"
+  string payment_reference = 9; // External reference number
+  string payment_date = 10; // YYYY-MM-DD
+  string journal_id = 11; // Ledger transaction ID
+  string notes = 12;
+  google.protobuf.Timestamp created_at = 13;
+}
+
+// Customer statement line
+message StatementLine {
+  string date = 1; // YYYY-MM-DD
+  string document_type = 2; // "invoice", "credit_note", "payment"
+  string document_number = 3;
+  string description = 4;
+  string debit = 5; // Decimal as string, invoices increase balance
+  string credit = 6; // Decimal as string, payments/credit notes reduce balance
+  string balance = 7; // Decimal as string, running balance
+}
+
+// Customer statement
+message Statement {
+  string tenant_id = 1;
+  string customer_id = 2;
+  string customer_name = 3;
+  Address billing_address = 4;
+  string currency = 5;
+  string period_start = 6; // YYYY-MM-DD
+  string period_end = 7; // YYYY-MM-DD
+  string opening_balance = 8; // Decimal as string
+  string closing_balance = 9; // Decimal as string
+  string total_debits = 10; // Decimal as string
+  string total_credits = 11; // Decimal as string
+  repeated StatementLine lines = 12;
+  google.protobuf.Timestamp generated_at = 13;
+}
+
+// CreateInvoice
+message CreateInvoiceRequest {
+  string tenant_id = 1;
+  InvoiceType invoice_type = 2;
+  string customer_id = 3;
+  string customer_name = 4;
+  Address billing_address = 5;
+  string currency = 6;
+  string due_date = 7; // YYYY-MM-DD
+  string notes = 8;
+  string reference_invoice_id = 9; // Required for credit notes
+  string metadata = 10;
+}
+
+message CreateInvoiceResponse {
+  Invoice invoice = 1;
+}
+
+// GetInvoice
+message GetInvoiceRequest {
+  string tenant_id = 1;
+  string invoice_id = 2;
+}
+
+message GetInvoiceResponse {
+  Invoice invoice = 1;
+}
+
+// ListInvoices
+message ListInvoicesRequest {
+  string tenant_id = 1;
+  InvoiceStatus status = 2; // Optional filter
+  string customer_id = 3; // Optional filter
+  string start_date = 4; // YYYY-MM-DD
+  string end_date = 5; // YYYY-MM-DD
+  int32 page_size = 6;
+  string page_token = 7;
+}
+
+message ListInvoicesResponse {
+  repeated Invoice invoices = 1;
+  string next_page_token = 2;
+}
+
+// UpdateInvoice - update draft invoice (only drafts can be modified)
+message UpdateInvoiceRequest {
+  string tenant_id = 1;
+  string invoice_id = 2;
+  string customer_name = 3; // Optional, only update if provided
+  Address billing_address = 4; // Optional
+  string due_date = 5; // YYYY-MM-DD, optional
+  string notes = 6; // Optional
+  string metadata = 7; // JSON string, optional
+}
+
+message UpdateInvoiceResponse {
+  Invoice invoice = 1;
+}
+
+// IssueInvoice - finalizes draft, assigns number, creates ledger entry
+message IssueInvoiceRequest {
+  string tenant_id = 1;
+  string invoice_id = 2;
+  string issue_date = 3; // YYYY-MM-DD, defaults to today
+}
+
+message IssueInvoiceResponse {
+  Invoice invoice = 1;
+}
+
+// VoidInvoice - creates reversing ledger entry
+message VoidInvoiceRequest {
+  string tenant_id = 1;
+  string invoice_id = 2;
+  string reason = 3;
+}
+
+message VoidInvoiceResponse {
+  Invoice invoice = 1;
+}
+
+// DeleteInvoice - only draft invoices
+message DeleteInvoiceRequest {
+  string tenant_id = 1;
+  string invoice_id = 2;
+}
+
+message DeleteInvoiceResponse {
+  bool success = 1;
+}
+
+// AddLineItem
+message AddLineItemRequest {
+  string tenant_id = 1;
+  string invoice_id = 2;
+  string description = 3;
+  string quantity = 4; // Decimal as string
+  string unit_price = 5; // Decimal as string
+  string tax_rate_id = 6; // Optional
+  string ledger_account_id = 7; // Revenue account
+  int32 sort_order = 8;
+}
+
+message AddLineItemResponse {
+  LineItem line_item = 1;
+  Invoice invoice = 2; // Updated invoice with recalculated totals
+}
+
+// UpdateLineItem
+message UpdateLineItemRequest {
+  string tenant_id = 1;
+  string invoice_id = 2;
+  string line_item_id = 3;
+  string description = 4;
+  string quantity = 5;
+  string unit_price = 6;
+  string tax_rate_id = 7;
+  string ledger_account_id = 8;
+  int32 sort_order = 9;
+}
+
+message UpdateLineItemResponse {
+  LineItem line_item = 1;
+  Invoice invoice = 2;
+}
+
+// RemoveLineItem
+message RemoveLineItemRequest {
+  string tenant_id = 1;
+  string invoice_id = 2;
+  string line_item_id = 3;
+}
+
+message RemoveLineItemResponse {
+  Invoice invoice = 1; // Updated invoice with recalculated totals
+}
+
+// RecordPayment
+message RecordPaymentRequest {
+  string tenant_id = 1;
+  string invoice_id = 2;
+  string amount = 3; // Decimal as string
+  string payment_method = 4;
+  string payment_reference = 5;
+  string payment_date = 6; // YYYY-MM-DD
+  string notes = 7;
+}
+
+message RecordPaymentResponse {
+  Receipt receipt = 1;
+  Invoice invoice = 2; // Updated with new amount_paid/amount_due/status
+}
+
+// GetReceipt
+message GetReceiptRequest {
+  string tenant_id = 1;
+  string receipt_id = 2;
+}
+
+message GetReceiptResponse {
+  Receipt receipt = 1;
+}
+
+// ListReceipts
+message ListReceiptsRequest {
+  string tenant_id = 1;
+  string invoice_id = 2; // Optional filter
+  string customer_id = 3; // Optional filter
+  string start_date = 4; // YYYY-MM-DD
+  string end_date = 5; // YYYY-MM-DD
+  int32 page_size = 6;
+  string page_token = 7;
+}
+
+message ListReceiptsResponse {
+  repeated Receipt receipts = 1;
+  string next_page_token = 2;
+}
+
+// GenerateStatement
+message GenerateStatementRequest {
+  string tenant_id = 1;
+  string customer_id = 2;
+  string period_start = 3; // YYYY-MM-DD
+  string period_end = 4; // YYYY-MM-DD
+}
+
+message GenerateStatementResponse {
+  Statement statement = 1;
+}
+
+// CreateTaxRate
+message CreateTaxRateRequest {
+  string tenant_id = 1;
+  string name = 2;
+  string rate = 3; // Decimal as string
+  TaxCalculation calculation = 4;
+  string effective_from = 5; // YYYY-MM-DD
+  string effective_to = 6; // YYYY-MM-DD, optional
+}
+
+message CreateTaxRateResponse {
+  TaxRate tax_rate = 1;
+}
+
+// GetTaxRate
+message GetTaxRateRequest {
+  string tenant_id = 1;
+  string tax_rate_id = 2;
+}
+
+message GetTaxRateResponse {
+  TaxRate tax_rate = 1;
+}
+
+// ListTaxRates
+message ListTaxRatesRequest {
+  string tenant_id = 1;
+  bool active_only = 2;
+  string as_of_date = 3; // YYYY-MM-DD, filter by effective date
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+message ListTaxRatesResponse {
+  repeated TaxRate tax_rates = 1;
+  string next_page_token = 2;
+}
+
+// UpdateTaxRate
+message UpdateTaxRateRequest {
+  string tenant_id = 1;
+  string tax_rate_id = 2;
+  string name = 3;
+  string rate = 4;
+  TaxCalculation calculation = 5;
+  string effective_from = 6;
+  string effective_to = 7;
+  bool active = 8;
+}
+
+message UpdateTaxRateResponse {
+  TaxRate tax_rate = 1;
+}
+
+// GenerateInvoicePdf - generate PDF for an invoice
+message GenerateInvoicePdfRequest {
+  string tenant_id = 1;
+  string invoice_id = 2;
+}
+
+message GenerateInvoicePdfResponse {
+  bytes pdf_bytes = 1; // PDF content
+  string filename = 2; // Suggested filename, e.g., "INV-202601-0042.pdf"
+}
+
+// GenerateReceiptPdf - generate PDF for a receipt
+message GenerateReceiptPdfRequest {
+  string tenant_id = 1;
+  string receipt_id = 2;
+}
+
+message GenerateReceiptPdfResponse {
+  bytes pdf_bytes = 1; // PDF content
+  string filename = 2; // Suggested filename, e.g., "RCP-202601-0015.pdf"
+}
+
+// GenerateStatementPdf - generate PDF for a statement
+message GenerateStatementPdfRequest {
+  string tenant_id = 1;
+  string customer_id = 2;
+  string period_start = 3; // YYYY-MM-DD
+  string period_end = 4; // YYYY-MM-DD
+}
+
+message GenerateStatementPdfResponse {
+  bytes pdf_bytes = 1; // PDF content
+  string filename = 2; // Suggested filename
+  Statement statement = 3; // The statement data used for PDF
+}

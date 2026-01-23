@@ -1,6 +1,6 @@
 # Story: Payments and Receipts
 
-- [ ] **Status: Planning**
+- [x] **Status: Complete**
 - **Epic:** [001-invoicing-service](../epics/001-invoicing-service.md)
 
 ## Summary
@@ -9,14 +9,14 @@ Implement RecordPayment, GetReceipt, and ListReceipts gRPC methods for payment p
 
 ## Tasks
 
-- [ ] Define proto messages: Receipt, RecordPaymentRequest/Response
-- [ ] Define proto messages: GetReceiptRequest/Response, ListReceiptsRequest/Response
-- [ ] Implement RecordPayment handler with ledger integration
-- [ ] Implement GetReceipt handler
-- [ ] Implement ListReceipts handler with filters
-- [ ] Implement receipt number generation
-- [ ] Implement invoice status update on payment
-- [ ] Handle partial payments
+- [x] Define proto messages: Receipt, RecordPaymentRequest/Response
+- [x] Define proto messages: GetReceiptRequest/Response, ListReceiptsRequest/Response
+- [x] Implement RecordPayment handler with ledger integration
+- [x] Implement GetReceipt handler
+- [x] Implement ListReceipts handler with filters
+- [x] Implement receipt number generation
+- [x] Implement invoice status update on payment
+- [x] Handle partial payments
 
 ## gRPC Methods
 
@@ -36,13 +36,19 @@ Implement RecordPayment, GetReceipt, and ListReceipts gRPC methods for payment p
 - Debit: Cash/Bank Account for amount
 - Credit: Accounts Receivable (customer) for amount
 
+**Status:** ✅ Implemented
+
 ### GetReceipt
 **Input:** tenant_id, receipt_id
 **Output:** receipt
 
+**Status:** ✅ Implemented
+
 ### ListReceipts
 **Input:** tenant_id, invoice_id (optional), date_from (optional), date_to (optional), page_size, page_token
 **Output:** receipts[], next_page_token
+
+**Status:** ✅ Implemented
 
 ## Payment Methods
 
@@ -56,21 +62,23 @@ Supported values (stored as string, not enum):
 
 ## Acceptance Criteria
 
-- [ ] RecordPayment creates receipt with generated number
-- [ ] RecordPayment creates correct ledger entry
-- [ ] RecordPayment updates invoice amount_paid
-- [ ] RecordPayment sets status to paid when fully paid
-- [ ] RecordPayment allows partial payments
-- [ ] RecordPayment rejects overpayment
-- [ ] RecordPayment rejects payment on draft/void invoice
-- [ ] GetReceipt returns receipt details
-- [ ] ListReceipts filters by invoice_id and date range
+- [x] RecordPayment creates receipt with generated number
+- [x] RecordPayment creates correct ledger entry
+- [x] RecordPayment updates invoice amount_paid
+- [x] RecordPayment sets status to paid when fully paid
+- [x] RecordPayment allows partial payments
+- [x] RecordPayment rejects overpayment
+- [x] RecordPayment rejects payment on draft/void invoice
+- [x] GetReceipt returns receipt details
+- [x] ListReceipts filters by invoice_id and date range
 
 ## Integration Tests
 
-- [ ] Record full payment marks invoice as paid
-- [ ] Record partial payment updates balance_due
-- [ ] Record multiple partial payments succeeds
-- [ ] Record payment exceeding balance returns INVALID_ARGUMENT
-- [ ] Record payment on draft invoice returns FAILED_PRECONDITION
-- [ ] List receipts for invoice returns all payments
+- [x] Record full payment marks invoice as paid
+- [x] Record partial payment updates balance_due
+- [x] Record multiple partial payments succeeds
+- [x] Record payment exceeding balance returns INVALID_ARGUMENT
+- [x] Record payment on draft invoice returns FAILED_PRECONDITION
+- [x] Get receipt returns payment details
+- [x] List receipts for invoice returns all payments
+- [x] List receipts by date range works correctly

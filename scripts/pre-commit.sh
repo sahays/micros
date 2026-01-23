@@ -56,7 +56,7 @@ echo -e "${GREEN}═════════════════════
 echo ""
 
 # All services in the monorepo
-ALL_SERVICES=("auth-service" "service-core" "document-service" "genai-service" "notification-service" "ledger-service" "payment-service")
+ALL_SERVICES=("auth-service" "service-core" "document-service" "genai-service" "notification-service" "ledger-service" "payment-service" "invoicing-service")
 
 # Check only staged rust files for formatting/linting
 STAGED_RS_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.rs$' || true)

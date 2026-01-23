@@ -5,18 +5,22 @@
 //! - Interceptors for trace context propagation
 //! - Health check service implementation
 //! - Server builder utilities
+//! - Retry utilities for service-to-service calls
 //! - Auth service client for service-to-service communication
 //! - Notification service client for service-to-service communication
 //! - Document service client for service-to-service communication
 //! - Payment service client for service-to-service communication
+//! - Ledger service client for service-to-service communication
 
 pub mod auth_client;
 pub mod document_client;
 pub mod error;
 pub mod health;
 pub mod interceptors;
+pub mod ledger_client;
 pub mod notification_client;
 pub mod payment_client;
+pub mod retry;
 pub mod server;
 
 // Include the generated proto code for clients
@@ -26,6 +30,9 @@ pub mod proto {
     }
     pub mod document {
         tonic::include_proto!("micros.document.v1");
+    }
+    pub mod ledger {
+        tonic::include_proto!("micros.ledger.v1");
     }
     pub mod notification {
         tonic::include_proto!("micros.notification.v1");
@@ -46,11 +53,13 @@ pub use interceptors::{
     extract_request_id, extract_traceparent, inject_trace_context,
     inject_trace_context_with_request_id, trace_context_interceptor,
 };
+pub use ledger_client::{LedgerClient, LedgerClientConfig, TransactionEntry};
 pub use notification_client::{
     BatchNotification, BatchNotificationResult, NotificationChannelProto, NotificationClient,
     NotificationClientConfig, NotificationProto, NotificationStatusProto, PushPlatformProto,
 };
 pub use payment_client::{PaymentClient, PaymentClientConfig};
+pub use retry::{RetryConfig, RetryingClient, is_permanent_failure, is_retryable, retry_grpc_call};
 pub use server::{GrpcServerBuilder, create_reflection_service, start_http_health_server};
 
 // Re-export commonly used tonic types
