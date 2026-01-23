@@ -1,5 +1,5 @@
 use notification_service::config::{
-    FcmConfig, MongoConfig, Msg91Config, NotificationConfig, SmtpConfig,
+    AuthConfig, FcmConfig, MongoConfig, Msg91Config, NotificationConfig, SmtpConfig,
 };
 use notification_service::startup::Application;
 use service_core::config::Config as CoreConfig;
@@ -41,6 +41,9 @@ impl TestApp {
                 project_id: "test-project".to_string(),
                 service_account_key: "test-key".to_string(),
                 enabled: false, // Use mock
+            },
+            auth: AuthConfig {
+                auth_service_endpoint: None, // Tests use BFF trust model
             },
         };
 

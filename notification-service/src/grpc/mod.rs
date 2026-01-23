@@ -1,5 +1,7 @@
+pub mod capability_check;
 pub mod notification_service;
 
+pub use capability_check::{capabilities, CapabilityChecker};
 pub use notification_service::NotificationGrpcService;
 
 // Include generated proto code

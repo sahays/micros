@@ -6,15 +6,17 @@
 use crate::config::NotificationConfig;
 use crate::grpc::{
     proto::{notification_service_server::NotificationServiceServer, FILE_DESCRIPTOR_SET},
-    NotificationGrpcService,
+    CapabilityChecker, NotificationGrpcService,
 };
 use crate::services::{
-    EmailProvider, FcmProvider, MockEmailProvider, MockPushProvider, MockSmsProvider,
+    get_metrics, EmailProvider, FcmProvider, MockEmailProvider, MockPushProvider, MockSmsProvider,
     Msg91Provider, NotificationDb, PushProvider, SmsProvider, SmtpProvider,
 };
 use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::get, Json, Router};
 use serde_json::json;
 use service_core::error::AppError;
+use service_core::grpc::interceptors::{metrics_interceptor, trace_context_interceptor};
+use service_core::tower::ServiceBuilder;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -28,6 +30,7 @@ pub struct AppState {
     pub email_provider: Arc<dyn EmailProvider>,
     pub sms_provider: Arc<dyn SmsProvider>,
     pub push_provider: Arc<dyn PushProvider>,
+    pub capability_checker: CapabilityChecker,
 }
 
 /// State for health check endpoints.
@@ -64,6 +67,15 @@ async fn readiness_check(State(state): State<HealthState>) -> impl IntoResponse 
         Ok(_) => StatusCode::OK,
         Err(_) => StatusCode::SERVICE_UNAVAILABLE,
     }
+}
+
+/// Prometheus metrics endpoint.
+async fn metrics_endpoint() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [("content-type", "text/plain; charset=utf-8")],
+        get_metrics(),
+    )
 }
 
 /// Application container for managing server lifecycle.
@@ -124,12 +136,25 @@ impl Application {
             Arc::new(MockPushProvider::new(true))
         };
 
+        // Initialize capability checker
+        let capability_checker =
+            CapabilityChecker::new(config.auth.auth_service_endpoint.as_deref())
+                .await
+                .map_err(|e| {
+                    tracing::error!("Failed to initialize capability checker: {}", e);
+                    AppError::from(std::io::Error::other(format!(
+                        "Capability checker initialization error: {}",
+                        e
+                    )))
+                })?;
+
         let state = AppState {
             config: config.clone(),
             db,
             email_provider,
             sms_provider,
             push_provider,
+            capability_checker,
         };
 
         // Bind HTTP listener (port 0 = random port for testing)
@@ -189,6 +214,7 @@ impl Application {
         let http_router = Router::new()
             .route("/health", get(health_check))
             .route("/ready", get(readiness_check))
+            .route("/metrics", get(metrics_endpoint))
             .with_state(health_state);
 
         // Build gRPC server
@@ -208,8 +234,15 @@ impl Application {
                 std::io::Error::other(format!("Failed to build reflection service: {}", e))
             })?;
 
+        // Apply metering and tracing interceptors
+        let layer = ServiceBuilder::new()
+            .layer(tonic::service::interceptor(trace_context_interceptor))
+            .layer(tonic::service::interceptor(metrics_interceptor))
+            .into_inner();
+
         let incoming = tokio_stream::wrappers::TcpListenerStream::new(self.grpc_listener);
         let grpc_server = GrpcServer::builder()
+            .layer(layer)
             .add_service(grpc_health_service)
             .add_service(reflection_service)
             .add_service(NotificationServiceServer::new(notification_service))

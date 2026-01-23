@@ -1,3 +1,4 @@
+use crate::grpc::capability_check::{capabilities, CapabilityMetadata};
 use crate::grpc::proto::{
     notification_service_server::NotificationService, BatchNotification, BatchNotificationResult,
     GetNotificationRequest, GetNotificationResponse, ListNotificationsRequest,
@@ -7,7 +8,9 @@ use crate::grpc::proto::{
     SendPushResponse, SendSmsRequest, SendSmsResponse,
 };
 use crate::models::{Channel, Notification, NotificationStatus, PushPlatform};
-use crate::services::{EmailMessage, ProviderError, PushMessage, SmsMessage};
+use crate::services::{
+    record_notification, record_provider_call, EmailMessage, ProviderError, PushMessage, SmsMessage,
+};
 use crate::startup::AppState;
 use prost_types::Timestamp;
 use tonic::{Request, Response, Status};
@@ -99,6 +102,14 @@ impl NotificationService for NotificationGrpcService {
         &self,
         request: Request<SendEmailRequest>,
     ) -> Result<Response<SendEmailResponse>, Status> {
+        // Capability check (if enabled)
+        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
+            self.state
+                .capability_checker
+                .require_capability_from_metadata(&metadata, capabilities::NOTIFICATION_EMAIL_SEND)
+                .await?;
+        }
+
         let req = request.into_inner();
 
         // Validation
@@ -144,6 +155,13 @@ impl NotificationService for NotificationGrpcService {
             reply_to: req.reply_to,
         };
 
+        // Get tenant_id from metadata for metering
+        let tenant_id = req
+            .metadata
+            .get("tenant_id")
+            .cloned()
+            .unwrap_or_else(|| "unknown".to_string());
+
         match self.state.email_provider.send(&email_message).await {
             Ok(response) => {
                 notification.mark_sent(response.provider_id.clone());
@@ -157,6 +175,10 @@ impl NotificationService for NotificationGrpcService {
                         None,
                     )
                     .await;
+
+                // Record metering
+                record_notification(&tenant_id, "email", "sent");
+                record_provider_call("smtp", "success");
 
                 tracing::info!(notification_id = %notification_id, "Email sent successfully");
             }
@@ -177,6 +199,10 @@ impl NotificationService for NotificationGrpcService {
                         None,
                     )
                     .await;
+
+                // Record metering (mock counts as sent)
+                record_notification(&tenant_id, "email", "sent");
+                record_provider_call("mock_email", "success");
             }
             Err(e) => {
                 let error_msg = e.to_string();
@@ -191,6 +217,10 @@ impl NotificationService for NotificationGrpcService {
                         Some(&error_msg),
                     )
                     .await;
+
+                // Record metering (failed)
+                record_notification(&tenant_id, "email", "failed");
+                record_provider_call("smtp", "failure");
 
                 tracing::error!(
                     notification_id = %notification_id,
@@ -217,6 +247,14 @@ impl NotificationService for NotificationGrpcService {
         &self,
         request: Request<SendSmsRequest>,
     ) -> Result<Response<SendSmsResponse>, Status> {
+        // Capability check (if enabled)
+        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
+            self.state
+                .capability_checker
+                .require_capability_from_metadata(&metadata, capabilities::NOTIFICATION_SMS_SEND)
+                .await?;
+        }
+
         let req = request.into_inner();
 
         // Validation
@@ -244,6 +282,13 @@ impl NotificationService for NotificationGrpcService {
             .await
             .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
 
+        // Get tenant_id from metadata for metering
+        let tenant_id = req
+            .metadata
+            .get("tenant_id")
+            .cloned()
+            .unwrap_or_else(|| "unknown".to_string());
+
         // Send SMS
         let sms_message = SmsMessage {
             to: req.to,
@@ -264,6 +309,10 @@ impl NotificationService for NotificationGrpcService {
                     )
                     .await;
 
+                // Record metering
+                record_notification(&tenant_id, "sms", "sent");
+                record_provider_call("msg91", "success");
+
                 tracing::info!(notification_id = %notification_id, "SMS sent successfully");
             }
             Err(ProviderError::NotEnabled(msg)) => {
@@ -283,6 +332,10 @@ impl NotificationService for NotificationGrpcService {
                         None,
                     )
                     .await;
+
+                // Record metering (mock counts as sent)
+                record_notification(&tenant_id, "sms", "sent");
+                record_provider_call("mock_sms", "success");
             }
             Err(e) => {
                 let error_msg = e.to_string();
@@ -297,6 +350,10 @@ impl NotificationService for NotificationGrpcService {
                         Some(&error_msg),
                     )
                     .await;
+
+                // Record metering (failed)
+                record_notification(&tenant_id, "sms", "failed");
+                record_provider_call("msg91", "failure");
 
                 tracing::error!(
                     notification_id = %notification_id,
@@ -323,6 +380,14 @@ impl NotificationService for NotificationGrpcService {
         &self,
         request: Request<SendPushRequest>,
     ) -> Result<Response<SendPushResponse>, Status> {
+        // Capability check (if enabled)
+        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
+            self.state
+                .capability_checker
+                .require_capability_from_metadata(&metadata, capabilities::NOTIFICATION_PUSH_SEND)
+                .await?;
+        }
+
         let req = request.into_inner();
 
         // Validation
@@ -362,6 +427,13 @@ impl NotificationService for NotificationGrpcService {
             .await
             .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
 
+        // Get tenant_id from metadata for metering
+        let tenant_id = req
+            .metadata
+            .get("tenant_id")
+            .cloned()
+            .unwrap_or_else(|| "unknown".to_string());
+
         // Send push notification
         let push_message = PushMessage {
             device_token: req.device_token,
@@ -389,6 +461,10 @@ impl NotificationService for NotificationGrpcService {
                     )
                     .await;
 
+                // Record metering
+                record_notification(&tenant_id, "push", "sent");
+                record_provider_call("fcm", "success");
+
                 tracing::info!(notification_id = %notification_id, "Push notification sent successfully");
             }
             Err(ProviderError::NotEnabled(msg)) => {
@@ -408,6 +484,10 @@ impl NotificationService for NotificationGrpcService {
                         None,
                     )
                     .await;
+
+                // Record metering (mock counts as sent)
+                record_notification(&tenant_id, "push", "sent");
+                record_provider_call("mock_push", "success");
             }
             Err(e) => {
                 let error_msg = e.to_string();
@@ -422,6 +502,10 @@ impl NotificationService for NotificationGrpcService {
                         Some(&error_msg),
                     )
                     .await;
+
+                // Record metering (failed)
+                record_notification(&tenant_id, "push", "failed");
+                record_provider_call("fcm", "failure");
 
                 tracing::error!(
                     notification_id = %notification_id,
@@ -448,6 +532,14 @@ impl NotificationService for NotificationGrpcService {
         &self,
         request: Request<SendBatchRequest>,
     ) -> Result<Response<SendBatchResponse>, Status> {
+        // Capability check (if enabled)
+        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
+            self.state
+                .capability_checker
+                .require_capability_from_metadata(&metadata, capabilities::NOTIFICATION_BATCH_SEND)
+                .await?;
+        }
+
         let req = request.into_inner();
 
         if req.notifications.is_empty() {
@@ -478,6 +570,14 @@ impl NotificationService for NotificationGrpcService {
         &self,
         request: Request<GetNotificationRequest>,
     ) -> Result<Response<GetNotificationResponse>, Status> {
+        // Capability check (if enabled)
+        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
+            self.state
+                .capability_checker
+                .require_capability_from_metadata(&metadata, capabilities::NOTIFICATION_READ)
+                .await?;
+        }
+
         let req = request.into_inner();
 
         if req.notification_id.is_empty() {
@@ -507,6 +607,14 @@ impl NotificationService for NotificationGrpcService {
         &self,
         request: Request<ListNotificationsRequest>,
     ) -> Result<Response<ListNotificationsResponse>, Status> {
+        // Capability check (if enabled)
+        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
+            self.state
+                .capability_checker
+                .require_capability_from_metadata(&metadata, capabilities::NOTIFICATION_READ)
+                .await?;
+        }
+
         let req = request.into_inner();
 
         // Parse channel filter

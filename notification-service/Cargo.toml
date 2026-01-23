@@ -28,6 +28,11 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 uuid = { workspace = true }
 validator = { workspace = true, features = ["derive"] }
 
+# Observability & Metrics
+metrics = { workspace = true }
+metrics-exporter-prometheus = { workspace = true }
+prometheus = "0.13"
+
 # gRPC dependencies
 tonic = { workspace = true }
 tonic-health = { workspace = true }

@@ -2,15 +2,17 @@ use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::ge
 use notification_service::config::NotificationConfig;
 use notification_service::grpc::{
     proto::{notification_service_server::NotificationServiceServer, FILE_DESCRIPTOR_SET},
-    NotificationGrpcService,
+    CapabilityChecker, NotificationGrpcService,
 };
 use notification_service::services::{
-    EmailProvider, FcmProvider, MockEmailProvider, MockPushProvider, MockSmsProvider,
-    Msg91Provider, NotificationDb, PushProvider, SmsProvider, SmtpProvider,
+    get_metrics, init_metrics, EmailProvider, FcmProvider, MockEmailProvider, MockPushProvider,
+    MockSmsProvider, Msg91Provider, NotificationDb, PushProvider, SmsProvider, SmtpProvider,
 };
 use notification_service::startup::AppState;
 use serde_json::json;
+use service_core::grpc::interceptors::{metrics_interceptor, trace_context_interceptor};
 use service_core::observability::init_tracing;
+use service_core::tower::ServiceBuilder;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -51,6 +53,14 @@ async fn readiness_check(State(state): State<HealthState>) -> impl IntoResponse 
     }
 }
 
+async fn metrics_endpoint() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [("content-type", "text/plain; charset=utf-8")],
+        get_metrics(),
+    )
+}
+
 async fn shutdown_signal() {
     let ctrl_c = async {
         signal::ctrl_c()
@@ -83,6 +93,9 @@ async fn main() -> std::io::Result<()> {
     let otlp_endpoint =
         std::env::var("OTLP_ENDPOINT").unwrap_or_else(|_| "http://tempo:4317".to_string());
     init_tracing("notification-service", "info", &otlp_endpoint);
+
+    // Initialize metrics
+    init_metrics();
 
     let config = NotificationConfig::load().map_err(|e| {
         tracing::error!("Failed to load configuration: {}", e);
@@ -135,12 +148,21 @@ async fn main() -> std::io::Result<()> {
         Arc::new(MockPushProvider::new(true))
     };
 
+    // Initialize capability checker
+    let capability_checker = CapabilityChecker::new(config.auth.auth_service_endpoint.as_deref())
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to initialize capability checker: {}", e);
+            std::io::Error::other(format!("Capability checker initialization error: {}", e))
+        })?;
+
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
         email_provider,
         sms_provider,
         push_provider,
+        capability_checker,
     };
 
     let health_state = HealthState { db };
@@ -149,6 +171,7 @@ async fn main() -> std::io::Result<()> {
     let health_router = Router::new()
         .route("/health", get(health_check))
         .route("/ready", get(readiness_check))
+        .route("/metrics", get(metrics_endpoint))
         .with_state(health_state);
 
     let health_port = config.common.port;
@@ -180,8 +203,15 @@ async fn main() -> std::io::Result<()> {
 
     tracing::info!("gRPC server listening on port {}", grpc_port);
 
+    // Apply metering and tracing interceptors
+    let layer = ServiceBuilder::new()
+        .layer(tonic::service::interceptor(trace_context_interceptor))
+        .layer(tonic::service::interceptor(metrics_interceptor))
+        .into_inner();
+
     // Build gRPC server
     let grpc_server = GrpcServer::builder()
+        .layer(layer)
         .add_service(grpc_health_service)
         .add_service(reflection_service)
         .add_service(NotificationServiceServer::new(notification_service))
