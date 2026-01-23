@@ -1,5 +1,6 @@
 //! gRPC implementation of AssignmentService.
 
+use crate::grpc::capability_check::require_capability;
 use crate::grpc::proto::auth::{
     assignment_service_server::AssignmentService, Assignment as ProtoAssignment,
     CreateAssignmentRequest, CreateAssignmentResponse, EndAssignmentRequest, EndAssignmentResponse,
@@ -38,6 +39,9 @@ impl AssignmentService for AssignmentServiceImpl {
         &self,
         request: Request<CreateAssignmentRequest>,
     ) -> Result<Response<CreateAssignmentResponse>, Status> {
+        // Require org.assignment:create capability
+        let _auth = require_capability(&self.state, &request, "org.assignment:create").await?;
+
         let req = request.into_inner();
 
         let user_id = Uuid::parse_str(&req.user_id)
@@ -120,6 +124,9 @@ impl AssignmentService for AssignmentServiceImpl {
         &self,
         request: Request<EndAssignmentRequest>,
     ) -> Result<Response<EndAssignmentResponse>, Status> {
+        // Require org.assignment:end capability
+        let _auth = require_capability(&self.state, &request, "org.assignment:end").await?;
+
         let req = request.into_inner();
 
         let assignment_id = Uuid::parse_str(&req.assignment_id)
@@ -140,6 +147,9 @@ impl AssignmentService for AssignmentServiceImpl {
         &self,
         request: Request<ListUserAssignmentsRequest>,
     ) -> Result<Response<ListUserAssignmentsResponse>, Status> {
+        // Require org.assignment:read capability
+        let _auth = require_capability(&self.state, &request, "org.assignment:read").await?;
+
         let req = request.into_inner();
 
         let user_id = Uuid::parse_str(&req.user_id)

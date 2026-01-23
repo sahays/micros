@@ -1,5 +1,6 @@
 //! gRPC implementation of RoleService.
 
+use crate::grpc::capability_check::require_capability;
 use crate::grpc::proto::auth::{
     role_service_server::RoleService, AssignCapabilityRequest, AssignCapabilityResponse,
     Capability as ProtoCapability, CreateRoleRequest, CreateRoleResponse, GetCapabilityRequest,
@@ -57,6 +58,9 @@ impl RoleService for RoleServiceImpl {
         &self,
         request: Request<CreateRoleRequest>,
     ) -> Result<Response<CreateRoleResponse>, Status> {
+        // Require role:create capability
+        let _auth = require_capability(&self.state, &request, "role:create").await?;
+
         let req = request.into_inner();
 
         let tenant_id = Uuid::parse_str(&req.tenant_id)
@@ -93,6 +97,9 @@ impl RoleService for RoleServiceImpl {
         &self,
         request: Request<GetRoleRequest>,
     ) -> Result<Response<GetRoleResponse>, Status> {
+        // Require role:read capability
+        let _auth = require_capability(&self.state, &request, "role:read").await?;
+
         let req = request.into_inner();
 
         let role_id = Uuid::parse_str(&req.role_id)
@@ -123,6 +130,9 @@ impl RoleService for RoleServiceImpl {
         &self,
         request: Request<ListTenantRolesRequest>,
     ) -> Result<Response<ListTenantRolesResponse>, Status> {
+        // Require role:read capability
+        let _auth = require_capability(&self.state, &request, "role:read").await?;
+
         let req = request.into_inner();
 
         let tenant_id = Uuid::parse_str(&req.tenant_id)
@@ -154,6 +164,9 @@ impl RoleService for RoleServiceImpl {
         &self,
         request: Request<GetRoleCapabilitiesRequest>,
     ) -> Result<Response<GetRoleCapabilitiesResponse>, Status> {
+        // Require role:read capability
+        let _auth = require_capability(&self.state, &request, "role:read").await?;
+
         let req = request.into_inner();
 
         let role_id = Uuid::parse_str(&req.role_id)
@@ -181,6 +194,9 @@ impl RoleService for RoleServiceImpl {
         &self,
         request: Request<AssignCapabilityRequest>,
     ) -> Result<Response<AssignCapabilityResponse>, Status> {
+        // Require role.capability:assign capability
+        let _auth = require_capability(&self.state, &request, "role.capability:assign").await?;
+
         let req = request.into_inner();
 
         let role_id = Uuid::parse_str(&req.role_id)
@@ -217,8 +233,11 @@ impl RoleService for RoleServiceImpl {
 
     async fn list_capabilities(
         &self,
-        _request: Request<ListCapabilitiesRequest>,
+        request: Request<ListCapabilitiesRequest>,
     ) -> Result<Response<ListCapabilitiesResponse>, Status> {
+        // Require capability:read capability
+        let _auth = require_capability(&self.state, &request, "capability:read").await?;
+
         let capabilities = self
             .state
             .db
@@ -238,6 +257,9 @@ impl RoleService for RoleServiceImpl {
         &self,
         request: Request<GetCapabilityRequest>,
     ) -> Result<Response<GetCapabilityResponse>, Status> {
+        // Require capability:read capability
+        let _auth = require_capability(&self.state, &request, "capability:read").await?;
+
         let req = request.into_inner();
 
         let capability = self

@@ -1,5 +1,6 @@
 //! gRPC implementation of AuditService.
 
+use crate::grpc::capability_check::require_capability;
 use crate::grpc::proto::auth::{
     audit_service_server::AuditService, AuditEvent as ProtoAuditEvent, ListAuditEventsRequest,
     ListAuditEventsResponse,
@@ -36,6 +37,9 @@ impl AuditService for AuditServiceImpl {
         &self,
         request: Request<ListAuditEventsRequest>,
     ) -> Result<Response<ListAuditEventsResponse>, Status> {
+        // Require audit:read capability
+        let _auth = require_capability(&self.state, &request, "audit:read").await?;
+
         let req = request.into_inner();
 
         let tenant_id = Uuid::parse_str(&req.tenant_id)

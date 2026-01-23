@@ -1,4 +1,4 @@
-//! Authentication handlers for auth-service v2.
+//! Authentication business logic for auth-service v2.
 //!
 //! Implements password-based authentication with:
 //! - Registration with email verification
@@ -6,10 +6,6 @@
 //! - Token refresh
 //! - Logout with token blacklisting
 
-use axum::{
-    extract::{Json, State},
-    http::StatusCode,
-};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
@@ -77,13 +73,13 @@ pub struct MessageResponse {
 }
 
 // ============================================================================
-// Handlers
+// Business Logic Implementations
 // ============================================================================
 
 /// Register a new user - implementation.
 ///
 /// This function contains the core registration logic and can be called
-/// from both REST handlers and gRPC services.
+/// from gRPC services.
 pub async fn register_impl(
     state: &AppState,
     req: RegisterRequest,
@@ -159,21 +155,10 @@ pub async fn register_impl(
     })
 }
 
-/// Register a new user.
-///
-/// POST /auth/register
-pub async fn register(
-    State(state): State<AppState>,
-    Json(req): Json<RegisterRequest>,
-) -> Result<(StatusCode, Json<AuthResponse>), AppError> {
-    let response = register_impl(&state, req).await?;
-    Ok((StatusCode::CREATED, Json(response)))
-}
-
 /// Login with email and password - implementation.
 ///
 /// This function contains the core login logic and can be called
-/// from both REST handlers and gRPC services.
+/// from gRPC services.
 pub async fn login_impl(state: &AppState, req: LoginRequest) -> Result<AuthResponse, AppError> {
     // Find tenant
     let tenant = state
@@ -210,7 +195,6 @@ pub async fn login_impl(state: &AppState, req: LoginRequest) -> Result<AuthRespo
 
     // Verify password
     if !verify_password(&req.password, &identity.ident_hash)? {
-        // TODO: Add failed login tracking when needed
         return Err(AppError::AuthError(anyhow::anyhow!("Invalid credentials")));
     }
 
@@ -232,21 +216,10 @@ pub async fn login_impl(state: &AppState, req: LoginRequest) -> Result<AuthRespo
     })
 }
 
-/// Login with email and password.
-///
-/// POST /auth/login
-pub async fn login(
-    State(state): State<AppState>,
-    Json(req): Json<LoginRequest>,
-) -> Result<Json<AuthResponse>, AppError> {
-    let response = login_impl(&state, req).await?;
-    Ok(Json(response))
-}
-
 /// Refresh access token using refresh token - implementation.
 ///
 /// This function contains the core refresh logic and can be called
-/// from both REST handlers and gRPC services.
+/// from gRPC services.
 pub async fn refresh_impl(state: &AppState, req: RefreshRequest) -> Result<AuthResponse, AppError> {
     // Verify and decode refresh token
     let claims = state
@@ -317,21 +290,10 @@ pub async fn refresh_impl(state: &AppState, req: RefreshRequest) -> Result<AuthR
     })
 }
 
-/// Refresh access token using refresh token.
-///
-/// POST /auth/refresh
-pub async fn refresh(
-    State(state): State<AppState>,
-    Json(req): Json<RefreshRequest>,
-) -> Result<Json<AuthResponse>, AppError> {
-    let response = refresh_impl(&state, req).await?;
-    Ok(Json(response))
-}
-
 /// Logout and revoke refresh token - implementation.
 ///
 /// This function contains the core logout logic and can be called
-/// from both REST handlers and gRPC services.
+/// from gRPC services.
 pub async fn logout_impl(state: &AppState, req: LogoutRequest) -> Result<(), AppError> {
     // Verify refresh token (but don't fail if invalid - still try to revoke)
     if let Ok(claims) = state.jwt.validate_refresh_token(&req.refresh_token) {
@@ -348,19 +310,6 @@ pub async fn logout_impl(state: &AppState, req: LogoutRequest) -> Result<(), App
     }
 
     Ok(())
-}
-
-/// Logout and revoke refresh token.
-///
-/// POST /auth/logout
-pub async fn logout(
-    State(state): State<AppState>,
-    Json(req): Json<LogoutRequest>,
-) -> Result<Json<MessageResponse>, AppError> {
-    logout_impl(&state, req).await?;
-    Ok(Json(MessageResponse {
-        message: "Logged out successfully".to_string(),
-    }))
 }
 
 // ============================================================================

@@ -79,6 +79,15 @@ impl Database {
         Ok(())
     }
 
+    /// Count total number of tenants.
+    pub async fn count_tenants(&self) -> Result<i64, AppError> {
+        let row: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM tenants")
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
+        Ok(row.0)
+    }
+
     // ==================== User Operations ====================
 
     /// Find user by ID.

@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package micros.auth.v1;
+
+// AdminService provides administrative operations for auth-service.
+// All endpoints require the X-Admin-Api-Key header.
+service AdminService {
+  // Bootstrap creates the first tenant and superadmin user.
+  // This is a one-time operation that can only be called when no tenants exist.
+  // Requires X-Admin-Api-Key header.
+  rpc Bootstrap(BootstrapRequest) returns (BootstrapResponse);
+}
+
+// BootstrapRequest for creating the first tenant and superadmin.
+message BootstrapRequest {
+  // URL-friendly tenant identifier (e.g., "acme").
+  string tenant_slug = 1;
+
+  // Human-readable tenant name (e.g., "Acme Corp").
+  string tenant_label = 2;
+
+  // Admin user's email address.
+  string admin_email = 3;
+
+  // Admin user's password (min 8 characters).
+  string admin_password = 4;
+
+  // Optional display name for the admin user.
+  optional string admin_display_name = 5;
+}
+
+// BootstrapResponse returned after successful bootstrap.
+message BootstrapResponse {
+  // Created tenant's ID.
+  string tenant_id = 1;
+
+  // Root org node ID for the tenant.
+  string root_org_node_id = 2;
+
+  // Superadmin role ID with "*" capability.
+  string superadmin_role_id = 3;
+
+  // Created admin user's ID.
+  string admin_user_id = 4;
+
+  // JWT access token for the admin user.
+  string access_token = 5;
+
+  // Refresh token for the admin user.
+  string refresh_token = 6;
+}

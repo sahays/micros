@@ -1,5 +1,6 @@
 //! gRPC implementation of InvitationService.
 
+use crate::grpc::capability_check::require_capability;
 use crate::grpc::proto::auth::{
     invitation_service_server::InvitationService, AcceptInvitationRequest,
     AcceptInvitationResponse, CreateInvitationRequest, CreateInvitationResponse,
@@ -63,6 +64,9 @@ impl InvitationService for InvitationServiceImpl {
         &self,
         request: Request<CreateInvitationRequest>,
     ) -> Result<Response<CreateInvitationResponse>, Status> {
+        // Require user:invite capability
+        let _auth = require_capability(&self.state, &request, "user:invite").await?;
+
         let req = request.into_inner();
 
         let tenant_id = Uuid::parse_str(&req.tenant_id)

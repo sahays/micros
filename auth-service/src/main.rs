@@ -1,13 +1,14 @@
 //! Auth Service v2 - Main entry point (gRPC-only).
 
 use auth_service::grpc::proto::auth::{
-    assignment_service_server::AssignmentServiceServer, audit_service_server::AuditServiceServer,
-    auth_service_server::AuthServiceServer, authz_service_server::AuthzServiceServer,
-    invitation_service_server::InvitationServiceServer, org_service_server::OrgServiceServer,
-    role_service_server::RoleServiceServer, visibility_service_server::VisibilityServiceServer,
+    admin_service_server::AdminServiceServer, assignment_service_server::AssignmentServiceServer,
+    audit_service_server::AuditServiceServer, auth_service_server::AuthServiceServer,
+    authz_service_server::AuthzServiceServer, invitation_service_server::InvitationServiceServer,
+    org_service_server::OrgServiceServer, role_service_server::RoleServiceServer,
+    visibility_service_server::VisibilityServiceServer,
 };
 use auth_service::grpc::{
-    AssignmentServiceImpl, AuditServiceImpl, AuthServiceImpl, AuthzServiceImpl,
+    AdminServiceImpl, AssignmentServiceImpl, AuditServiceImpl, AuthServiceImpl, AuthzServiceImpl,
     InvitationServiceImpl, OrgServiceImpl, RoleServiceImpl, VisibilityServiceImpl,
 };
 use auth_service::{config::AuthConfig, db, services, AppState};
@@ -94,6 +95,7 @@ async fn main() -> anyhow::Result<()> {
     let grpc_port = config.common.port + 1;
     let grpc_addr = SocketAddr::from(([0, 0, 0, 0], grpc_port));
 
+    let admin_service = AdminServiceImpl::new(state.clone());
     let auth_service = AuthServiceImpl::new(state.clone());
     let authz_service = AuthzServiceImpl::new(state.clone());
     let org_service = OrgServiceImpl::new(state.clone());
@@ -110,6 +112,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Create gRPC health service
     let (mut health_reporter, grpc_health_service) = tonic_health::server::health_reporter();
+    health_reporter
+        .set_serving::<AdminServiceServer<AdminServiceImpl>>()
+        .await;
     health_reporter
         .set_serving::<AuthServiceServer<AuthServiceImpl>>()
         .await;
@@ -140,6 +145,10 @@ async fn main() -> anyhow::Result<()> {
     let grpc_server = GrpcServer::builder()
         .add_service(grpc_health_service)
         .add_service(reflection_service)
+        .add_service(AdminServiceServer::with_interceptor(
+            admin_service,
+            trace_context_interceptor,
+        ))
         .add_service(AuthServiceServer::with_interceptor(
             auth_service,
             trace_context_interceptor,

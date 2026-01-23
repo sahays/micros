@@ -1,4 +1,4 @@
-//! OTP authentication handlers for auth-service v2.
+//! OTP authentication business logic for auth-service v2.
 //!
 //! Implements OTP send/verify flows for:
 //! - Passwordless login
@@ -6,10 +6,6 @@
 //! - Phone verification
 //! - Password reset
 
-use axum::{
-    extract::{Json, State},
-    http::StatusCode,
-};
 use chrono::Utc;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -81,13 +77,13 @@ const OTP_EXPIRY_SECONDS: i64 = 300; // 5 minutes
 const OTP_MAX_ATTEMPTS: i32 = 5;
 
 // ============================================================================
-// Handlers
+// Business Logic Implementations
 // ============================================================================
 
 /// Send an OTP to the specified destination - implementation.
 ///
 /// This function contains the core OTP sending logic and can be called
-/// from both REST handlers and gRPC services.
+/// from gRPC services.
 #[tracing::instrument(
     skip(state),
     fields(tenant_id = %req.tenant_id, channel = ?req.channel, purpose = ?req.purpose)
@@ -194,21 +190,10 @@ pub async fn send_otp_impl(
     })
 }
 
-/// Send an OTP to the specified destination.
-///
-/// POST /auth/otp/send
-pub async fn send_otp(
-    State(state): State<AppState>,
-    Json(req): Json<SendOtpRequest>,
-) -> Result<(StatusCode, Json<SendOtpResponse>), AppError> {
-    let response = send_otp_impl(&state, req).await?;
-    Ok((StatusCode::OK, Json(response)))
-}
-
 /// Verify an OTP code - implementation.
 ///
 /// This function contains the core OTP verification logic and can be called
-/// from both REST handlers and gRPC services.
+/// from gRPC services.
 #[tracing::instrument(skip(state, req), fields(otp_id = %req.otp_id))]
 pub async fn verify_otp_impl(
     state: &AppState,
@@ -352,17 +337,6 @@ pub async fn verify_otp_impl(
     }
 }
 
-/// Verify an OTP code.
-///
-/// POST /auth/otp/verify
-pub async fn verify_otp(
-    State(state): State<AppState>,
-    Json(req): Json<VerifyOtpRequest>,
-) -> Result<Json<VerifyOtpResponse>, AppError> {
-    let response = verify_otp_impl(&state, req).await?;
-    Ok(Json(response))
-}
-
 // ============================================================================
 // Helper Functions
 // ============================================================================
@@ -412,8 +386,6 @@ async fn send_otp_email(
     _code: &str,
     purpose: &OtpPurpose,
 ) -> Result<(), AppError> {
-    // TODO: Use the actual email service in production
-    // _state.email.send_otp(_email, _code, purpose).await?;
     let subject = match purpose {
         OtpPurpose::Login => "Your login code",
         OtpPurpose::VerifyEmail => "Verify your email",
@@ -428,9 +400,6 @@ async fn send_otp_email(
         purpose = ?purpose,
         "OTP email sent"
     );
-
-    // In production, use the actual email service
-    // _state.email.send_otp_email(email, code, subject).await?;
 
     Ok(())
 }

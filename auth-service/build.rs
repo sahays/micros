@@ -16,6 +16,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .compile_protos(
             &[
+                "../proto/micros/auth/v1/admin.proto",
                 "../proto/micros/auth/v1/auth.proto",
                 "../proto/micros/auth/v1/context.proto",
                 "../proto/micros/auth/v1/org.proto",

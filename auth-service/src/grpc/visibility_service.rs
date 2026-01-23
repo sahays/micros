@@ -1,5 +1,6 @@
 //! gRPC implementation of VisibilityService.
 
+use crate::grpc::capability_check::require_capability;
 use crate::grpc::proto::auth::{
     visibility_service_server::VisibilityService, CreateVisibilityGrantRequest,
     CreateVisibilityGrantResponse, ListUserVisibilityGrantsRequest,
@@ -39,6 +40,9 @@ impl VisibilityService for VisibilityServiceImpl {
         &self,
         request: Request<CreateVisibilityGrantRequest>,
     ) -> Result<Response<CreateVisibilityGrantResponse>, Status> {
+        // Require visibility:grant capability
+        let _auth = require_capability(&self.state, &request, "visibility:grant").await?;
+
         let req = request.into_inner();
 
         let tenant_id = Uuid::parse_str(&req.tenant_id)
@@ -124,6 +128,9 @@ impl VisibilityService for VisibilityServiceImpl {
         &self,
         request: Request<RevokeVisibilityGrantRequest>,
     ) -> Result<Response<RevokeVisibilityGrantResponse>, Status> {
+        // Require visibility:revoke capability
+        let _auth = require_capability(&self.state, &request, "visibility:revoke").await?;
+
         let req = request.into_inner();
 
         let grant_id = Uuid::parse_str(&req.grant_id)
@@ -152,6 +159,9 @@ impl VisibilityService for VisibilityServiceImpl {
         &self,
         request: Request<ListUserVisibilityGrantsRequest>,
     ) -> Result<Response<ListUserVisibilityGrantsResponse>, Status> {
+        // Require visibility:read capability
+        let _auth = require_capability(&self.state, &request, "visibility:read").await?;
+
         let req = request.into_inner();
 
         let user_id = Uuid::parse_str(&req.user_id)

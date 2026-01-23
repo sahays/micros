@@ -5,7 +5,6 @@
 #![allow(dead_code)]
 
 use auth_service::{
-    build_router,
     config::{
         AuthConfig, DatabaseConfig, Environment, GmailConfig, GoogleOAuthConfig, JwtConfig,
         NotificationServiceConfig, RateLimitConfig, RedisConfig, SecurityConfig, SwaggerConfig,
@@ -17,7 +16,6 @@ use sqlx::PgPool;
 use std::io::Write;
 use std::sync::Arc;
 use tempfile::NamedTempFile;
-use tokio::net::TcpListener;
 
 /// Test RSA private key for JWT signing
 const TEST_PRIVATE_KEY: &str = r#"-----BEGIN PRIVATE KEY-----
@@ -181,37 +179,6 @@ pub async fn create_test_state(pool: PgPool) -> anyhow::Result<AppState> {
         jwt,
         redis,
     })
-}
-
-/// Test application wrapper for integration tests
-pub struct TestApp {
-    pub address: String,
-    pub pool: PgPool,
-}
-
-impl TestApp {
-    /// Spawn a new test application on a random port
-    pub async fn spawn() -> anyhow::Result<Self> {
-        let pool = create_test_pool().await?;
-        let state = create_test_state(pool.clone()).await?;
-        let app = build_router(state).await?;
-
-        let listener = TcpListener::bind("127.0.0.1:0").await?;
-        let address = format!("http://{}", listener.local_addr()?);
-
-        tokio::spawn(async move {
-            axum::serve(listener, app.into_make_service())
-                .await
-                .unwrap();
-        });
-
-        Ok(Self { address, pool })
-    }
-
-    /// Get a reqwest client for making requests
-    pub fn client(&self) -> reqwest::Client {
-        reqwest::Client::new()
-    }
 }
 
 /// Clean up test data from the database

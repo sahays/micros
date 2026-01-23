@@ -1,9 +1,11 @@
 //! gRPC service implementations for auth-service.
 
+pub mod admin_service;
 pub mod assignment_service;
 pub mod audit_service;
 pub mod auth_service;
 pub mod authz_service;
+pub mod capability_check;
 pub mod invitation_service;
 pub mod org_service;
 pub mod role_service;
@@ -20,6 +22,7 @@ pub mod proto {
     }
 }
 
+pub use admin_service::AdminServiceImpl;
 pub use assignment_service::AssignmentServiceImpl;
 pub use audit_service::AuditServiceImpl;
 pub use auth_service::AuthServiceImpl;
