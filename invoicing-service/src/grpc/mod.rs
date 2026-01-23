@@ -1,5 +1,6 @@
 //! gRPC module for invoicing-service.
 
+pub mod capability_check;
 mod service;
 
 pub use service::InvoicingServiceImpl;

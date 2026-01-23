@@ -11,8 +11,10 @@
 //! - Document service client for service-to-service communication
 //! - Payment service client for service-to-service communication
 //! - Ledger service client for service-to-service communication
+//! - Capability checking infrastructure for authorization
 
 pub mod auth_client;
+pub mod capability_checker;
 pub mod document_client;
 pub mod error;
 pub mod health;
@@ -43,6 +45,9 @@ pub mod proto {
 }
 
 pub use auth_client::{AuthClient, AuthClientConfig};
+pub use capability_checker::{
+    AuthContext, CapabilityChecker, CapabilityMetadata, extract_bearer_token, extract_org_node_id,
+};
 pub use document_client::{
     DocumentClient, DocumentClientConfig, DocumentProto, DocumentStatusProto,
     ProcessingMetadataProto, ProcessingOptionsProto, ProcessorTypeProto,

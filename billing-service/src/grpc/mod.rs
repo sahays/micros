@@ -1,6 +1,6 @@
 //! gRPC module for billing-service.
 
-mod capability_check;
+pub mod capability_check;
 mod service;
 mod trace_interceptor;
 

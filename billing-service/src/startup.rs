@@ -135,8 +135,19 @@ impl Application {
         let db = Arc::new(db);
 
         // Create capability checker
+        let auth_endpoint = if config.auth.auth_service_endpoint.is_empty() {
+            None
+        } else {
+            Some(config.auth.auth_service_endpoint.as_str())
+        };
         let capability_checker =
-            Arc::new(CapabilityChecker::new(&config.auth.auth_service_endpoint));
+            Arc::new(CapabilityChecker::new(auth_endpoint).await.map_err(|e| {
+                tracing::error!(error = %e, "Failed to create capability checker");
+                AppError::InternalError(anyhow::anyhow!(
+                    "Failed to create capability checker: {}",
+                    e
+                ))
+            })?);
 
         let state = AppState {
             config: config.clone(),

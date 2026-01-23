@@ -93,7 +93,7 @@ impl TestApp {
                 url: "http://localhost:50053".to_string(), // May not be available in tests
             },
             auth: AuthConfig {
-                auth_service_endpoint: "http://localhost:3001".to_string(),
+                auth_service_endpoint: "".to_string(), // Empty = disabled mode for tests
             },
         };
 
