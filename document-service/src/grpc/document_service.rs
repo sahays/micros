@@ -1,6 +1,7 @@
 use crate::dtos::{
     ImageOptions, PdfOptions, ProcessingOptions, ProcessorType as DtoProcessorType, VideoOptions,
 };
+use crate::grpc::capability_check::{capabilities, CapabilityMetadata};
 use crate::grpc::proto::{
     document_service_server::DocumentService, ChunkDownloadMetadata, ChunkedVideoInfo,
     DeleteDocumentRequest, DeleteDocumentResponse, Document as ProtoDocument, DocumentStatus,
@@ -18,6 +19,7 @@ use crate::startup::AppState;
 use crate::workers::ProcessingJob;
 use futures::stream::TryStreamExt;
 use futures::StreamExt;
+use metrics::{counter, histogram};
 use mongodb::bson::doc;
 use mongodb::options::FindOptions;
 use prost_types::Timestamp;
@@ -219,8 +221,21 @@ impl DocumentService for DocumentGrpcService {
         &self,
         request: Request<Streaming<UploadDocumentRequest>>,
     ) -> Result<Response<UploadDocumentResponse>, Status> {
+        // Extract metadata for capability check before consuming the request
+        let cap_metadata = CapabilityMetadata::try_from_request(&request);
         let tenant = Self::extract_tenant_context_from_streaming(&request)?;
         let mut stream = request.into_inner();
+
+        // Capability check (if enabled) - use extracted metadata
+        if let Some(metadata) = cap_metadata {
+            self.state
+                .capability_checker
+                .require_capability_from_metadata(&metadata, capabilities::DOCUMENT_UPLOAD)
+                .await?;
+        } else if self.state.capability_checker.is_enabled() {
+            // If capability checking is enabled but no auth header, fail
+            return Err(Status::unauthenticated("Missing authorization header"));
+        }
 
         // First message should contain metadata
         let first_msg = stream
@@ -274,6 +289,9 @@ impl DocumentService for DocumentGrpcService {
             .unwrap_or("bin");
         let storage_key = format!("{}/{}.{}", Uuid::new_v4(), Uuid::new_v4(), extension);
 
+        // Clone tenant_id for metrics before moving into Document
+        let tenant_id_for_metrics = tenant.app_id.clone();
+
         // Create document
         let mut document = Document::new(
             tenant.app_id,
@@ -315,6 +333,18 @@ impl DocumentService for DocumentGrpcService {
                 Status::internal(format!("Database error: {}", e))
             })?;
 
+        // Record metering metrics
+        let labels = [
+            ("tenant_id", tenant_id_for_metrics.clone()),
+            ("mime_type", document.mime_type.clone()),
+        ];
+        counter!("document_uploads_total", &labels).increment(1);
+        histogram!(
+            "document_upload_bytes",
+            &[("tenant_id", tenant_id_for_metrics)]
+        )
+        .record(size as f64);
+
         tracing::info!(document_id = %document.id, "Document upload completed via gRPC");
 
         Ok(Response::new(UploadDocumentResponse {
@@ -328,6 +358,15 @@ impl DocumentService for DocumentGrpcService {
         request: Request<DownloadDocumentRequest>,
     ) -> Result<Response<Self::DownloadDocumentStream>, Status> {
         let req = request.get_ref();
+
+        // Capability check only if not using signed URL
+        let has_signature = req.signature.is_some() && req.expires.is_some();
+        if !has_signature {
+            self.state
+                .capability_checker
+                .require_capability(&request, capabilities::DOCUMENT_DOWNLOAD)
+                .await?;
+        }
 
         // Check for signed URL parameters
         let is_signed = if let (Some(signature), Some(expires)) = (&req.signature, &req.expires) {
@@ -349,6 +388,12 @@ impl DocumentService for DocumentGrpcService {
         } else {
             None
         };
+
+        // Extract tenant_id for metrics before tenant is moved
+        let tenant_id_for_metrics = tenant
+            .as_ref()
+            .map(|t| t.app_id.clone())
+            .unwrap_or_else(|| "signed_url".to_string());
 
         // Fetch document
         let document = if is_signed {
@@ -454,6 +499,15 @@ impl DocumentService for DocumentGrpcService {
 
         let total_size = file_data.len() as i64;
 
+        // Record metering metrics
+        let labels = [("tenant_id", tenant_id_for_metrics.clone())];
+        counter!("document_downloads_total", &labels).increment(1);
+        histogram!(
+            "document_download_bytes",
+            &[("tenant_id", tenant_id_for_metrics)]
+        )
+        .record(total_size as f64);
+
         // Create streaming response
         let (tx, rx) = mpsc::channel(32);
 
@@ -497,6 +551,12 @@ impl DocumentService for DocumentGrpcService {
         &self,
         request: Request<GetDocumentRequest>,
     ) -> Result<Response<GetDocumentResponse>, Status> {
+        // Capability check (if enabled)
+        self.state
+            .capability_checker
+            .require_capability(&request, capabilities::DOCUMENT_READ)
+            .await?;
+
         let tenant = Self::extract_tenant_context(&request)?;
         let req = request.into_inner();
 
@@ -526,6 +586,12 @@ impl DocumentService for DocumentGrpcService {
         &self,
         request: Request<ListDocumentsRequest>,
     ) -> Result<Response<ListDocumentsResponse>, Status> {
+        // Capability check (if enabled)
+        self.state
+            .capability_checker
+            .require_capability(&request, capabilities::DOCUMENT_READ)
+            .await?;
+
         let tenant = Self::extract_tenant_context(&request)?;
         let req = request.into_inner();
 
@@ -598,6 +664,12 @@ impl DocumentService for DocumentGrpcService {
         &self,
         request: Request<DeleteDocumentRequest>,
     ) -> Result<Response<DeleteDocumentResponse>, Status> {
+        // Capability check (if enabled)
+        self.state
+            .capability_checker
+            .require_capability(&request, capabilities::DOCUMENT_DELETE)
+            .await?;
+
         let tenant = Self::extract_tenant_context(&request)?;
         let req = request.into_inner();
 
@@ -640,6 +712,10 @@ impl DocumentService for DocumentGrpcService {
                 }
             }
 
+            // Record metering metrics
+            let labels = [("tenant_id", tenant.app_id.clone())];
+            counter!("document_deletes_total", &labels).increment(1);
+
             tracing::info!(document_id = %req.document_id, "Document deleted");
             Ok(Response::new(DeleteDocumentResponse { success: true }))
         } else {
@@ -652,6 +728,12 @@ impl DocumentService for DocumentGrpcService {
         &self,
         request: Request<ProcessDocumentRequest>,
     ) -> Result<Response<ProcessDocumentResponse>, Status> {
+        // Capability check (if enabled)
+        self.state
+            .capability_checker
+            .require_capability(&request, capabilities::DOCUMENT_PROCESS)
+            .await?;
+
         let tenant = Self::extract_tenant_context(&request)?;
         let req = request.into_inner();
 
@@ -709,6 +791,13 @@ impl DocumentService for DocumentGrpcService {
                 Status::internal("Worker queue is full")
             })?;
 
+            // Record metering metrics
+            let labels = [
+                ("tenant_id", tenant.app_id.clone()),
+                ("mime_type", document.mime_type.clone()),
+            ];
+            counter!("document_processing_requests_total", &labels).increment(1);
+
             tracing::info!(document_id = %document.id, "Processing job enqueued via gRPC");
         } else {
             return Err(Status::unavailable("Worker pool not available"));
@@ -725,6 +814,12 @@ impl DocumentService for DocumentGrpcService {
         &self,
         request: Request<GetProcessingStatusRequest>,
     ) -> Result<Response<GetProcessingStatusResponse>, Status> {
+        // Capability check (if enabled)
+        self.state
+            .capability_checker
+            .require_capability(&request, capabilities::DOCUMENT_READ)
+            .await?;
+
         let tenant = Self::extract_tenant_context(&request)?;
         let req = request.into_inner();
 
@@ -786,6 +881,12 @@ impl DocumentService for DocumentGrpcService {
         &self,
         request: Request<GenerateSignedUrlRequest>,
     ) -> Result<Response<GenerateSignedUrlResponse>, Status> {
+        // Capability check (if enabled)
+        self.state
+            .capability_checker
+            .require_capability(&request, capabilities::DOCUMENT_SIGNED_URL)
+            .await?;
+
         let tenant = Self::extract_tenant_context(&request)?;
         let req = request.into_inner();
 
@@ -835,6 +936,12 @@ impl DocumentService for DocumentGrpcService {
         &self,
         request: Request<DownloadVideoChunkRequest>,
     ) -> Result<Response<Self::DownloadVideoChunkStream>, Status> {
+        // Capability check (if enabled)
+        self.state
+            .capability_checker
+            .require_capability(&request, capabilities::DOCUMENT_DOWNLOAD)
+            .await?;
+
         let tenant = Self::extract_tenant_context(&request)?;
         let req = request.into_inner();
 

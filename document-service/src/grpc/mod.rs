@@ -1,5 +1,7 @@
+pub mod capability_check;
 pub mod document_service;
 
+pub use capability_check::{capabilities, CapabilityChecker};
 pub use document_service::DocumentGrpcService;
 
 // Include generated proto code

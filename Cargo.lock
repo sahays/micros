@@ -1145,6 +1145,7 @@ dependencies = [
  "dotenvy",
  "futures",
  "metrics 0.23.1",
+ "metrics-exporter-prometheus",
  "mongodb",
  "prost 0.13.5",
  "prost-types",

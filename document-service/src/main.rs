@@ -2,13 +2,15 @@ use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::ge
 use document_service::config::DocumentConfig;
 use document_service::grpc::{
     proto::{document_service_server::DocumentServiceServer, FILE_DESCRIPTOR_SET},
-    DocumentGrpcService,
+    CapabilityChecker, DocumentGrpcService,
 };
-use document_service::services::{LocalStorage, MongoDb, Storage};
+use document_service::services::{get_metrics, init_metrics, LocalStorage, MongoDb, Storage};
 use document_service::startup::AppState;
 use document_service::workers::WorkerOrchestrator;
 use serde_json::json;
+use service_core::grpc::interceptors::{metrics_interceptor, trace_context_interceptor};
 use service_core::observability::init_tracing;
+use service_core::tower::ServiceBuilder;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -48,6 +50,14 @@ async fn readiness_check(State(state): State<HealthState>) -> impl IntoResponse 
     }
 }
 
+async fn metrics_endpoint() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [("content-type", "text/plain; charset=utf-8")],
+        get_metrics(),
+    )
+}
+
 async fn shutdown_signal() {
     let ctrl_c = async {
         signal::ctrl_c()
@@ -76,6 +86,9 @@ async fn shutdown_signal() {
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
+    // Initialize metrics recorder (must be before any metrics are recorded)
+    init_metrics();
+
     // Initialize tracing
     let otlp_endpoint =
         std::env::var("OTLP_ENDPOINT").unwrap_or_else(|_| "http://tempo:4317".to_string());
@@ -122,19 +135,29 @@ async fn main() -> std::io::Result<()> {
         orchestrator.start().await;
     });
 
+    // Initialize capability checker
+    let capability_checker = CapabilityChecker::new(config.auth.auth_service_endpoint.as_deref())
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to initialize capability checker: {}", e);
+            std::io::Error::other(format!("Capability checker initialization error: {}", e))
+        })?;
+
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
         storage,
         job_tx: Some(job_tx),
+        capability_checker,
     };
 
     let health_state = HealthState { db };
 
-    // HTTP health endpoint for Docker/K8s probes
+    // HTTP health/metrics endpoint for Docker/K8s probes and Prometheus
     let health_router = Router::new()
         .route("/health", get(health_check))
         .route("/ready", get(readiness_check))
+        .route("/metrics", get(metrics_endpoint))
         .with_state(health_state);
 
     let health_port = config.common.port;
@@ -166,8 +189,15 @@ async fn main() -> std::io::Result<()> {
 
     tracing::info!("gRPC server listening on port {}", grpc_port);
 
+    // Apply metering and tracing interceptors
+    let layer = ServiceBuilder::new()
+        .layer(tonic::service::interceptor(trace_context_interceptor))
+        .layer(tonic::service::interceptor(metrics_interceptor))
+        .into_inner();
+
     // Build gRPC server
     let grpc_server = GrpcServer::builder()
+        .layer(layer)
         .add_service(grpc_health_service)
         .add_service(reflection_service)
         .add_service(DocumentServiceServer::new(document_service))
