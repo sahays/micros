@@ -20,8 +20,16 @@ An imported statement file from a bank.
 - Source file reference (uploaded via document-service)
 - Statement period (start/end dates)
 - Opening and closing balances as reported by bank
-- Status: uploaded, parsing, parsed, reconciling, reconciled, failed
+- Status: uploaded, extracting, staged, committed, reconciling, reconciled, failed
 - Contains extracted transactions
+- Extraction confidence score (from GenAI)
+
+**Status Flow:**
+```
+uploaded → extracting → staged → committed → reconciling → reconciled
+                ↓           ↓
+              failed     abandoned
+```
 
 ### Bank Transaction
 A single transaction from a bank statement.
@@ -61,13 +69,16 @@ User-defined rules for automatic matching.
 
 **Bank Account Setup**
 - Register bank account with ledger account mapping
-- Configure statement format (CSV, OFX, MT940, PDF)
+- Optional: Configure extraction hints (bank name, typical format patterns)
 - Set up matching rules
+- GenAI handles format detection automatically
 
-**Statement Import**
-- Upload statement file via document-service
-- Parse statement based on format configuration
-- Extract transactions and balances
+**Statement Import (GenAI-Powered)**
+- Upload statement file (PDF, CSV, image) via document-service
+- Send to genai-service for intelligent extraction
+- GenAI extracts transactions regardless of bank format
+- Stage extracted data for user review
+- User reviews, corrects, and commits transactions
 - Validate statement continuity (closing = next opening)
 
 **Transaction Matching**
@@ -117,6 +128,24 @@ User-defined rules for automatic matching.
 
 ## GenAI Integration
 
+**Statement Extraction (Primary):**
+- Send statement document (PDF, image, CSV) to genai-service
+- GenAI extracts structured transaction data:
+  - Date, description, reference number
+  - Debit/credit amount, running balance
+  - Opening and closing balances
+- Works with any bank format (ICICI, SBI, HDFC, Axis, etc.)
+- No bank-specific parsers required
+- Confidence scores per extracted field
+- Handles multi-page statements, tables, varying layouts
+
+**Staging Workflow:**
+- Extracted transactions staged for review (not immediately committed)
+- User reviews extraction accuracy
+- User can correct individual fields
+- User commits approved transactions
+- Rejected extractions can be re-processed with hints
+
 **Matching Assistance:**
 - Send unmatched transactions and candidate ledger entries to genai-service
 - Request match suggestions with confidence scores
@@ -129,6 +158,7 @@ User-defined rules for automatic matching.
 
 **Learning:**
 - Track which suggestions user accepts/rejects
+- Track extraction corrections to improve future extractions
 - Use feedback to improve future suggestions (per tenant)
 
 ## Business Rules

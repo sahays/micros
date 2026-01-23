@@ -9,10 +9,12 @@ Bank statement reconciliation service with AI-powered transaction matching. Pars
 
 ## Core Principles
 
+- GenAI-first: Statement extraction via genai-service, no bank-specific parsers
+- Staging workflow: Extract → Review → Commit with human approval
 - Accuracy: Precise matching with confidence scores
-- Auditability: Full trail of matches and adjustments
+- Auditability: Full trail of extractions, corrections, matches, and adjustments
 - AI-assisted: GenAI suggestions with human confirmation
-- Multi-format: Support various bank statement formats
+- Multi-format: PDF, CSV, images - any bank format
 - Multi-tenant: Complete isolation via tenant_id
 
 ## Tech Stack
@@ -31,7 +33,7 @@ Bank statement reconciliation service with AI-powered transaction matching. Pars
 
 ### Phase 2: Statement Import
 
-- [ ] [003-statement-import](../stories/003-statement-import.md) - ImportStatement, parsing, transaction extraction
+- [ ] [003-statement-import](../stories/003-statement-import.md) - GenAI extraction, staging, review, commit workflow
 - [ ] [004-matching-rules](../stories/004-matching-rules.md) - CreateRule, ListRules, rule-based auto-matching
 
 ### Phase 3: Matching
@@ -55,6 +57,10 @@ Bank statement reconciliation service with AI-powered transaction matching. Pars
 | ImportStatement | 003 |
 | GetStatement | 003 |
 | ListStatements | 003 |
+| GetStagedTransactions | 003 |
+| UpdateStagedTransaction | 003 |
+| CommitStatement | 003 |
+| AbandonStatement | 003 |
 | CreateMatchingRule | 004 |
 | ListMatchingRules | 004 |
 | DeleteMatchingRule | 004 |
@@ -73,7 +79,9 @@ Bank statement reconciliation service with AI-powered transaction matching. Pars
 ## Acceptance Criteria
 
 - [ ] All gRPC methods implemented and tested
-- [ ] Multiple statement formats supported (CSV, OFX)
+- [ ] GenAI extraction works for PDF, CSV, images
+- [ ] Staging workflow: extract → review → commit
+- [ ] User can correct extracted data before commit
 - [ ] Rule-based matching works correctly
 - [ ] AI suggestions have confidence scores
 - [ ] Reconciliation locks matched periods
