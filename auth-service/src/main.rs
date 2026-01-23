@@ -4,14 +4,11 @@ use auth_service::grpc::proto::auth::{
     assignment_service_server::AssignmentServiceServer, audit_service_server::AuditServiceServer,
     auth_service_server::AuthServiceServer, authz_service_server::AuthzServiceServer,
     invitation_service_server::InvitationServiceServer, org_service_server::OrgServiceServer,
-    role_service_server::RoleServiceServer,
-    service_registry_service_server::ServiceRegistryServiceServer,
-    visibility_service_server::VisibilityServiceServer,
+    role_service_server::RoleServiceServer, visibility_service_server::VisibilityServiceServer,
 };
 use auth_service::grpc::{
     AssignmentServiceImpl, AuditServiceImpl, AuthServiceImpl, AuthzServiceImpl,
-    InvitationServiceImpl, OrgServiceImpl, RoleServiceImpl, ServiceRegistryServiceImpl,
-    VisibilityServiceImpl,
+    InvitationServiceImpl, OrgServiceImpl, RoleServiceImpl, VisibilityServiceImpl,
 };
 use auth_service::{config::AuthConfig, db, services, AppState};
 use axum::{extract::State, routing::get, Json, Router};
@@ -104,8 +101,7 @@ async fn main() -> anyhow::Result<()> {
     let assignment_service = AssignmentServiceImpl::new(state.clone());
     let invitation_service = InvitationServiceImpl::new(state.clone());
     let visibility_service = VisibilityServiceImpl::new(state.clone());
-    let audit_service = AuditServiceImpl::new(state.clone());
-    let service_registry_service = ServiceRegistryServiceImpl::new(state);
+    let audit_service = AuditServiceImpl::new(state);
 
     // Create reflection service
     let reflection_service = tonic_reflection::server::Builder::configure()
@@ -137,9 +133,6 @@ async fn main() -> anyhow::Result<()> {
         .await;
     health_reporter
         .set_serving::<AuditServiceServer<AuditServiceImpl>>()
-        .await;
-    health_reporter
-        .set_serving::<ServiceRegistryServiceServer<ServiceRegistryServiceImpl>>()
         .await;
 
     tracing::info!("gRPC server listening on {}", grpc_addr);
@@ -177,10 +170,6 @@ async fn main() -> anyhow::Result<()> {
         ))
         .add_service(AuditServiceServer::with_interceptor(
             audit_service,
-            trace_context_interceptor,
-        ))
-        .add_service(ServiceRegistryServiceServer::with_interceptor(
-            service_registry_service,
             trace_context_interceptor,
         ))
         .serve_with_shutdown(grpc_addr, shutdown_signal());

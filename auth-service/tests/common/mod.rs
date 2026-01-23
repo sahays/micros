@@ -220,16 +220,6 @@ pub async fn cleanup_test_data(pool: &PgPool) -> anyhow::Result<()> {
     sqlx::query("DELETE FROM audit_events")
         .execute(pool)
         .await?;
-    sqlx::query("DELETE FROM service_sessions")
-        .execute(pool)
-        .await?;
-    sqlx::query("DELETE FROM service_permissions")
-        .execute(pool)
-        .await?;
-    sqlx::query("DELETE FROM service_secrets")
-        .execute(pool)
-        .await?;
-    sqlx::query("DELETE FROM services").execute(pool).await?;
     sqlx::query("DELETE FROM invitations").execute(pool).await?;
     sqlx::query("DELETE FROM visibility_grants")
         .execute(pool)

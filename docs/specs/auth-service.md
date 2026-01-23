@@ -12,7 +12,6 @@ A reusable auth microservice providing:
 - Multi-tenant user accounts with multiple identity providers
 - JWT-based authentication with refresh token rotation
 - Capability-based authorization with org hierarchy
-- Know-Your-Service (KYS) registry for service-to-service auth
 - Time-bounded assignments and visibility grants
 
 ## Core Principles
@@ -22,7 +21,6 @@ A reusable auth microservice providing:
 - **Hierarchical:** Org tree with inheritance via closure table
 - **Time-bounded:** Assignments have start/end, never deleted
 - **Immutable audit:** All actions logged, no deletions
-- **KYS:** Services register and authenticate like users
 
 ## Data Model
 
@@ -96,15 +94,6 @@ Enables efficient subtree queries: "all descendants of node X"
 
 Allows users to see org nodes outside their assigned subtree (e.g., executives viewing all branches).
 
-### Services (KYS Registry)
-- `svc_id`: UUID
-- `tenant_id`: optional (null = global)
-- `svc_key`: unique identifier
-- `svc_label`: display name
-- `svc_state_code`: active, disabled
-
-Services authenticate like users and can have permissions for inter-service calls.
-
 ## gRPC Services
 
 ### AuthService
@@ -165,16 +154,6 @@ Services authenticate like users and can have permissions for inter-service call
 | `GetInvitation` | Get invitation by token |
 | `AcceptInvitation` | Accept invitation, create user |
 
-### ServiceRegistryService (KYS)
-| Method | Description |
-|--------|-------------|
-| `RegisterService` | Register new service |
-| `GetServiceToken` | Get service auth token |
-| `GetService` | Get service by key |
-| `RotateSecret` | Rotate service secret |
-| `GetServicePermissions` | List service permissions |
-| `GrantPermission` | Grant permission to service |
-
 ### AuditService
 | Method | Description |
 |--------|-------------|
@@ -226,7 +205,6 @@ Services authenticate like users and can have permissions for inter-service call
 - **Multi-tenant SaaS:** Each customer is a tenant with isolated users
 - **Hierarchical orgs:** Regions → Branches → Teams with inherited access
 - **Field apps:** Sales reps see their assigned territory, managers see all
-- **Service mesh:** Backend services authenticate via KYS registry
 
 ## Key Features
 
@@ -272,15 +250,109 @@ Redis (token blacklist)
 - Password policies (basic validation only)
 - Session management beyond tokens
 - Rate limiting (handled by gateway)
+- Service-to-service auth (internal services have unrestricted access)
 - SAML/LDAP (future consideration)
 
-## Default Capabilities
+## Capabilities
 
-Seeded on first migration:
-- `org.node:create/read/update/deactivate`
-- `org.assignment:create/end/read`
-- `role:create/read/update`
-- `role.capability:assign/revoke`
-- `user:invite/read/update`
-- `visibility:grant/revoke`
-- `audit:read`
+Capabilities control access to auth-service operations. Each capability maps to specific service actions.
+
+**Format:** `{domain}.{resource}:{action}[:scope]`
+
+### Org Node Management
+
+| Capability | Service Action | Description |
+|------------|----------------|-------------|
+| `org.node:create` | OrgService.CreateOrgNode | Create org nodes in hierarchy |
+| `org.node:read` | OrgService.GetOrgNode, GetOrgNodeDescendants, ListTenantOrgNodes, GetTenantOrgTree | View org node details and hierarchy |
+| `org.node:update` | OrgService.UpdateOrgNode | Modify org node label or type |
+| `org.node:deactivate` | OrgService.DeactivateOrgNode | Soft-delete org node (set active_flag=false) |
+
+### Org Assignments
+
+| Capability | Service Action | Description |
+|------------|----------------|-------------|
+| `org.assignment:create` | AssignmentService.CreateAssignment | Assign user to org node with role |
+| `org.assignment:read` | AssignmentService.ListUserAssignments | View user's org assignments |
+| `org.assignment:end` | AssignmentService.EndAssignment | End an assignment (set end_utc) |
+
+### Role Management
+
+| Capability | Service Action | Description |
+|------------|----------------|-------------|
+| `role:create` | RoleService.CreateRole | Create tenant-scoped roles |
+| `role:read` | RoleService.GetRole, ListTenantRoles, GetRoleCapabilities | View role details and capabilities |
+| `role:update` | RoleService.UpdateRole | Modify role label |
+| `role.capability:assign` | RoleService.AssignCapability | Add capability to role |
+| `role.capability:revoke` | RoleService.RevokeCapability | Remove capability from role |
+
+### Capability Registry
+
+| Capability | Service Action | Description |
+|------------|----------------|-------------|
+| `capability:read` | RoleService.ListCapabilities, GetCapability | View available capabilities |
+
+### User Management
+
+| Capability | Service Action | Description |
+|------------|----------------|-------------|
+| `user:read` | UserService.GetUser, ListUsers | View user details |
+| `user:update` | UserService.UpdateUser | Modify user display name or state |
+| `user:invite` | InvitationService.CreateInvitation | Invite new users to org |
+
+### Invitation Management
+
+| Capability | Service Action | Description |
+|------------|----------------|-------------|
+| `invitation:read` | InvitationService.GetInvitation, ListInvitations | View pending invitations |
+| `invitation:revoke` | InvitationService.RevokeInvitation | Cancel pending invitation |
+
+### Visibility Grants
+
+| Capability | Service Action | Description |
+|------------|----------------|-------------|
+| `visibility:grant` | VisibilityService.CreateVisibilityGrant | Grant cross-subtree visibility |
+| `visibility:read` | VisibilityService.ListUserVisibilityGrants | View user's visibility grants |
+| `visibility:revoke` | VisibilityService.RevokeVisibilityGrant | Revoke visibility grant |
+
+### Audit
+
+| Capability | Service Action | Description |
+|------------|----------------|-------------|
+| `audit:read` | AuditService.ListAuditEvents | View audit trail |
+
+### Tenant Management
+
+| Capability | Service Action | Description |
+|------------|----------------|-------------|
+| `tenant:read` | TenantService.GetTenant | View tenant details |
+| `tenant:update` | TenantService.UpdateTenant | Modify tenant label or state |
+
+### Public Endpoints (No Capability Required)
+
+These endpoints are accessible without capabilities:
+
+| Service | Methods | Description |
+|---------|---------|-------------|
+| AuthService | Register, Login, Refresh, Logout | User authentication |
+| AuthService | SendOtp, VerifyOtp | OTP verification |
+| AuthService | ValidateToken | Token validation |
+| AuthzService | GetAuthContext, CheckCapability | Authorization context (self) |
+| InvitationService | AcceptInvitation | Accept invitation (invitee) |
+
+### Default Seeded Capabilities
+
+The following capabilities are seeded on first migration:
+
+```sql
+org.node:create, org.node:read, org.node:update, org.node:deactivate
+org.assignment:create, org.assignment:read, org.assignment:end
+role:create, role:read, role:update
+role.capability:assign, role.capability:revoke
+capability:read
+user:read, user:update, user:invite
+invitation:read, invitation:revoke
+visibility:grant, visibility:read, visibility:revoke
+audit:read
+tenant:read, tenant:update
+```

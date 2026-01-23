@@ -10,7 +10,6 @@ pub mod oauth;
 pub mod org;
 pub mod otp;
 pub mod role;
-pub mod service;
 pub mod visibility;
 
 pub use assignment::*;
@@ -23,5 +22,4 @@ pub use oauth::*;
 pub use org::*;
 pub use otp::*;
 pub use role::*;
-pub use service::*;
 pub use visibility::*;

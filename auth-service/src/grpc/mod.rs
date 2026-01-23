@@ -7,7 +7,6 @@ pub mod authz_service;
 pub mod invitation_service;
 pub mod org_service;
 pub mod role_service;
-pub mod service_registry_service;
 pub mod visibility_service;
 
 // Include the generated proto code
@@ -28,5 +27,4 @@ pub use authz_service::AuthzServiceImpl;
 pub use invitation_service::InvitationServiceImpl;
 pub use org_service::OrgServiceImpl;
 pub use role_service::RoleServiceImpl;
-pub use service_registry_service::ServiceRegistryServiceImpl;
 pub use visibility_service::VisibilityServiceImpl;

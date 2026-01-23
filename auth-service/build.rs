@@ -24,7 +24,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "../proto/micros/auth/v1/invitation.proto",
                 "../proto/micros/auth/v1/visibility.proto",
                 "../proto/micros/auth/v1/audit.proto",
-                "../proto/micros/auth/v1/service_registry.proto",
             ],
             &[proto_root],
         )?;

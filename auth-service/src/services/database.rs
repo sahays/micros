@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use crate::models::{
     AuditEvent, Capability, IdentProvider, Invitation, OrgAssignment, OrgNode, OtpCode,
-    RefreshSession, Role, Service, ServiceSecret, Tenant, User, UserIdentity, VisibilityGrant,
+    RefreshSession, Role, Tenant, User, UserIdentity, VisibilityGrant,
 };
 
 /// PostgreSQL database wrapper.
@@ -561,118 +561,6 @@ impl Database {
             .execute(&self.pool)
             .await
             .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
-        Ok(())
-    }
-
-    // ==================== Service (KYS) Operations ====================
-
-    /// Find service by ID.
-    pub async fn find_service_by_id(&self, svc_id: Uuid) -> Result<Option<Service>, AppError> {
-        sqlx::query_as::<_, Service>("SELECT * FROM services WHERE svc_id = $1")
-            .bind(svc_id)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))
-    }
-
-    /// Find service by key.
-    pub async fn find_service_by_key(&self, svc_key: &str) -> Result<Option<Service>, AppError> {
-        sqlx::query_as::<_, Service>("SELECT * FROM services WHERE svc_key = $1")
-            .bind(svc_key)
-            .fetch_optional(&self.pool)
-            .await
-            .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))
-    }
-
-    /// Insert a new service.
-    pub async fn insert_service(&self, service: &Service) -> Result<(), AppError> {
-        sqlx::query(
-            r#"
-            INSERT INTO services (svc_id, tenant_id, svc_key, svc_label, svc_state_code, created_utc)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            "#,
-        )
-        .bind(service.svc_id)
-        .bind(service.tenant_id)
-        .bind(&service.svc_key)
-        .bind(&service.svc_label)
-        .bind(&service.svc_state_code)
-        .bind(service.created_utc)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
-        Ok(())
-    }
-
-    /// Find valid service secret.
-    pub async fn find_valid_service_secret(
-        &self,
-        svc_id: Uuid,
-    ) -> Result<Option<ServiceSecret>, AppError> {
-        sqlx::query_as::<_, ServiceSecret>(
-            "SELECT * FROM service_secrets WHERE svc_id = $1 AND revoked_utc IS NULL ORDER BY created_utc DESC LIMIT 1",
-        )
-        .bind(svc_id)
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))
-    }
-
-    /// Insert a new service secret.
-    pub async fn insert_service_secret(&self, secret: &ServiceSecret) -> Result<(), AppError> {
-        sqlx::query(
-            r#"
-            INSERT INTO service_secrets (secret_id, svc_id, secret_hash_text, created_utc, revoked_utc)
-            VALUES ($1, $2, $3, $4, $5)
-            "#,
-        )
-        .bind(secret.secret_id)
-        .bind(secret.svc_id)
-        .bind(&secret.secret_hash_text)
-        .bind(secret.created_utc)
-        .bind(secret.revoked_utc)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
-        Ok(())
-    }
-
-    /// Revoke a service secret.
-    pub async fn revoke_service_secret(&self, secret_id: Uuid) -> Result<(), AppError> {
-        sqlx::query("UPDATE service_secrets SET revoked_utc = NOW() WHERE secret_id = $1")
-            .bind(secret_id)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
-        Ok(())
-    }
-
-    /// Get service permissions.
-    pub async fn get_service_permissions(&self, svc_id: Uuid) -> Result<Vec<String>, AppError> {
-        let rows: Vec<(String,)> =
-            sqlx::query_as("SELECT perm_key FROM service_permissions WHERE svc_id = $1")
-                .bind(svc_id)
-                .fetch_all(&self.pool)
-                .await
-                .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
-
-        Ok(rows.into_iter().map(|(k,)| k).collect())
-    }
-
-    /// Insert service permission.
-    pub async fn insert_service_permission(
-        &self,
-        svc_id: Uuid,
-        perm_key: &str,
-    ) -> Result<(), AppError> {
-        sqlx::query(
-            "INSERT INTO service_permissions (svc_id, perm_key) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-        )
-        .bind(svc_id)
-        .bind(perm_key)
-        .execute(&self.pool)
-        .await
-        .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
         Ok(())
     }
 

@@ -4,7 +4,6 @@
 //! - Capability-based authorization
 //! - Org node hierarchy with closure table
 //! - Time-bounded immutable assignments
-//! - Know-Your-Service (KYS) registry
 
 pub mod config;
 pub mod db;
@@ -23,7 +22,7 @@ use tower_http::cors::CorsLayer;
 
 use crate::config::AuthConfig;
 use crate::handlers::{
-    assignment, audit, auth, authz, context, invitation, oauth, org, otp, role, service, visibility,
+    assignment, audit, auth, authz, context, invitation, oauth, org, otp, role, visibility,
 };
 use crate::services::{Database, EmailProvider, JwtService, TokenBlacklist};
 use service_core::error::AppError;
@@ -117,18 +116,6 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
         .route("/evaluate", post(authz::evaluate))
         .route("/batch-evaluate", post(authz::batch_evaluate));
 
-    // Service routes (KYS - Know Your Service)
-    let service_routes = Router::new()
-        .route("/", post(service::register_service))
-        .route("/token", post(service::get_service_token))
-        .route("/:svc_key", get(service::get_service))
-        .route("/:svc_key/rotate-secret", post(service::rotate_secret))
-        .route(
-            "/:svc_key/permissions",
-            get(service::get_service_permissions),
-        )
-        .route("/:svc_key/permissions", post(service::grant_permission));
-
     let app = Router::new()
         .route("/health", get(health_check))
         .nest("/auth", auth_routes)
@@ -144,7 +131,6 @@ pub async fn build_router(state: AppState) -> Result<Router, AppError> {
         .nest("/invitations", invitation_routes)
         .nest("/audit", audit_routes)
         .nest("/authz", authz_routes)
-        .nest("/services", service_routes)
         .with_state(state.clone())
         .layer(CorsLayer::permissive());
 
