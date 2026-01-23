@@ -1,6 +1,6 @@
 //! Test helper module for auth-service v2 integration tests.
 //!
-//! Provides common setup utilities for PostgreSQL-based tests.
+//! Provides common setup utilities for PostgreSQL-based gRPC tests.
 
 #![allow(dead_code)]
 
@@ -10,12 +10,22 @@ use auth_service::{
         NotificationServiceConfig, RateLimitConfig, RedisConfig, SecurityConfig, SwaggerConfig,
         SwaggerMode,
     },
-    db, services, AppState,
+    db,
+    grpc::proto::auth::{
+        admin_service_client::AdminServiceClient, auth_service_client::AuthServiceClient,
+        authz_service_client::AuthzServiceClient, org_service_client::OrgServiceClient,
+        role_service_client::RoleServiceClient,
+    },
+    services, AppState,
 };
 use sqlx::PgPool;
 use std::io::Write;
+use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 use tempfile::NamedTempFile;
+use tokio::net::TcpListener;
+use tonic::transport::Channel;
 
 /// Test RSA private key for JWT signing
 const TEST_PRIVATE_KEY: &str = r#"-----BEGIN PRIVATE KEY-----
@@ -58,7 +68,140 @@ VKI+1tHRXupJS/V7J1mlETrG+VvSECpcCQzHwrOxRw4xET6DQlcEXff1RI+CD7tZ
 HQIDAQAB
 -----END PUBLIC KEY-----"#;
 
-/// Create temporary JWT key files for testing
+pub const TEST_ADMIN_API_KEY: &str = "test-admin-key-12345";
+
+/// Test application with running gRPC server.
+pub struct TestApp {
+    pub grpc_port: u16,
+    pub state: AppState,
+    _key_files: (NamedTempFile, NamedTempFile),
+}
+
+impl TestApp {
+    /// Spawn the test application with a fresh database.
+    pub async fn spawn() -> Self {
+        let (private_file, public_file) = create_test_keys().expect("Failed to create test keys");
+        let pool = create_test_pool()
+            .await
+            .expect("Failed to create test pool");
+
+        // Clean up any existing test data
+        cleanup_test_data(&pool)
+            .await
+            .expect("Failed to cleanup test data");
+
+        let config = create_test_config(
+            private_file.path().to_str().unwrap(),
+            public_file.path().to_str().unwrap(),
+        );
+
+        let database = services::Database::new(pool);
+        let jwt = services::JwtService::new(&config.jwt).expect("Failed to create JWT service");
+        let redis = Arc::new(services::MockBlacklist::new()) as Arc<dyn services::TokenBlacklist>;
+        let email = Arc::new(services::MockEmailService) as Arc<dyn services::EmailProvider>;
+
+        let state = AppState {
+            config: config.clone(),
+            db: database,
+            email,
+            jwt,
+            redis,
+        };
+
+        // Find an available port for gRPC
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("Failed to bind to random port");
+        let grpc_port = listener.local_addr().unwrap().port();
+        drop(listener);
+
+        let grpc_addr = SocketAddr::from(([127, 0, 0, 1], grpc_port));
+
+        // Build gRPC services
+        let admin_service = auth_service::grpc::AdminServiceImpl::new(state.clone());
+        let auth_svc = auth_service::grpc::AuthServiceImpl::new(state.clone());
+        let authz_service = auth_service::grpc::AuthzServiceImpl::new(state.clone());
+        let org_service = auth_service::grpc::OrgServiceImpl::new(state.clone());
+        let role_service = auth_service::grpc::RoleServiceImpl::new(state.clone());
+        let assignment_service = auth_service::grpc::AssignmentServiceImpl::new(state.clone());
+        let invitation_service = auth_service::grpc::InvitationServiceImpl::new(state.clone());
+        let visibility_service = auth_service::grpc::VisibilityServiceImpl::new(state.clone());
+        let audit_service = auth_service::grpc::AuditServiceImpl::new(state.clone());
+
+        use auth_service::grpc::proto::auth::{
+            admin_service_server::AdminServiceServer,
+            assignment_service_server::AssignmentServiceServer,
+            audit_service_server::AuditServiceServer, auth_service_server::AuthServiceServer,
+            authz_service_server::AuthzServiceServer,
+            invitation_service_server::InvitationServiceServer,
+            org_service_server::OrgServiceServer, role_service_server::RoleServiceServer,
+            visibility_service_server::VisibilityServiceServer,
+        };
+
+        let grpc_server = tonic::transport::Server::builder()
+            .add_service(AdminServiceServer::new(admin_service))
+            .add_service(AuthServiceServer::new(auth_svc))
+            .add_service(AuthzServiceServer::new(authz_service))
+            .add_service(OrgServiceServer::new(org_service))
+            .add_service(RoleServiceServer::new(role_service))
+            .add_service(AssignmentServiceServer::new(assignment_service))
+            .add_service(InvitationServiceServer::new(invitation_service))
+            .add_service(VisibilityServiceServer::new(visibility_service))
+            .add_service(AuditServiceServer::new(audit_service))
+            .serve(grpc_addr);
+
+        // Spawn the server in the background
+        tokio::spawn(async move {
+            let _ = grpc_server.await;
+        });
+
+        // Wait for server to start
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        TestApp {
+            grpc_port,
+            state,
+            _key_files: (private_file, public_file),
+        }
+    }
+
+    /// Get the gRPC endpoint address.
+    pub fn grpc_addr(&self) -> String {
+        format!("http://127.0.0.1:{}", self.grpc_port)
+    }
+
+    /// Create an AdminService client.
+    pub async fn admin_client(&self) -> AdminServiceClient<Channel> {
+        create_admin_client(self.grpc_port).await
+    }
+
+    /// Create an AuthService client.
+    pub async fn auth_client(&self) -> AuthServiceClient<Channel> {
+        create_auth_client(self.grpc_port).await
+    }
+
+    /// Create an AuthzService client.
+    pub async fn authz_client(&self) -> AuthzServiceClient<Channel> {
+        create_authz_client(self.grpc_port).await
+    }
+
+    /// Create an OrgService client.
+    pub async fn org_client(&self) -> OrgServiceClient<Channel> {
+        create_org_client(self.grpc_port).await
+    }
+
+    /// Create a RoleService client.
+    pub async fn role_client(&self) -> RoleServiceClient<Channel> {
+        create_role_client(self.grpc_port).await
+    }
+
+    /// Clean up test data.
+    pub async fn cleanup(&self) -> anyhow::Result<()> {
+        cleanup_test_data(self.state.db.pool()).await
+    }
+}
+
+/// Create temporary JWT key files for testing.
 pub fn create_test_keys() -> anyhow::Result<(NamedTempFile, NamedTempFile)> {
     let mut private_file = NamedTempFile::new()?;
     private_file.write_all(TEST_PRIVATE_KEY.as_bytes())?;
@@ -69,13 +212,13 @@ pub fn create_test_keys() -> anyhow::Result<(NamedTempFile, NamedTempFile)> {
     Ok((private_file, public_file))
 }
 
-/// Get the database URL for testing from environment or use default
+/// Get the database URL for testing from environment or use default.
 pub fn get_test_database_url() -> String {
     std::env::var("TEST_DATABASE_URL")
         .unwrap_or_else(|_| "postgres://postgres:pass%40word1@localhost:5432/auth_test".to_string())
 }
 
-/// Create a test database pool
+/// Create a test database pool.
 pub async fn create_test_pool() -> anyhow::Result<PgPool> {
     let config = DatabaseConfig {
         url: get_test_database_url(),
@@ -89,7 +232,7 @@ pub async fn create_test_pool() -> anyhow::Result<PgPool> {
     Ok(pool)
 }
 
-/// Create a test configuration
+/// Create a test configuration.
 pub fn create_test_config(private_key_path: &str, public_key_path: &str) -> AuthConfig {
     AuthConfig {
         common: service_core::config::Config { port: 0 },
@@ -131,7 +274,7 @@ pub fn create_test_config(private_key_path: &str, public_key_path: &str) -> Auth
         security: SecurityConfig {
             allowed_origins: vec!["http://localhost:3000".to_string()],
             require_signatures: false,
-            admin_api_key: "test-admin-key".to_string(),
+            admin_api_key: TEST_ADMIN_API_KEY.to_string(),
             signature_config: service_core::middleware::signature::SignatureConfig {
                 require_signatures: false,
                 excluded_paths: vec!["/health".to_string()],
@@ -155,7 +298,7 @@ pub fn create_test_config(private_key_path: &str, public_key_path: &str) -> Auth
     }
 }
 
-/// Create a test application state with mock services
+/// Create a test application state with mock services.
 pub async fn create_test_state(pool: PgPool) -> anyhow::Result<AppState> {
     let (private_file, public_file) = create_test_keys()?;
     let config = create_test_config(
@@ -181,7 +324,7 @@ pub async fn create_test_state(pool: PgPool) -> anyhow::Result<AppState> {
     })
 }
 
-/// Clean up test data from the database
+/// Clean up test data from the database.
 pub async fn cleanup_test_data(pool: &PgPool) -> anyhow::Result<()> {
     // Delete in order respecting foreign key constraints
     sqlx::query("DELETE FROM audit_events")
@@ -213,4 +356,67 @@ pub async fn cleanup_test_data(pool: &PgPool) -> anyhow::Result<()> {
     sqlx::query("DELETE FROM tenants").execute(pool).await?;
 
     Ok(())
+}
+
+// ============================================================================
+// gRPC Client Helpers
+// ============================================================================
+
+async fn connect_with_retry(addr: String) -> Channel {
+    for _ in 0..10 {
+        match Channel::from_shared(addr.clone()).unwrap().connect().await {
+            Ok(channel) => return channel,
+            Err(_) => {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        }
+    }
+    panic!("Failed to connect to gRPC server at {}", addr);
+}
+
+pub async fn create_admin_client(port: u16) -> AdminServiceClient<Channel> {
+    let addr = format!("http://127.0.0.1:{}", port);
+    let channel = connect_with_retry(addr).await;
+    AdminServiceClient::new(channel)
+}
+
+pub async fn create_auth_client(port: u16) -> AuthServiceClient<Channel> {
+    let addr = format!("http://127.0.0.1:{}", port);
+    let channel = connect_with_retry(addr).await;
+    AuthServiceClient::new(channel)
+}
+
+pub async fn create_authz_client(port: u16) -> AuthzServiceClient<Channel> {
+    let addr = format!("http://127.0.0.1:{}", port);
+    let channel = connect_with_retry(addr).await;
+    AuthzServiceClient::new(channel)
+}
+
+pub async fn create_org_client(port: u16) -> OrgServiceClient<Channel> {
+    let addr = format!("http://127.0.0.1:{}", port);
+    let channel = connect_with_retry(addr).await;
+    OrgServiceClient::new(channel)
+}
+
+pub async fn create_role_client(port: u16) -> RoleServiceClient<Channel> {
+    let addr = format!("http://127.0.0.1:{}", port);
+    let channel = connect_with_retry(addr).await;
+    RoleServiceClient::new(channel)
+}
+
+/// Add authorization header to a request.
+pub fn with_auth<T>(mut request: tonic::Request<T>, token: &str) -> tonic::Request<T> {
+    request.metadata_mut().insert(
+        "authorization",
+        format!("Bearer {}", token).parse().unwrap(),
+    );
+    request
+}
+
+/// Add admin API key header to a request.
+pub fn with_admin_key<T>(mut request: tonic::Request<T>) -> tonic::Request<T> {
+    request
+        .metadata_mut()
+        .insert("x-admin-api-key", TEST_ADMIN_API_KEY.parse().unwrap());
+    request
 }

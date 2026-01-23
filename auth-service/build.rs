@@ -10,7 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Compile auth service protos
     tonic_build::configure()
         .build_server(true)
-        .build_client(false) // Clients will be built in service-core
+        .build_client(true) // Enable clients for integration tests
         .file_descriptor_set_path(
             PathBuf::from(std::env::var("OUT_DIR")?).join("auth_service_descriptor.bin"),
         )
