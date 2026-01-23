@@ -50,8 +50,9 @@ pub use document_client::{
 pub use error::{GrpcResult, IntoStatus};
 pub use health::{HealthComponents, HealthReporter, HealthStatus, create_health_service};
 pub use interceptors::{
-    extract_request_id, extract_traceparent, inject_trace_context,
-    inject_trace_context_with_request_id, trace_context_interceptor,
+    TENANT_ID_KEY, extract_request_id, extract_tenant_id, extract_traceparent, inject_tenant_id,
+    inject_trace_context, inject_trace_context_with_request_id, metrics_interceptor,
+    trace_context_interceptor,
 };
 pub use ledger_client::{LedgerClient, LedgerClientConfig, TransactionEntry};
 pub use notification_client::{

@@ -3,8 +3,9 @@
 //! Provides interceptors for:
 //! - Trace context propagation (W3C traceparent/tracestate)
 //! - Request logging
-//! - Metrics collection
+//! - Metrics collection (with tenant_id for metering)
 
+use metrics::counter;
 use opentelemetry::trace::TraceContextExt;
 use tonic::{Request, Status};
 use tracing::Span;
@@ -18,6 +19,12 @@ pub const TRACESTATE_KEY: &str = "tracestate";
 
 /// gRPC metadata key for request ID.
 pub const REQUEST_ID_KEY: &str = "x-request-id";
+
+/// gRPC metadata key for tenant ID (used for metering).
+pub const TENANT_ID_KEY: &str = "x-tenant-id";
+
+/// Default tenant ID used when x-tenant-id metadata is missing.
+const UNKNOWN_TENANT: &str = "unknown";
 
 /// Interceptor that extracts trace context from incoming requests.
 ///
@@ -49,6 +56,53 @@ pub fn trace_context_interceptor(request: Request<()>) -> Result<Request<()>, St
     }
 
     Ok(request)
+}
+
+/// Interceptor that records gRPC request metrics with tenant_id for metering.
+///
+/// Extracts `x-tenant-id` from request metadata and increments the
+/// `grpc_metering_total` counter with tenant_id label.
+///
+/// Note: Service and method names are not available in tonic interceptors.
+/// Use this for tenant-level metering. For method-level metrics, use
+/// service-specific metrics in handlers.
+///
+/// # Example
+///
+/// ```ignore
+/// use service_core::grpc::interceptors::metrics_interceptor;
+///
+/// let layer = tonic::service::interceptor(metrics_interceptor);
+/// ```
+#[allow(clippy::result_large_err)]
+pub fn metrics_interceptor(request: Request<()>) -> Result<Request<()>, Status> {
+    let tenant_id = request
+        .metadata()
+        .get(TENANT_ID_KEY)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or(UNKNOWN_TENANT);
+
+    let labels = [("tenant_id", tenant_id.to_string())];
+
+    counter!("grpc_metering_total", &labels).increment(1);
+
+    Ok(request)
+}
+
+/// Extract tenant ID from incoming gRPC request metadata.
+pub fn extract_tenant_id<T>(request: &Request<T>) -> Option<String> {
+    request
+        .metadata()
+        .get(TENANT_ID_KEY)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+}
+
+/// Inject tenant ID into outgoing gRPC request metadata.
+pub fn inject_tenant_id<T>(request: &mut Request<T>, tenant_id: &str) {
+    if let Ok(value) = tenant_id.parse() {
+        request.metadata_mut().insert(TENANT_ID_KEY, value);
+    }
 }
 
 /// Inject current trace context into outgoing gRPC request metadata.
