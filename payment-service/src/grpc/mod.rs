@@ -1,5 +1,7 @@
+pub mod capability_check;
 pub mod payment_service;
 
+pub use capability_check::{capabilities, CapabilityChecker};
 pub use payment_service::PaymentGrpcService;
 
 // Include generated proto code

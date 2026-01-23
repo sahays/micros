@@ -6,15 +6,17 @@
 use crate::config::Config;
 use crate::grpc::{
     proto::{payment_service_server::PaymentServiceServer, FILE_DESCRIPTOR_SET},
-    PaymentGrpcService,
+    CapabilityChecker, PaymentGrpcService,
 };
-use crate::services::{PaymentRepository, RazorpayClient};
+use crate::services::{get_metrics, PaymentRepository, RazorpayClient};
 use axum::{http::StatusCode, response::IntoResponse, routing::get, Json, Router};
 use mongodb::{options::ClientOptions, Client};
 use secrecy::ExposeSecret;
 use serde_json::json;
 use service_core::error::AppError;
+use service_core::grpc::interceptors::{metrics_interceptor, trace_context_interceptor};
 use service_core::middleware::signature::SignatureConfig;
+use service_core::tower::ServiceBuilder;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tonic::transport::Server as GrpcServer;
@@ -28,6 +30,7 @@ pub struct AppState {
     pub signature_config: SignatureConfig,
     pub repository: PaymentRepository,
     pub razorpay: RazorpayClient,
+    pub capability_checker: CapabilityChecker,
 }
 
 /// Health check endpoint for Docker/K8s liveness probes.
@@ -45,6 +48,15 @@ async fn health_check() -> impl IntoResponse {
 /// Readiness check endpoint for K8s readiness probes.
 async fn readiness_check() -> impl IntoResponse {
     (StatusCode::OK, Json(json!({ "status": "ready" })))
+}
+
+/// Prometheus metrics endpoint.
+async fn metrics_endpoint() -> impl IntoResponse {
+    (
+        StatusCode::OK,
+        [("content-type", "text/plain; charset=utf-8")],
+        get_metrics(),
+    )
 }
 
 /// Application container for managing server lifecycle.
@@ -104,6 +116,18 @@ impl Application {
             );
         }
 
+        // Initialize capability checker
+        let capability_checker =
+            CapabilityChecker::new(config.auth.auth_service_endpoint.as_deref())
+                .await
+                .map_err(|e| {
+                    tracing::error!("Failed to initialize capability checker: {}", e);
+                    AppError::from(std::io::Error::other(format!(
+                        "Capability checker initialization error: {}",
+                        e
+                    )))
+                })?;
+
         let state = AppState {
             db,
             redis,
@@ -111,6 +135,7 @@ impl Application {
             signature_config,
             repository,
             razorpay,
+            capability_checker,
         };
 
         // Bind HTTP listener (port 0 = random port for testing)
@@ -168,10 +193,11 @@ impl Application {
     ///
     /// This starts both the HTTP health server and the gRPC server concurrently.
     pub async fn run_until_stopped(self) -> std::io::Result<()> {
-        // Build minimal HTTP router (health only)
+        // Build minimal HTTP router (health + metrics)
         let http_router = Router::new()
             .route("/health", get(health_check))
-            .route("/ready", get(readiness_check));
+            .route("/ready", get(readiness_check))
+            .route("/metrics", get(metrics_endpoint));
 
         // Build gRPC server
         let payment_service = PaymentGrpcService::new(self.state);
@@ -190,8 +216,15 @@ impl Application {
                 std::io::Error::other(format!("Failed to build reflection service: {}", e))
             })?;
 
+        // Apply metering and tracing interceptors
+        let layer = ServiceBuilder::new()
+            .layer(tonic::service::interceptor(trace_context_interceptor))
+            .layer(tonic::service::interceptor(metrics_interceptor))
+            .into_inner();
+
         let incoming = tokio_stream::wrappers::TcpListenerStream::new(self.grpc_listener);
         let grpc_server = GrpcServer::builder()
+            .layer(layer)
             .add_service(grpc_health_service)
             .add_service(reflection_service)
             .add_service(PaymentServiceServer::new(payment_service))

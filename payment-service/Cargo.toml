@@ -31,6 +31,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 # Observability & Security
 metrics = { workspace = true }
 metrics-exporter-prometheus = { workspace = true }
+prometheus = "0.13"
 opentelemetry = { workspace = true }
 opentelemetry-otlp = { workspace = true }
 opentelemetry_sdk = { workspace = true }

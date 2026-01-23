@@ -14,7 +14,7 @@
 #
 # Database requirements:
 #   - PostgreSQL: localhost:5432 (for auth-service, ledger-service)
-#   - MongoDB: localhost:27017 (for document-service, genai-service, notification-service)
+#   - MongoDB: localhost:27017 (for document-service, genai-service, notification-service, payment-service)
 #
 # Examples:
 #   ./scripts/integ-tests.sh                           # Run all tests
@@ -50,7 +50,7 @@ MONGO_AVAILABLE=false
 
 # Services by database type
 PG_SERVICES=("auth-service" "ledger-service" "invoicing-service")
-MONGO_SERVICES=("document-service" "genai-service" "notification-service")
+MONGO_SERVICES=("document-service" "genai-service" "notification-service" "payment-service")
 
 # Colors for output
 RED='\033[0;31m'

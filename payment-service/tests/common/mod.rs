@@ -1,6 +1,6 @@
 use payment_service::config::{
-    Config, DatabaseConfig, RazorpayConfig, RedisConfig, ServerConfig, ServiceSignatureConfig,
-    UpiConfig,
+    AuthConfig, Config, DatabaseConfig, RazorpayConfig, RedisConfig, ServerConfig,
+    ServiceSignatureConfig, UpiConfig,
 };
 use payment_service::startup::Application;
 use secrecy::Secret;
@@ -57,6 +57,9 @@ impl TestApp {
                 key_secret: Secret::new("test_key_secret".to_string()),
                 webhook_secret: Secret::new("test_webhook_secret".to_string()),
                 api_base_url: "https://api.razorpay.com/v1".to_string(),
+            },
+            auth: AuthConfig {
+                auth_service_endpoint: None, // Tests use BFF trust model
             },
             service_name: "payment-service-test".to_string(),
         };
