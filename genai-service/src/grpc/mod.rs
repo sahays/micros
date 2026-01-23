@@ -1,5 +1,7 @@
+pub mod capability_check;
 pub mod genai_service;
 
+pub use capability_check::{capabilities, CapabilityChecker};
 pub use genai_service::GenaiGrpcService;
 
 /// Include generated proto code.

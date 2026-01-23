@@ -1,7 +1,7 @@
 use genai_service::config::GenaiConfig;
 use genai_service::grpc::{
     proto::{gen_ai_service_server::GenAiServiceServer, FILE_DESCRIPTOR_SET},
-    GenaiGrpcService,
+    CapabilityChecker, GenaiGrpcService,
 };
 use genai_service::services::providers::gemini::{GeminiConfig, GeminiTextProvider};
 use genai_service::services::providers::TextProvider;
@@ -13,9 +13,11 @@ use axum::{
     Router,
 };
 use serde_json::json;
+use service_core::grpc::interceptors::{metrics_interceptor, trace_context_interceptor};
 use service_core::middleware::metrics::metrics_middleware;
 use service_core::middleware::tracing::request_id_middleware;
 use service_core::observability::init_tracing;
+use service_core::tower::ServiceBuilder;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -170,11 +172,20 @@ async fn main() -> std::io::Result<()> {
         "Initialized document fetcher"
     );
 
+    // Initialize capability checker
+    let capability_checker = CapabilityChecker::new(config.auth.auth_service_endpoint.as_deref())
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to initialize capability checker");
+            std::io::Error::other(format!("Capability checker initialization error: {}", e))
+        })?;
+
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
         text_provider,
         document_fetcher,
+        capability_checker,
     };
 
     let health_state = HealthState { db };
@@ -218,8 +229,15 @@ async fn main() -> std::io::Result<()> {
 
     tracing::info!(port = %grpc_port, "gRPC server listening");
 
+    // Apply metering and tracing interceptors
+    let layer = ServiceBuilder::new()
+        .layer(tonic::service::interceptor(trace_context_interceptor))
+        .layer(tonic::service::interceptor(metrics_interceptor))
+        .into_inner();
+
     // Build gRPC server
     let grpc_server = GrpcServer::builder()
+        .layer(layer)
         .add_service(grpc_health_service)
         .add_service(reflection_service)
         .add_service(GenAiServiceServer::new(genai_service))

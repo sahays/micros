@@ -61,17 +61,17 @@ pub fn init_metrics() {
     )
     .expect("Failed to create grpc_requests_in_flight metric");
 
-    // Token counter (input/output by model)
+    // Token counter (input/output by model and tenant for billing)
     let genai_tokens = IntCounterVec::new(
         Opts::new("genai_tokens_total", "Total tokens processed"),
-        &["model", "type"], // type: input, output
+        &["tenant_id", "model", "type"], // type: input, output
     )
     .expect("Failed to create genai_tokens_total metric");
 
-    // AI request counter
+    // AI request counter (with tenant for billing)
     let genai_requests = IntCounterVec::new(
         Opts::new("genai_requests_total", "Total GenAI requests"),
-        &["output_format", "model", "finish_reason"],
+        &["tenant_id", "output_format", "model", "finish_reason"],
     )
     .expect("Failed to create genai_requests_total metric");
 
@@ -238,23 +238,28 @@ pub fn dec_grpc_in_flight(method: &str) {
     }
 }
 
-/// Record token usage.
-pub fn record_tokens(model: &str, input_tokens: i32, output_tokens: i32) {
+/// Record token usage with tenant_id for billing.
+pub fn record_tokens(tenant_id: &str, model: &str, input_tokens: i32, output_tokens: i32) {
     if let Some(counter) = GENAI_TOKENS_TOTAL.get() {
         counter
-            .with_label_values(&[model, "input"])
+            .with_label_values(&[tenant_id, model, "input"])
             .inc_by(input_tokens as u64);
         counter
-            .with_label_values(&[model, "output"])
+            .with_label_values(&[tenant_id, model, "output"])
             .inc_by(output_tokens as u64);
     }
 }
 
-/// Record a completed GenAI request.
-pub fn record_genai_request(output_format: &str, model: &str, finish_reason: &str) {
+/// Record a completed GenAI request with tenant_id for billing.
+pub fn record_genai_request(
+    tenant_id: &str,
+    output_format: &str,
+    model: &str,
+    finish_reason: &str,
+) {
     if let Some(counter) = GENAI_REQUESTS_TOTAL.get() {
         counter
-            .with_label_values(&[output_format, model, finish_reason])
+            .with_label_values(&[tenant_id, output_format, model, finish_reason])
             .inc();
     }
 }

@@ -293,3 +293,134 @@ async fn process_rejects_invalid_json_schema() {
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
     assert!(status.message().contains("valid JSON"));
 }
+
+#[tokio::test]
+async fn session_lifecycle() {
+    use genai_service::grpc::proto::{
+        CreateSessionRequest, DeleteSessionRequest, GetSessionRequest,
+    };
+
+    // Skip if MongoDB is not available
+    if std::env::var("SKIP_MONGO_TESTS").is_ok() {
+        eprintln!("Skipping test: SKIP_MONGO_TESTS is set");
+        return;
+    }
+
+    let port = spawn_app().await;
+    let mut client = create_client(port).await;
+
+    // Create a session
+    let create_response = client
+        .create_session(CreateSessionRequest {
+            title: Some("Test Session".to_string()),
+            system_prompt: Some("You are a helpful assistant.".to_string()),
+            documents: vec![],
+            metadata: Some(RequestMetadata {
+                tenant_id: "test-tenant".to_string(),
+                user_id: "test-user".to_string(),
+                tags: Default::default(),
+            }),
+        })
+        .await
+        .expect("Failed to create session");
+
+    let session = create_response
+        .into_inner()
+        .session
+        .expect("Session should be returned");
+    assert!(!session.id.is_empty());
+    assert_eq!(session.title, Some("Test Session".to_string()));
+    assert_eq!(session.message_count, 0);
+
+    let session_id = session.id.clone();
+
+    // Get the session
+    let get_response = client
+        .get_session(GetSessionRequest {
+            session_id: session_id.clone(),
+            include_messages: true,
+        })
+        .await
+        .expect("Failed to get session");
+
+    let retrieved_session = get_response
+        .into_inner()
+        .session
+        .expect("Session should be returned");
+    assert_eq!(retrieved_session.id, session_id);
+    assert_eq!(retrieved_session.title, Some("Test Session".to_string()));
+
+    // Delete the session
+    let delete_response = client
+        .delete_session(DeleteSessionRequest {
+            session_id: session_id.clone(),
+        })
+        .await
+        .expect("Failed to delete session");
+
+    assert!(delete_response.into_inner().success);
+
+    // Verify session is deleted
+    let get_result = client
+        .get_session(GetSessionRequest {
+            session_id: session_id.clone(),
+            include_messages: false,
+        })
+        .await;
+
+    assert!(get_result.is_err());
+    assert_eq!(get_result.unwrap_err().code(), tonic::Code::NotFound);
+}
+
+#[tokio::test]
+async fn create_session_requires_metadata() {
+    use genai_service::grpc::proto::CreateSessionRequest;
+
+    // Skip if MongoDB is not available
+    if std::env::var("SKIP_MONGO_TESTS").is_ok() {
+        eprintln!("Skipping test: SKIP_MONGO_TESTS is set");
+        return;
+    }
+
+    let port = spawn_app().await;
+    let mut client = create_client(port).await;
+
+    let result = client
+        .create_session(CreateSessionRequest {
+            title: Some("Test Session".to_string()),
+            system_prompt: None,
+            documents: vec![],
+            metadata: None, // Missing metadata
+        })
+        .await;
+
+    assert!(result.is_err());
+    let status = result.unwrap_err();
+    assert_eq!(status.code(), tonic::Code::InvalidArgument);
+    assert!(status.message().contains("metadata"));
+}
+
+#[tokio::test]
+async fn get_session_requires_session_id() {
+    use genai_service::grpc::proto::GetSessionRequest;
+
+    // Skip if MongoDB is not available
+    if std::env::var("SKIP_MONGO_TESTS").is_ok() {
+        eprintln!("Skipping test: SKIP_MONGO_TESTS is set");
+        return;
+    }
+
+    let port = spawn_app().await;
+    let mut client = create_client(port).await;
+
+    let result = client
+        .get_session(GetSessionRequest {
+            session_id: "".to_string(), // Empty session ID
+            include_messages: false,
+        })
+        .await;
+
+    assert!(result.is_err());
+    let status = result.unwrap_err();
+    assert_eq!(status.code(), tonic::Code::InvalidArgument);
+}

@@ -1,4 +1,5 @@
 use crate::config::OutputFormat;
+use crate::grpc::capability_check::{capabilities, CapabilityMetadata};
 use crate::grpc::proto::{
     gen_ai_service_server::GenAiService, CreateSessionRequest, CreateSessionResponse,
     DeleteSessionRequest, DeleteSessionResponse, FinishReason, GetSessionRequest,
@@ -266,6 +267,14 @@ impl GenAiService for GenaiGrpcService {
         let method = "Process";
         inc_grpc_in_flight(method);
 
+        // Check capability
+        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
+            self.state
+                .capability_checker
+                .require_capability_from_metadata(&metadata, capabilities::GENAI_PROCESS)
+                .await?;
+        }
+
         let req = request.into_inner();
         let request_id = uuid::Uuid::new_v4().to_string();
 
@@ -400,13 +409,20 @@ impl GenAiService for GenaiGrpcService {
             total_tokens: provider_response.input_tokens + provider_response.output_tokens,
         };
 
-        // Record metrics
+        // Record metrics with tenant_id for billing
+        let tenant_id = req
+            .metadata
+            .as_ref()
+            .map(|m| m.tenant_id.as_str())
+            .unwrap_or("unknown");
         record_tokens(
+            tenant_id,
             &model,
             provider_response.input_tokens,
             provider_response.output_tokens,
         );
         record_genai_request(
+            tenant_id,
             output_format_str(output_format),
             &model,
             finish_reason_str(provider_response.finish_reason),
@@ -480,6 +496,14 @@ impl GenAiService for GenaiGrpcService {
         let start = Instant::now();
         let method = "ProcessStream";
         inc_grpc_in_flight(method);
+
+        // Check capability
+        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
+            self.state
+                .capability_checker
+                .require_capability_from_metadata(&metadata, capabilities::GENAI_PROCESS)
+                .await?;
+        }
 
         let req = request.into_inner();
         let request_id = uuid::Uuid::new_v4().to_string();
@@ -607,6 +631,11 @@ impl GenAiService for GenaiGrpcService {
         let model_clone = model.clone();
         let request_id_clone = request_id.clone();
         let output_format_clone = output_format;
+        let tenant_id_clone = req
+            .metadata
+            .as_ref()
+            .map(|m| m.tenant_id.clone())
+            .unwrap_or_else(|| "unknown".to_string());
 
         // Spawn task to transform provider stream to gRPC stream
         tokio::spawn(async move {
@@ -651,9 +680,15 @@ impl GenAiService for GenaiGrpcService {
                             output_tokens,
                             finish_reason,
                         } => {
-                            // Record metrics
-                            record_tokens(&model_clone, input_tokens, output_tokens);
+                            // Record metrics with tenant_id for billing
+                            record_tokens(
+                                &tenant_id_clone,
+                                &model_clone,
+                                input_tokens,
+                                output_tokens,
+                            );
                             record_genai_request(
+                                &tenant_id_clone,
                                 output_format_str(output_format_clone),
                                 &model_clone,
                                 finish_reason_str(finish_reason),
@@ -739,6 +774,14 @@ impl GenAiService for GenaiGrpcService {
         let method = "CreateSession";
         inc_grpc_in_flight(method);
 
+        // Check capability
+        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
+            self.state
+                .capability_checker
+                .require_capability_from_metadata(&metadata, capabilities::GENAI_SESSION_CREATE)
+                .await?;
+        }
+
         let req = request.into_inner();
 
         // Extract metadata
@@ -811,6 +854,14 @@ impl GenAiService for GenaiGrpcService {
         let method = "GetSession";
         inc_grpc_in_flight(method);
 
+        // Check capability
+        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
+            self.state
+                .capability_checker
+                .require_capability_from_metadata(&metadata, capabilities::GENAI_SESSION_READ)
+                .await?;
+        }
+
         let req = request.into_inner();
 
         if req.session_id.is_empty() {
@@ -880,6 +931,14 @@ impl GenAiService for GenaiGrpcService {
         let method = "DeleteSession";
         inc_grpc_in_flight(method);
 
+        // Check capability
+        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
+            self.state
+                .capability_checker
+                .require_capability_from_metadata(&metadata, capabilities::GENAI_SESSION_DELETE)
+                .await?;
+        }
+
         let req = request.into_inner();
 
         if req.session_id.is_empty() {
@@ -931,6 +990,14 @@ impl GenAiService for GenaiGrpcService {
         let start = Instant::now();
         let method = "GetUsage";
         inc_grpc_in_flight(method);
+
+        // Check capability
+        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
+            self.state
+                .capability_checker
+                .require_capability_from_metadata(&metadata, capabilities::GENAI_USAGE_READ)
+                .await?;
+        }
 
         let req = request.into_inner();
 
@@ -1026,14 +1093,22 @@ impl GenAiService for GenaiGrpcService {
         }))
     }
 
-    #[tracing::instrument(skip(self, _request))]
+    #[tracing::instrument(skip(self, request))]
     async fn list_models(
         &self,
-        _request: Request<ListModelsRequest>,
+        request: Request<ListModelsRequest>,
     ) -> Result<Response<ListModelsResponse>, Status> {
         let start = Instant::now();
         let method = "ListModels";
         inc_grpc_in_flight(method);
+
+        // Check capability
+        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
+            self.state
+                .capability_checker
+                .require_capability_from_metadata(&metadata, capabilities::GENAI_MODELS_READ)
+                .await?;
+        }
 
         tracing::debug!("Listing available models");
 
