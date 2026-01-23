@@ -29,13 +29,10 @@ Add usage metering capabilities to invoicing-service to support consumption-base
 - [ ] [010-usage-events](../stories/010-usage-events.md) - RecordUsage, GetUsageEvent, usage event storage
 - [ ] [011-meters](../stories/011-meters.md) - CreateMeter, GetMeter, ListMeters, meter configuration
 
-### Phase 2: Aggregation
+### Future
 
 - [ ] [012-usage-aggregation](../stories/012-usage-aggregation.md) - GetUsageSummary, aggregation by meter/period
 - [ ] [013-pricing-models](../stories/013-pricing-models.md) - Per-unit, tiered, volume pricing calculations
-
-### Phase 3: Invoice Generation
-
 - [ ] [014-usage-invoicing](../stories/014-usage-invoicing.md) - CreateUsageInvoice, convert usage to line items
 
 ## Data Model
@@ -104,8 +101,13 @@ usage_summaries
 | RecordUsage | 010 | Record a usage event |
 | RecordUsageBatch | 010 | Record multiple usage events |
 | GetUsageEvent | 010 | Retrieve usage event by ID |
+| ListUsageEvents | 010 | List raw usage events with filters |
+
+### Future Methods
+
+| Method | Story | Description |
+|--------|-------|-------------|
 | GetUsageSummary | 012 | Get aggregated usage for period |
-| ListUsageEvents | 012 | List raw usage events with filters |
 | CalculateUsageCharges | 013 | Preview charges for usage |
 | CreateUsageInvoice | 014 | Generate invoice from usage |
 
@@ -175,16 +177,16 @@ Usage-based invoicing flow:
 
 - [ ] Meters can be created and configured per tenant
 - [ ] Usage events recorded with idempotency
-- [ ] Usage correctly aggregated by meter/customer/period
-- [ ] All three pricing models calculate correctly
-- [ ] Usage can be converted to invoice line items
-- [ ] Invoices from usage follow existing lifecycle (issue, payment, void)
+- [ ] Usage events can be listed with filters
 - [ ] Multi-tenant isolation verified
 - [ ] Prometheus metrics for usage ingestion rate
 - [ ] OpenTelemetry tracing on all operations
 
 ## Future Considerations
 
+- Usage aggregation by meter/customer/period
+- Pricing model calculations (per-unit, tiered, volume)
+- Usage-to-invoice conversion
 - Real-time usage alerts and thresholds
 - Prepaid usage packages (credits)
 - Usage-based discounts and commitments
