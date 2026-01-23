@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "auth-service",
+    "billing-service",
     "document-service",
     "genai-service",
     "invoicing-service",

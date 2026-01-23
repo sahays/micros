@@ -1,0 +1,593 @@
+syntax = "proto3";
+
+package micros.billing.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// BillingService provides subscription billing and usage tracking operations.
+service BillingService {
+  // Plan management
+  rpc CreatePlan(CreatePlanRequest) returns (CreatePlanResponse);
+  rpc GetPlan(GetPlanRequest) returns (GetPlanResponse);
+  rpc UpdatePlan(UpdatePlanRequest) returns (UpdatePlanResponse);
+  rpc ListPlans(ListPlansRequest) returns (ListPlansResponse);
+  rpc ArchivePlan(ArchivePlanRequest) returns (ArchivePlanResponse);
+
+  // Subscription management
+  rpc CreateSubscription(CreateSubscriptionRequest) returns (CreateSubscriptionResponse);
+  rpc GetSubscription(GetSubscriptionRequest) returns (GetSubscriptionResponse);
+  rpc ListSubscriptions(ListSubscriptionsRequest) returns (ListSubscriptionsResponse);
+
+  // Subscription lifecycle
+  rpc ActivateSubscription(ActivateSubscriptionRequest) returns (ActivateSubscriptionResponse);
+  rpc PauseSubscription(PauseSubscriptionRequest) returns (PauseSubscriptionResponse);
+  rpc ResumeSubscription(ResumeSubscriptionRequest) returns (ResumeSubscriptionResponse);
+  rpc CancelSubscription(CancelSubscriptionRequest) returns (CancelSubscriptionResponse);
+
+  // Plan changes
+  rpc ChangePlan(ChangePlanRequest) returns (ChangePlanResponse);
+
+  // Usage tracking
+  rpc RecordUsage(RecordUsageRequest) returns (RecordUsageResponse);
+  rpc GetUsage(GetUsageRequest) returns (GetUsageResponse);
+  rpc ListUsage(ListUsageRequest) returns (ListUsageResponse);
+  rpc GetUsageSummary(GetUsageSummaryRequest) returns (GetUsageSummaryResponse);
+
+  // Billing cycles
+  rpc GetBillingCycle(GetBillingCycleRequest) returns (GetBillingCycleResponse);
+  rpc ListBillingCycles(ListBillingCyclesRequest) returns (ListBillingCyclesResponse);
+  rpc AdvanceBillingCycle(AdvanceBillingCycleRequest) returns (AdvanceBillingCycleResponse);
+
+  // Charges
+  rpc GetCharge(GetChargeRequest) returns (GetChargeResponse);
+  rpc ListCharges(ListChargesRequest) returns (ListChargesResponse);
+  rpc CreateOneTimeCharge(CreateOneTimeChargeRequest) returns (CreateOneTimeChargeResponse);
+
+  // Billing runs
+  rpc RunBilling(RunBillingRequest) returns (RunBillingResponse);
+  rpc RunBillingForSubscription(RunBillingForSubscriptionRequest) returns (RunBillingForSubscriptionResponse);
+  rpc GetBillingRun(GetBillingRunRequest) returns (GetBillingRunResponse);
+  rpc ListBillingRuns(ListBillingRunsRequest) returns (ListBillingRunsResponse);
+}
+
+// Billing interval for plans
+enum BillingInterval {
+  BILLING_INTERVAL_UNSPECIFIED = 0;
+  BILLING_INTERVAL_DAILY = 1;
+  BILLING_INTERVAL_WEEKLY = 2;
+  BILLING_INTERVAL_MONTHLY = 3;
+  BILLING_INTERVAL_QUARTERLY = 4;
+  BILLING_INTERVAL_ANNUALLY = 5;
+}
+
+// Subscription status
+enum SubscriptionStatus {
+  SUBSCRIPTION_STATUS_UNSPECIFIED = 0;
+  SUBSCRIPTION_STATUS_TRIAL = 1;
+  SUBSCRIPTION_STATUS_ACTIVE = 2;
+  SUBSCRIPTION_STATUS_PAUSED = 3;
+  SUBSCRIPTION_STATUS_CANCELLED = 4;
+  SUBSCRIPTION_STATUS_EXPIRED = 5;
+}
+
+// Proration mode for plan changes
+enum ProrationMode {
+  PRORATION_MODE_UNSPECIFIED = 0;
+  PRORATION_MODE_IMMEDIATE = 1;
+  PRORATION_MODE_NEXT_CYCLE = 2;
+  PRORATION_MODE_NONE = 3;
+}
+
+// Billing cycle status
+enum BillingCycleStatus {
+  BILLING_CYCLE_STATUS_UNSPECIFIED = 0;
+  BILLING_CYCLE_STATUS_PENDING = 1;
+  BILLING_CYCLE_STATUS_INVOICED = 2;
+  BILLING_CYCLE_STATUS_PAID = 3;
+  BILLING_CYCLE_STATUS_FAILED = 4;
+}
+
+// Charge type
+enum ChargeType {
+  CHARGE_TYPE_UNSPECIFIED = 0;
+  CHARGE_TYPE_RECURRING = 1;
+  CHARGE_TYPE_USAGE = 2;
+  CHARGE_TYPE_ONE_TIME = 3;
+  CHARGE_TYPE_PRORATION = 4;
+}
+
+// Billing run type
+enum BillingRunType {
+  BILLING_RUN_TYPE_UNSPECIFIED = 0;
+  BILLING_RUN_TYPE_SCHEDULED = 1;
+  BILLING_RUN_TYPE_MANUAL = 2;
+  BILLING_RUN_TYPE_SINGLE = 3;
+}
+
+// Billing run status
+enum BillingRunStatus {
+  BILLING_RUN_STATUS_UNSPECIFIED = 0;
+  BILLING_RUN_STATUS_RUNNING = 1;
+  BILLING_RUN_STATUS_COMPLETED = 2;
+  BILLING_RUN_STATUS_FAILED = 3;
+}
+
+// Usage component definition within a plan
+message UsageComponent {
+  string component_id = 1;
+  string plan_id = 2;
+  string name = 3;
+  string unit_name = 4; // e.g., "API calls", "GB"
+  string unit_price = 5; // Decimal as string
+  int32 included_units = 6;
+  bool is_active = 7;
+}
+
+// Billing plan
+message BillingPlan {
+  string plan_id = 1;
+  string tenant_id = 2;
+  string name = 3;
+  string description = 4;
+  BillingInterval billing_interval = 5;
+  int32 interval_count = 6;
+  string base_price = 7; // Decimal as string
+  string currency = 8;
+  string tax_rate_id = 9;
+  bool is_active = 10;
+  bool is_archived = 11;
+  repeated UsageComponent usage_components = 12;
+  string metadata = 13; // JSON string
+  google.protobuf.Timestamp created_at = 14;
+  google.protobuf.Timestamp updated_at = 15;
+}
+
+// Subscription
+message Subscription {
+  string subscription_id = 1;
+  string tenant_id = 2;
+  string customer_id = 3;
+  string plan_id = 4;
+  SubscriptionStatus status = 5;
+  int32 billing_anchor_day = 6; // 1-31
+  string start_date = 7; // YYYY-MM-DD
+  string end_date = 8; // YYYY-MM-DD, optional
+  string trial_end_date = 9; // YYYY-MM-DD, optional
+  string current_period_start = 10; // YYYY-MM-DD
+  string current_period_end = 11; // YYYY-MM-DD
+  ProrationMode proration_mode = 12;
+  string pending_plan_id = 13; // For next_cycle plan changes
+  string metadata = 14; // JSON string
+  google.protobuf.Timestamp created_at = 15;
+  google.protobuf.Timestamp updated_at = 16;
+}
+
+// Billing cycle
+message BillingCycle {
+  string cycle_id = 1;
+  string subscription_id = 2;
+  string period_start = 3; // YYYY-MM-DD
+  string period_end = 4; // YYYY-MM-DD
+  BillingCycleStatus status = 5;
+  string invoice_id = 6;
+  repeated Charge charges = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+// Charge
+message Charge {
+  string charge_id = 1;
+  string cycle_id = 2;
+  ChargeType charge_type = 3;
+  string description = 4;
+  string quantity = 5; // Decimal as string
+  string unit_price = 6; // Decimal as string
+  string amount = 7; // Decimal as string
+  bool is_prorated = 8;
+  string proration_factor = 9; // Decimal as string
+  string component_id = 10;
+  string metadata = 11; // JSON string
+  google.protobuf.Timestamp created_at = 12;
+}
+
+// Usage record
+message UsageRecord {
+  string record_id = 1;
+  string subscription_id = 2;
+  string component_id = 3;
+  string idempotency_key = 4;
+  string quantity = 5; // Decimal as string
+  google.protobuf.Timestamp timestamp = 6;
+  string cycle_id = 7;
+  bool is_invoiced = 8;
+  string metadata = 9; // JSON string
+  google.protobuf.Timestamp created_at = 10;
+}
+
+// Usage summary per component
+message UsageComponentSummary {
+  string component_id = 1;
+  string name = 2;
+  string total_quantity = 3; // Decimal as string
+  int32 included_units = 4;
+  string billable_units = 5; // Decimal as string
+  string amount = 6; // Decimal as string
+}
+
+// Billing run
+message BillingRun {
+  string run_id = 1;
+  string tenant_id = 2;
+  BillingRunType run_type = 3;
+  BillingRunStatus status = 4;
+  google.protobuf.Timestamp started_at = 5;
+  google.protobuf.Timestamp completed_at = 6;
+  int32 subscriptions_processed = 7;
+  int32 subscriptions_succeeded = 8;
+  int32 subscriptions_failed = 9;
+  string error_message = 10;
+  repeated BillingRunResult results = 11;
+}
+
+// Billing run result per subscription
+message BillingRunResult {
+  string result_id = 1;
+  string run_id = 2;
+  string subscription_id = 3;
+  string status = 4; // "success" or "failed"
+  string invoice_id = 5;
+  string error_message = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+// Proration charge created during plan change
+message ProrationCharge {
+  string description = 1;
+  string amount = 2; // Decimal as string, negative for credit
+}
+
+// ============================================================================
+// Plan Management
+// ============================================================================
+
+message CreatePlanRequest {
+  string tenant_id = 1;
+  string name = 2;
+  string description = 3;
+  BillingInterval billing_interval = 4;
+  int32 interval_count = 5;
+  string base_price = 6; // Decimal as string
+  string currency = 7;
+  string tax_rate_id = 8;
+  repeated CreateUsageComponentInput usage_components = 9;
+  string metadata = 10; // JSON string
+}
+
+message CreateUsageComponentInput {
+  string name = 1;
+  string unit_name = 2;
+  string unit_price = 3; // Decimal as string
+  int32 included_units = 4;
+}
+
+message CreatePlanResponse {
+  BillingPlan plan = 1;
+}
+
+message GetPlanRequest {
+  string tenant_id = 1;
+  string plan_id = 2;
+}
+
+message GetPlanResponse {
+  BillingPlan plan = 1;
+}
+
+message UpdatePlanRequest {
+  string tenant_id = 1;
+  string plan_id = 2;
+  string name = 3;
+  string description = 4;
+  string base_price = 5; // Decimal as string
+  string tax_rate_id = 6;
+  string metadata = 7; // JSON string
+}
+
+message UpdatePlanResponse {
+  BillingPlan plan = 1;
+}
+
+message ListPlansRequest {
+  string tenant_id = 1;
+  bool include_archived = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+message ListPlansResponse {
+  repeated BillingPlan plans = 1;
+  string next_page_token = 2;
+}
+
+message ArchivePlanRequest {
+  string tenant_id = 1;
+  string plan_id = 2;
+}
+
+message ArchivePlanResponse {
+  BillingPlan plan = 1;
+}
+
+// ============================================================================
+// Subscription Management
+// ============================================================================
+
+message CreateSubscriptionRequest {
+  string tenant_id = 1;
+  string customer_id = 2;
+  string plan_id = 3;
+  int32 billing_anchor_day = 4; // 1-31
+  string start_date = 5; // YYYY-MM-DD
+  string trial_end_date = 6; // YYYY-MM-DD, optional
+  ProrationMode proration_mode = 7;
+  string metadata = 8; // JSON string
+}
+
+message CreateSubscriptionResponse {
+  Subscription subscription = 1;
+  BillingCycle initial_cycle = 2;
+}
+
+message GetSubscriptionRequest {
+  string tenant_id = 1;
+  string subscription_id = 2;
+}
+
+message GetSubscriptionResponse {
+  Subscription subscription = 1;
+  BillingCycle current_cycle = 2;
+}
+
+message ListSubscriptionsRequest {
+  string tenant_id = 1;
+  string customer_id = 2; // Optional filter
+  SubscriptionStatus status = 3; // Optional filter
+  string plan_id = 4; // Optional filter
+  int32 page_size = 5;
+  string page_token = 6;
+}
+
+message ListSubscriptionsResponse {
+  repeated Subscription subscriptions = 1;
+  string next_page_token = 2;
+}
+
+// ============================================================================
+// Subscription Lifecycle
+// ============================================================================
+
+message ActivateSubscriptionRequest {
+  string tenant_id = 1;
+  string subscription_id = 2;
+}
+
+message ActivateSubscriptionResponse {
+  Subscription subscription = 1;
+}
+
+message PauseSubscriptionRequest {
+  string tenant_id = 1;
+  string subscription_id = 2;
+  string reason = 3;
+}
+
+message PauseSubscriptionResponse {
+  Subscription subscription = 1;
+}
+
+message ResumeSubscriptionRequest {
+  string tenant_id = 1;
+  string subscription_id = 2;
+}
+
+message ResumeSubscriptionResponse {
+  Subscription subscription = 1;
+}
+
+message CancelSubscriptionRequest {
+  string tenant_id = 1;
+  string subscription_id = 2;
+  bool cancel_at_period_end = 3;
+  string reason = 4;
+}
+
+message CancelSubscriptionResponse {
+  Subscription subscription = 1;
+}
+
+// ============================================================================
+// Plan Changes
+// ============================================================================
+
+message ChangePlanRequest {
+  string tenant_id = 1;
+  string subscription_id = 2;
+  string new_plan_id = 3;
+  ProrationMode proration_mode = 4; // Optional, uses subscription default
+}
+
+message ChangePlanResponse {
+  Subscription subscription = 1;
+  repeated ProrationCharge proration_charges = 2;
+}
+
+// ============================================================================
+// Usage Tracking
+// ============================================================================
+
+message RecordUsageRequest {
+  string tenant_id = 1;
+  string subscription_id = 2;
+  string component_id = 3;
+  string quantity = 4; // Decimal as string
+  google.protobuf.Timestamp timestamp = 5;
+  string idempotency_key = 6;
+  string metadata = 7; // JSON string
+}
+
+message RecordUsageResponse {
+  UsageRecord usage_record = 1;
+}
+
+message GetUsageRequest {
+  string tenant_id = 1;
+  string record_id = 2;
+}
+
+message GetUsageResponse {
+  UsageRecord usage_record = 1;
+}
+
+message ListUsageRequest {
+  string tenant_id = 1;
+  string subscription_id = 2;
+  string component_id = 3; // Optional filter
+  string cycle_id = 4; // Optional filter
+  bool is_invoiced = 5; // Optional filter
+  int32 page_size = 6;
+  string page_token = 7;
+}
+
+message ListUsageResponse {
+  repeated UsageRecord usage_records = 1;
+  string next_page_token = 2;
+}
+
+message GetUsageSummaryRequest {
+  string tenant_id = 1;
+  string subscription_id = 2;
+  string cycle_id = 3; // Optional, defaults to current cycle
+}
+
+message GetUsageSummaryResponse {
+  repeated UsageComponentSummary component_summaries = 1;
+}
+
+// ============================================================================
+// Billing Cycles
+// ============================================================================
+
+message GetBillingCycleRequest {
+  string tenant_id = 1;
+  string cycle_id = 2;
+}
+
+message GetBillingCycleResponse {
+  BillingCycle billing_cycle = 1;
+}
+
+message ListBillingCyclesRequest {
+  string tenant_id = 1;
+  string subscription_id = 2;
+  BillingCycleStatus status = 3; // Optional filter
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+message ListBillingCyclesResponse {
+  repeated BillingCycle billing_cycles = 1;
+  string next_page_token = 2;
+}
+
+message AdvanceBillingCycleRequest {
+  string tenant_id = 1;
+  string subscription_id = 2;
+}
+
+message AdvanceBillingCycleResponse {
+  BillingCycle previous_cycle = 1;
+  BillingCycle new_cycle = 2;
+}
+
+// ============================================================================
+// Charges
+// ============================================================================
+
+message GetChargeRequest {
+  string tenant_id = 1;
+  string charge_id = 2;
+}
+
+message GetChargeResponse {
+  Charge charge = 1;
+}
+
+message ListChargesRequest {
+  string tenant_id = 1;
+  string cycle_id = 2;
+  ChargeType charge_type = 3; // Optional filter
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+message ListChargesResponse {
+  repeated Charge charges = 1;
+  string next_page_token = 2;
+}
+
+message CreateOneTimeChargeRequest {
+  string tenant_id = 1;
+  string subscription_id = 2;
+  string description = 3;
+  string amount = 4; // Decimal as string, can be negative for credit
+  string metadata = 5; // JSON string
+}
+
+message CreateOneTimeChargeResponse {
+  Charge charge = 1;
+}
+
+// ============================================================================
+// Billing Runs
+// ============================================================================
+
+message RunBillingRequest {
+  string tenant_id = 1;
+  BillingRunType run_type = 2;
+}
+
+message RunBillingResponse {
+  BillingRun billing_run = 1;
+}
+
+message RunBillingForSubscriptionRequest {
+  string tenant_id = 1;
+  string subscription_id = 2;
+}
+
+message RunBillingForSubscriptionResponse {
+  BillingRunResult result = 1;
+}
+
+message GetBillingRunRequest {
+  string tenant_id = 1;
+  string run_id = 2;
+}
+
+message GetBillingRunResponse {
+  BillingRun billing_run = 1;
+}
+
+message ListBillingRunsRequest {
+  string tenant_id = 1;
+  BillingRunStatus status = 2; // Optional filter
+  BillingRunType run_type = 3; // Optional filter
+  int32 page_size = 4;
+  string page_token = 5;
+}
+
+message ListBillingRunsResponse {
+  repeated BillingRun billing_runs = 1;
+  string next_page_token = 2;
+}
