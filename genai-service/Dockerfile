@@ -19,6 +19,7 @@ COPY invoicing-service ./invoicing-service
 COPY ledger-service ./ledger-service
 COPY notification-service ./notification-service
 COPY payment-service ./payment-service
+COPY reconciliation-service ./reconciliation-service
 COPY service-core ./service-core
 COPY proto ./proto
 RUN cargo chef prepare --recipe-path recipe.json --bin genai-service
@@ -38,6 +39,7 @@ COPY invoicing-service ./invoicing-service
 COPY ledger-service ./ledger-service
 COPY notification-service ./notification-service
 COPY payment-service ./payment-service
+COPY reconciliation-service ./reconciliation-service
 COPY service-core ./service-core
 COPY proto ./proto
 RUN cargo build --release --bin genai-service

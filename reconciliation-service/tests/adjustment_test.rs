@@ -4,6 +4,8 @@ mod common;
 
 use common::{spawn_app, with_tenant};
 use reconciliation_service::grpc::proto::*;
+use rust_decimal::Decimal;
+use std::str::FromStr;
 use uuid::Uuid;
 
 /// Helper to create a bank account and get back the ID.
@@ -81,7 +83,11 @@ async fn create_adjustment_success() {
     let adjustment = response.unwrap().into_inner().adjustment.unwrap();
     assert_eq!(adjustment.reconciliation_id, reconciliation_id);
     assert_eq!(adjustment.description, "Monthly service fee");
-    assert_eq!(adjustment.amount, "-15.00");
+    // Compare as Decimal since to_string() normalizes (e.g., "-15.00" -> "-15")
+    assert_eq!(
+        Decimal::from_str(&adjustment.amount).unwrap(),
+        Decimal::from_str("-15.00").unwrap()
+    );
 }
 
 #[tokio::test]
