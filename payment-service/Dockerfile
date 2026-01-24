@@ -12,7 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 FROM chef AS planner
 COPY Cargo.toml Cargo.lock ./
 COPY auth-service ./auth-service
+COPY billing-service ./billing-service
 COPY document-service ./document-service
+COPY genai-service ./genai-service
+COPY invoicing-service ./invoicing-service
+COPY ledger-service ./ledger-service
 COPY notification-service ./notification-service
 COPY payment-service ./payment-service
 COPY service-core ./service-core
@@ -27,7 +31,11 @@ RUN cargo chef cook --release --recipe-path recipe.json
 # Build application
 COPY Cargo.toml Cargo.lock ./
 COPY auth-service ./auth-service
+COPY billing-service ./billing-service
 COPY document-service ./document-service
+COPY genai-service ./genai-service
+COPY invoicing-service ./invoicing-service
+COPY ledger-service ./ledger-service
 COPY notification-service ./notification-service
 COPY payment-service ./payment-service
 COPY service-core ./service-core

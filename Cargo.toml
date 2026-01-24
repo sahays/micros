@@ -8,6 +8,7 @@ members = [
     "ledger-service",
     "notification-service",
     "payment-service",
+    "reconciliation-service",
     "service-core",
 ]
 

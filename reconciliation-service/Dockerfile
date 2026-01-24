@@ -19,9 +19,10 @@ COPY invoicing-service ./invoicing-service
 COPY ledger-service ./ledger-service
 COPY notification-service ./notification-service
 COPY payment-service ./payment-service
+COPY reconciliation-service ./reconciliation-service
 COPY service-core ./service-core
 COPY proto ./proto
-RUN cargo chef prepare --recipe-path recipe.json --bin document-service
+RUN cargo chef prepare --recipe-path recipe.json --bin reconciliation-service
 
 # Stage 3: Builder (Build dependencies and binary)
 FROM chef AS builder
@@ -38,35 +39,33 @@ COPY invoicing-service ./invoicing-service
 COPY ledger-service ./ledger-service
 COPY notification-service ./notification-service
 COPY payment-service ./payment-service
+COPY reconciliation-service ./reconciliation-service
 COPY service-core ./service-core
 COPY proto ./proto
-RUN cargo build --release --bin document-service
+RUN cargo build --release --bin reconciliation-service
 
 # Stage 4: Runtime (The final image)
 # Use trixie-slim to match cargo-chef's GLIBC version (2.39)
 FROM debian:trixie-slim AS runtime
 WORKDIR /app
 
-# Install runtime dependencies including FFmpeg, Poppler, and ImageMagick
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     libssl3 \
     curl \
-    ffmpeg \
-    poppler-utils \
-    imagemagick \
-    libwebp-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary from the builder stage
-COPY --from=builder /app/target/release/document-service /app/document-service
+COPY --from=builder /app/target/release/reconciliation-service /app/reconciliation-service
 
-# Expose health and gRPC ports
-EXPOSE 8080 8081
+# Expose the health and gRPC ports
+EXPOSE 8080
+EXPOSE 8081
 
 # Set healthcheck
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:8080/health || exit 1
 
 # Run the binary
-CMD ["/app/document-service"]
+CMD ["/app/reconciliation-service"]

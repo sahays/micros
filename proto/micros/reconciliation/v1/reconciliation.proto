@@ -1,0 +1,536 @@
+syntax = "proto3";
+
+package micros.reconciliation.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "com.micros.reconciliation.v1";
+
+// ReconciliationService handles bank statement reconciliation with AI-powered matching.
+service ReconciliationService {
+  // Bank Account Management
+  rpc RegisterBankAccount(RegisterBankAccountRequest) returns (RegisterBankAccountResponse);
+  rpc GetBankAccount(GetBankAccountRequest) returns (GetBankAccountResponse);
+  rpc ListBankAccounts(ListBankAccountsRequest) returns (ListBankAccountsResponse);
+  rpc UpdateBankAccount(UpdateBankAccountRequest) returns (UpdateBankAccountResponse);
+
+  // Statement Import (GenAI-powered extraction with staging workflow)
+  rpc ImportStatement(ImportStatementRequest) returns (ImportStatementResponse);
+  rpc GetStatement(GetStatementRequest) returns (GetStatementResponse);
+  rpc ListStatements(ListStatementsRequest) returns (ListStatementsResponse);
+  rpc GetStagedTransactions(GetStagedTransactionsRequest) returns (GetStagedTransactionsResponse);
+  rpc UpdateStagedTransaction(UpdateStagedTransactionRequest) returns (UpdateStagedTransactionResponse);
+  rpc CommitStatement(CommitStatementRequest) returns (CommitStatementResponse);
+  rpc AbandonStatement(AbandonStatementRequest) returns (AbandonStatementResponse);
+
+  // Matching Rules
+  rpc CreateMatchingRule(CreateMatchingRuleRequest) returns (CreateMatchingRuleResponse);
+  rpc GetMatchingRule(GetMatchingRuleRequest) returns (GetMatchingRuleResponse);
+  rpc ListMatchingRules(ListMatchingRulesRequest) returns (ListMatchingRulesResponse);
+  rpc UpdateMatchingRule(UpdateMatchingRuleRequest) returns (UpdateMatchingRuleResponse);
+  rpc DeleteMatchingRule(DeleteMatchingRuleRequest) returns (DeleteMatchingRuleResponse);
+
+  // Transaction Matching
+  rpc MatchTransaction(MatchTransactionRequest) returns (MatchTransactionResponse);
+  rpc UnmatchTransaction(UnmatchTransactionRequest) returns (UnmatchTransactionResponse);
+  rpc ExcludeTransaction(ExcludeTransactionRequest) returns (ExcludeTransactionResponse);
+  rpc GetCandidateEntries(GetCandidateEntriesRequest) returns (GetCandidateEntriesResponse);
+
+  // AI Matching
+  rpc GetAiSuggestions(GetAiSuggestionsRequest) returns (GetAiSuggestionsResponse);
+  rpc ConfirmSuggestion(ConfirmSuggestionRequest) returns (ConfirmSuggestionResponse);
+  rpc RejectSuggestion(RejectSuggestionRequest) returns (RejectSuggestionResponse);
+
+  // Reconciliation Process
+  rpc StartReconciliation(StartReconciliationRequest) returns (StartReconciliationResponse);
+  rpc GetReconciliation(GetReconciliationRequest) returns (GetReconciliationResponse);
+  rpc ListReconciliations(ListReconciliationsRequest) returns (ListReconciliationsResponse);
+  rpc CompleteReconciliation(CompleteReconciliationRequest) returns (CompleteReconciliationResponse);
+  rpc AbandonReconciliation(AbandonReconciliationRequest) returns (AbandonReconciliationResponse);
+
+  // Adjustments
+  rpc CreateAdjustment(CreateAdjustmentRequest) returns (CreateAdjustmentResponse);
+  rpc ListAdjustments(ListAdjustmentsRequest) returns (ListAdjustmentsResponse);
+}
+
+// ============================================================================
+// Bank Account Messages
+// ============================================================================
+
+message BankAccount {
+  string bank_account_id = 1;
+  string tenant_id = 2;
+  string ledger_account_id = 3;  // Reference to ledger-service cash/bank account
+  string bank_name = 4;
+  string account_number_masked = 5;  // Last 4 digits only
+  string currency = 6;
+  optional string last_reconciled_date = 7;  // ISO date
+  optional string last_reconciled_balance = 8;  // Decimal string
+  google.protobuf.Timestamp created_utc = 9;
+  google.protobuf.Timestamp updated_utc = 10;
+}
+
+message RegisterBankAccountRequest {
+  string ledger_account_id = 1;
+  string bank_name = 2;
+  string account_number_masked = 3;
+  string currency = 4;
+}
+
+message RegisterBankAccountResponse {
+  BankAccount bank_account = 1;
+}
+
+message GetBankAccountRequest {
+  string bank_account_id = 1;
+}
+
+message GetBankAccountResponse {
+  BankAccount bank_account = 1;
+}
+
+message ListBankAccountsRequest {
+  int32 page_size = 1;
+  optional string page_token = 2;
+}
+
+message ListBankAccountsResponse {
+  repeated BankAccount bank_accounts = 1;
+  optional string next_page_token = 2;
+}
+
+message UpdateBankAccountRequest {
+  string bank_account_id = 1;
+  optional string bank_name = 2;
+  optional string account_number_masked = 3;
+}
+
+message UpdateBankAccountResponse {
+  BankAccount bank_account = 1;
+}
+
+// ============================================================================
+// Statement Import Messages
+// ============================================================================
+
+enum StatementStatus {
+  STATEMENT_STATUS_UNSPECIFIED = 0;
+  STATEMENT_STATUS_UPLOADED = 1;      // File uploaded, not yet extracted
+  STATEMENT_STATUS_EXTRACTING = 2;    // GenAI extraction in progress
+  STATEMENT_STATUS_STAGED = 3;        // Extracted, awaiting review
+  STATEMENT_STATUS_COMMITTED = 4;     // User approved, transactions committed
+  STATEMENT_STATUS_RECONCILING = 5;   // Committed, reconciliation in progress
+  STATEMENT_STATUS_RECONCILED = 6;    // Fully reconciled
+  STATEMENT_STATUS_FAILED = 7;        // Extraction failed
+  STATEMENT_STATUS_ABANDONED = 8;     // User abandoned before commit
+}
+
+message BankStatement {
+  string statement_id = 1;
+  string bank_account_id = 2;
+  string tenant_id = 3;
+  optional string document_id = 4;  // Reference to document-service
+  string period_start = 5;  // ISO date
+  string period_end = 6;    // ISO date
+  string opening_balance = 7;  // Decimal string
+  string closing_balance = 8;  // Decimal string
+  StatementStatus status = 9;
+  optional string error_message = 10;
+  optional double extraction_confidence = 11;  // 0-1 confidence score
+  google.protobuf.Timestamp created_utc = 12;
+  google.protobuf.Timestamp updated_utc = 13;
+}
+
+message ImportStatementRequest {
+  string bank_account_id = 1;
+  string document_id = 2;  // Reference to uploaded document in document-service
+  optional string extraction_hints = 3;  // Optional hints for GenAI extraction
+}
+
+message ImportStatementResponse {
+  BankStatement statement = 1;
+}
+
+message GetStatementRequest {
+  string statement_id = 1;
+}
+
+message GetStatementResponse {
+  BankStatement statement = 1;
+}
+
+message ListStatementsRequest {
+  string bank_account_id = 1;
+  int32 page_size = 2;
+  optional string page_token = 3;
+  optional StatementStatus status_filter = 4;
+}
+
+message ListStatementsResponse {
+  repeated BankStatement statements = 1;
+  optional string next_page_token = 2;
+}
+
+// ============================================================================
+// Staged Transaction Messages
+// ============================================================================
+
+enum TransactionStatus {
+  TRANSACTION_STATUS_UNSPECIFIED = 0;
+  TRANSACTION_STATUS_STAGED = 1;      // Extracted, awaiting commit
+  TRANSACTION_STATUS_UNMATCHED = 2;   // Committed, not yet matched
+  TRANSACTION_STATUS_MATCHED = 3;     // Matched to ledger entry
+  TRANSACTION_STATUS_MANUALLY_MATCHED = 4;  // Manually matched by user
+  TRANSACTION_STATUS_EXCLUDED = 5;    // Excluded from matching
+}
+
+message StagedTransaction {
+  string transaction_id = 1;
+  string statement_id = 2;
+  string tenant_id = 3;
+  string transaction_date = 4;  // ISO date
+  string description = 5;
+  optional string reference = 6;
+  string amount = 7;  // Decimal string (positive=deposit, negative=withdrawal)
+  optional string running_balance = 8;
+  TransactionStatus status = 9;
+  optional double extraction_confidence = 10;  // Per-field confidence
+  bool is_modified = 11;  // True if user corrected this transaction
+  google.protobuf.Timestamp created_utc = 12;
+}
+
+message GetStagedTransactionsRequest {
+  string statement_id = 1;
+  int32 page_size = 2;
+  optional string page_token = 3;
+}
+
+message GetStagedTransactionsResponse {
+  repeated StagedTransaction transactions = 1;
+  optional string next_page_token = 2;
+}
+
+message UpdateStagedTransactionRequest {
+  string transaction_id = 1;
+  optional string transaction_date = 2;
+  optional string description = 3;
+  optional string reference = 4;
+  optional string amount = 5;
+}
+
+message UpdateStagedTransactionResponse {
+  StagedTransaction transaction = 1;
+}
+
+message CommitStatementRequest {
+  string statement_id = 1;
+}
+
+message CommitStatementResponse {
+  BankStatement statement = 1;
+  int32 transactions_committed = 2;
+}
+
+message AbandonStatementRequest {
+  string statement_id = 1;
+}
+
+message AbandonStatementResponse {
+  bool success = 1;
+}
+
+// ============================================================================
+// Matching Rule Messages
+// ============================================================================
+
+enum MatchType {
+  MATCH_TYPE_UNSPECIFIED = 0;
+  MATCH_TYPE_CONTAINS = 1;   // Description contains pattern
+  MATCH_TYPE_EXACT = 2;      // Exact match
+  MATCH_TYPE_REGEX = 3;      // Regular expression
+  MATCH_TYPE_STARTS_WITH = 4;
+  MATCH_TYPE_ENDS_WITH = 5;
+}
+
+message MatchingRule {
+  string rule_id = 1;
+  string tenant_id = 2;
+  string name = 3;
+  string description_pattern = 4;
+  MatchType match_type = 5;
+  optional string target_account_id = 6;  // Ledger account to match against
+  int32 priority = 7;  // Lower = higher priority
+  bool is_active = 8;
+  google.protobuf.Timestamp created_utc = 9;
+}
+
+message CreateMatchingRuleRequest {
+  string name = 1;
+  string description_pattern = 2;
+  MatchType match_type = 3;
+  optional string target_account_id = 4;
+  optional int32 priority = 5;
+}
+
+message CreateMatchingRuleResponse {
+  MatchingRule rule = 1;
+}
+
+message GetMatchingRuleRequest {
+  string rule_id = 1;
+}
+
+message GetMatchingRuleResponse {
+  MatchingRule rule = 1;
+}
+
+message ListMatchingRulesRequest {
+  int32 page_size = 1;
+  optional string page_token = 2;
+  optional bool active_only = 3;
+}
+
+message ListMatchingRulesResponse {
+  repeated MatchingRule rules = 1;
+  optional string next_page_token = 2;
+}
+
+message UpdateMatchingRuleRequest {
+  string rule_id = 1;
+  optional string name = 2;
+  optional string description_pattern = 3;
+  optional MatchType match_type = 4;
+  optional string target_account_id = 5;
+  optional int32 priority = 6;
+  optional bool is_active = 7;
+}
+
+message UpdateMatchingRuleResponse {
+  MatchingRule rule = 1;
+}
+
+message DeleteMatchingRuleRequest {
+  string rule_id = 1;
+}
+
+message DeleteMatchingRuleResponse {
+  bool success = 1;
+}
+
+// ============================================================================
+// Transaction Matching Messages
+// ============================================================================
+
+message TransactionMatch {
+  string match_id = 1;
+  string bank_transaction_id = 2;
+  string ledger_entry_id = 3;  // From ledger-service
+  string match_method = 4;  // auto, manual, ai_confirmed
+  optional double confidence_score = 5;
+  optional string matched_by = 6;  // User or rule name
+  google.protobuf.Timestamp matched_utc = 7;
+}
+
+message MatchTransactionRequest {
+  string bank_transaction_id = 1;
+  repeated string ledger_entry_ids = 2;  // Support split matching
+}
+
+message MatchTransactionResponse {
+  repeated TransactionMatch matches = 1;
+}
+
+message UnmatchTransactionRequest {
+  string bank_transaction_id = 1;
+}
+
+message UnmatchTransactionResponse {
+  bool success = 1;
+}
+
+message ExcludeTransactionRequest {
+  string bank_transaction_id = 1;
+  optional string reason = 2;
+}
+
+message ExcludeTransactionResponse {
+  bool success = 1;
+}
+
+message CandidateEntry {
+  string ledger_entry_id = 1;
+  string date = 2;
+  string description = 3;
+  string amount = 4;
+  string account_name = 5;
+  double match_likelihood = 6;  // 0-1, based on amount/date proximity
+}
+
+message GetCandidateEntriesRequest {
+  string bank_transaction_id = 1;
+  optional int32 date_range_days = 2;  // Default 7 days
+  optional int32 limit = 3;  // Max candidates to return
+}
+
+message GetCandidateEntriesResponse {
+  repeated CandidateEntry candidates = 1;
+}
+
+// ============================================================================
+// AI Matching Messages
+// ============================================================================
+
+message AiSuggestion {
+  string suggestion_id = 1;
+  string bank_transaction_id = 2;
+  string ledger_entry_id = 3;
+  double confidence_score = 4;  // 0-1
+  string explanation = 5;  // Why GenAI thinks this is a match
+}
+
+message GetAiSuggestionsRequest {
+  string reconciliation_id = 1;
+  optional int32 limit = 2;  // Max suggestions to return
+  optional double min_confidence = 3;  // Minimum confidence threshold
+}
+
+message GetAiSuggestionsResponse {
+  repeated AiSuggestion suggestions = 1;
+}
+
+message ConfirmSuggestionRequest {
+  string suggestion_id = 1;
+}
+
+message ConfirmSuggestionResponse {
+  TransactionMatch match = 1;
+}
+
+message RejectSuggestionRequest {
+  string suggestion_id = 1;
+  optional string reason = 2;  // Feedback for learning
+}
+
+message RejectSuggestionResponse {
+  bool success = 1;
+}
+
+// ============================================================================
+// Reconciliation Process Messages
+// ============================================================================
+
+enum ReconciliationStatus {
+  RECONCILIATION_STATUS_UNSPECIFIED = 0;
+  RECONCILIATION_STATUS_IN_PROGRESS = 1;
+  RECONCILIATION_STATUS_COMPLETED = 2;
+  RECONCILIATION_STATUS_ABANDONED = 3;
+}
+
+message Reconciliation {
+  string reconciliation_id = 1;
+  string bank_account_id = 2;
+  string tenant_id = 3;
+  string period_start = 4;  // ISO date
+  string period_end = 5;    // ISO date
+  string expected_balance = 6;  // From ledger
+  string actual_balance = 7;    // From statement
+  string difference = 8;
+  ReconciliationStatus status = 9;
+  int32 matched_count = 10;
+  int32 unmatched_count = 11;
+  google.protobuf.Timestamp started_utc = 12;
+  optional google.protobuf.Timestamp completed_utc = 13;
+}
+
+message StartReconciliationRequest {
+  string bank_account_id = 1;
+  string period_start = 2;
+  string period_end = 3;
+}
+
+message StartReconciliationResponse {
+  Reconciliation reconciliation = 1;
+}
+
+message GetReconciliationRequest {
+  string reconciliation_id = 1;
+}
+
+message GetReconciliationResponse {
+  Reconciliation reconciliation = 1;
+}
+
+message ListReconciliationsRequest {
+  string bank_account_id = 1;
+  int32 page_size = 2;
+  optional string page_token = 3;
+  optional ReconciliationStatus status_filter = 4;
+}
+
+message ListReconciliationsResponse {
+  repeated Reconciliation reconciliations = 1;
+  optional string next_page_token = 2;
+}
+
+message CompleteReconciliationRequest {
+  string reconciliation_id = 1;
+}
+
+message CompleteReconciliationResponse {
+  Reconciliation reconciliation = 1;
+}
+
+message AbandonReconciliationRequest {
+  string reconciliation_id = 1;
+}
+
+message AbandonReconciliationResponse {
+  bool success = 1;
+}
+
+// ============================================================================
+// Adjustment Messages
+// ============================================================================
+
+enum AdjustmentType {
+  ADJUSTMENT_TYPE_UNSPECIFIED = 0;
+  ADJUSTMENT_TYPE_BANK_FEE = 1;
+  ADJUSTMENT_TYPE_BANK_INTEREST = 2;
+  ADJUSTMENT_TYPE_CORRECTION = 3;
+  ADJUSTMENT_TYPE_TIMING_DIFFERENCE = 4;
+  ADJUSTMENT_TYPE_OTHER = 5;
+}
+
+message Adjustment {
+  string adjustment_id = 1;
+  string reconciliation_id = 2;
+  string tenant_id = 3;
+  AdjustmentType adjustment_type = 4;
+  string description = 5;
+  string amount = 6;  // Decimal string
+  optional string ledger_entry_id = 7;  // Created ledger entry
+  google.protobuf.Timestamp created_utc = 8;
+}
+
+message CreateAdjustmentRequest {
+  string reconciliation_id = 1;
+  AdjustmentType adjustment_type = 2;
+  string description = 3;
+  string amount = 4;
+}
+
+message CreateAdjustmentResponse {
+  Adjustment adjustment = 1;
+}
+
+message ListAdjustmentsRequest {
+  string reconciliation_id = 1;
+  int32 page_size = 2;
+  optional string page_token = 3;
+}
+
+message ListAdjustmentsResponse {
+  repeated Adjustment adjustments = 1;
+  optional string next_page_token = 2;
+}

@@ -322,6 +322,78 @@ services:
     networks:
       - micros-net
 
+  billing-service:
+    build:
+      context: .
+      dockerfile: billing-service/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-billing-service
+    ports:
+      - "${BILLING_SERVICE_HEALTH_PORT:-9012}:8080"
+      - "${BILLING_SERVICE_GRPC_PORT:-50057}:8081"
+    environment:
+      - APP__PORT=8080
+      - GRPC_PORT=8081
+      - ENVIRONMENT=${ENVIRONMENT:-dev}
+      - DATABASE_URL=${BILLING_DATABASE_URL:-postgres://postgres:password@host.docker.internal:5432/billing_db}
+      - DATABASE_MAX_CONNECTIONS=${BILLING_DATABASE_MAX_CONNECTIONS:-10}
+      - DATABASE_MIN_CONNECTIONS=${BILLING_DATABASE_MIN_CONNECTIONS:-2}
+      - RUST_LOG=${LOG_LEVEL:-info}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      # Invoicing Service Integration (gRPC)
+      - INVOICING_SERVICE_URL=${INVOICING_SERVICE_URL:-http://invoicing-service:8081}
+      # Auth Service Integration
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=8080"
+      - "prometheus.io/path=/health"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    networks:
+      - micros-net
+
+  reconciliation-service:
+    build:
+      context: .
+      dockerfile: reconciliation-service/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-reconciliation-service
+    ports:
+      - "${RECONCILIATION_SERVICE_HEALTH_PORT:-9013}:8080"
+      - "${RECONCILIATION_SERVICE_GRPC_PORT:-50058}:8081"
+    environment:
+      - APP__PORT=8080
+      - GRPC_PORT=8081
+      - ENVIRONMENT=${ENVIRONMENT:-dev}
+      - DATABASE_URL=${RECONCILIATION_DATABASE_URL:-postgres://postgres:password@host.docker.internal:5432/reconciliation_db}
+      - DATABASE_MAX_CONNECTIONS=${RECONCILIATION_DATABASE_MAX_CONNECTIONS:-10}
+      - DATABASE_MIN_CONNECTIONS=${RECONCILIATION_DATABASE_MIN_CONNECTIONS:-2}
+      - RUST_LOG=${LOG_LEVEL:-info}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      # Ledger Service Integration (gRPC)
+      - LEDGER_SERVICE_URL=${LEDGER_SERVICE_URL:-http://ledger-service:8081}
+      # GenAI Service Integration (gRPC)
+      - GENAI_SERVICE_URL=${GENAI_SERVICE_URL:-http://genai-service:8081}
+      # Document Service Integration (gRPC)
+      - DOCUMENT_SERVICE_URL=${DOCUMENT_SERVICE_URL:-http://document-service:8081}
+      # Auth Service Integration
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=8080"
+      - "prometheus.io/path=/health"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    networks:
+      - micros-net
+
 networks:
   micros-net:
     driver: bridge

@@ -17,6 +17,7 @@ pub mod auth_client;
 pub mod capability_checker;
 pub mod document_client;
 pub mod error;
+pub mod genai_client;
 pub mod health;
 pub mod interceptors;
 pub mod ledger_client;
@@ -32,6 +33,9 @@ pub mod proto {
     }
     pub mod document {
         tonic::include_proto!("micros.document.v1");
+    }
+    pub mod genai {
+        tonic::include_proto!("micros.genai.v1");
     }
     pub mod ledger {
         tonic::include_proto!("micros.ledger.v1");
@@ -53,6 +57,9 @@ pub use document_client::{
     ProcessingMetadataProto, ProcessingOptionsProto, ProcessorTypeProto,
 };
 pub use error::{GrpcResult, IntoStatus};
+pub use genai_client::{
+    BANK_STATEMENT_PROMPT, BANK_STATEMENT_SCHEMA_V1, GenaiClient, GenaiClientConfig,
+};
 pub use health::{HealthComponents, HealthReporter, HealthStatus, create_health_service};
 pub use interceptors::{
     TENANT_ID_KEY, extract_request_id, extract_tenant_id, extract_traceparent, inject_tenant_id,
