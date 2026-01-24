@@ -1,4 +1,4 @@
-# Runtime image for auth-service
+# Runtime image for invoicing-service
 # Requires: docker build -f Dockerfile.builder -t micros-builder . (from repo root)
 
 FROM debian:trixie-slim
@@ -12,15 +12,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the pre-built binary from builder image
-COPY --from=micros-builder /auth-service /app/auth-service
+COPY --from=micros-builder /invoicing-service /app/invoicing-service
 
-# Expose ports: HTTP health (3000) and gRPC (3001)
-EXPOSE 3000
-EXPOSE 3001
+# Expose the health and gRPC ports
+EXPOSE 8080
+EXPOSE 8081
 
-# Set healthcheck on HTTP health endpoint
+# Set healthcheck
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/health || exit 1
+  CMD curl -f http://localhost:8080/health || exit 1
 
 # Run the binary
-CMD ["/app/auth-service"]
+CMD ["/app/invoicing-service"]

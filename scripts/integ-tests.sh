@@ -1,9 +1,13 @@
 #!/bin/bash
 # integ-tests.sh - Run integration tests with database setup/teardown
 #
-# This script runs integration tests for all services that require databases.
-# It handles both PostgreSQL (auth-service, ledger-service) and MongoDB
-# (document-service, genai-service, notification-service) services.
+# This script runs integration tests for all services that require databases,
+# plus cross-service workflow tests.
+#
+# Test Categories:
+#   - PostgreSQL services: auth, ledger, invoicing, billing, reconciliation
+#   - MongoDB services: document, genai, notification, payment
+#   - Workflow tests: cross-service integration tests (requires all services running)
 #
 # Usage: ./scripts/integ-tests.sh [options]
 #
@@ -12,15 +16,16 @@
 #   --all                   Run all workspace tests (default if no -p specified)
 #   --                      Pass remaining args to cargo test
 #
-# Database requirements:
-#   - PostgreSQL: localhost:5432 (for auth-service, ledger-service)
-#   - MongoDB: localhost:27017 (for document-service, genai-service, notification-service, payment-service)
+# Requirements:
+#   - PostgreSQL: localhost:5432 (for PG services)
+#   - MongoDB: localhost:27017 (for Mongo services)
+#   - All services running via ./scripts/dev-up.sh (for workflow-tests)
 #
 # Examples:
 #   ./scripts/integ-tests.sh                           # Run all tests
 #   ./scripts/integ-tests.sh -p auth-service           # Run auth-service tests
-#   ./scripts/integ-tests.sh -p ledger-service         # Run ledger-service tests
-#   ./scripts/integ-tests.sh -p document-service       # Run document-service tests
+#   ./scripts/integ-tests.sh -p workflow-tests         # Run workflow tests only
+#   ./scripts/integ-tests.sh -p reconciliation-service # Run reconciliation tests
 
 set -e
 
@@ -51,6 +56,9 @@ MONGO_AVAILABLE=false
 # Services by database type
 PG_SERVICES=("auth-service" "ledger-service" "invoicing-service" "billing-service" "reconciliation-service")
 MONGO_SERVICES=("document-service" "genai-service" "notification-service" "payment-service")
+
+# Workflow tests - require all services running via docker-compose
+WORKFLOW_SERVICES=("workflow-tests")
 
 # Colors for output
 RED='\033[0;31m'
@@ -169,6 +177,74 @@ check_mongo() {
     return 1
 }
 
+# Check if all services are running (for workflow tests)
+check_services_running() {
+    log_step "Checking if all services are running..."
+
+    local services_healthy=true
+    local health_endpoints=(
+        "auth:http://localhost:9005/health"
+        "billing:http://localhost:9012/health"
+        "document:http://localhost:9007/health"
+        "genai:http://localhost:9010/health"
+        "invoicing:http://localhost:9014/health"
+        "ledger:http://localhost:9011/health"
+        "notification:http://localhost:9008/health"
+        "payment:http://localhost:9009/health"
+        "reconciliation:http://localhost:9013/health"
+    )
+
+    for entry in "${health_endpoints[@]}"; do
+        local name="${entry%%:*}"
+        local url="${entry#*:}"
+
+        if curl -sf --max-time 2 "$url" > /dev/null 2>&1; then
+            log_info "  ✓ ${name}-service is healthy"
+        else
+            log_warn "  ✗ ${name}-service is not responding at ${url}"
+            services_healthy=false
+        fi
+    done
+
+    if [ "$services_healthy" = true ]; then
+        log_info "All services are healthy"
+        return 0
+    else
+        log_error "Some services are not running. Start them with: ./scripts/dev-up.sh"
+        return 1
+    fi
+}
+
+# Export gRPC endpoints for workflow tests
+export_grpc_endpoints() {
+    export AUTH_GRPC_ENDPOINT="http://localhost:50051"
+    export BILLING_GRPC_ENDPOINT="http://localhost:50057"
+    export DOCUMENT_GRPC_ENDPOINT="http://localhost:50052"
+    export GENAI_GRPC_ENDPOINT="http://localhost:50055"
+    export INVOICING_GRPC_ENDPOINT="http://localhost:50059"
+    export LEDGER_GRPC_ENDPOINT="http://localhost:50056"
+    export NOTIFICATION_GRPC_ENDPOINT="http://localhost:50053"
+    export PAYMENT_GRPC_ENDPOINT="http://localhost:50054"
+    export RECONCILIATION_GRPC_ENDPOINT="http://localhost:50058"
+
+    log_info "gRPC endpoints exported"
+}
+
+# Run workflow tests
+run_workflow_tests() {
+    log_step "Running workflow tests..."
+
+    export_grpc_endpoints
+
+    if [ ${#CARGO_ARGS[@]} -gt 0 ]; then
+        log_info "Running: cargo test -p workflow-tests -- ${CARGO_ARGS[*]}"
+        cargo test -p workflow-tests -- "${CARGO_ARGS[@]}"
+    else
+        log_info "Running: cargo test -p workflow-tests"
+        cargo test -p workflow-tests
+    fi
+}
+
 # Create PostgreSQL test database
 create_pg_database() {
     log_step "Creating PostgreSQL test database: ${PG_DB_NAME}"
@@ -244,21 +320,25 @@ is_in_list() {
 get_services_to_test() {
     local pg_to_test=()
     local mongo_to_test=()
+    local workflow_to_test=()
 
     if [ "$RUN_ALL" = true ]; then
         pg_to_test=("${PG_SERVICES[@]}")
         mongo_to_test=("${MONGO_SERVICES[@]}")
+        workflow_to_test=("${WORKFLOW_SERVICES[@]}")
     else
         for pkg in "${PACKAGES[@]}"; do
             if is_in_list "$pkg" "${PG_SERVICES[@]}"; then
                 pg_to_test+=("$pkg")
             elif is_in_list "$pkg" "${MONGO_SERVICES[@]}"; then
                 mongo_to_test+=("$pkg")
+            elif is_in_list "$pkg" "${WORKFLOW_SERVICES[@]}"; then
+                workflow_to_test+=("$pkg")
             fi
         done
     fi
 
-    echo "${pg_to_test[*]}|${mongo_to_test[*]}"
+    echo "${pg_to_test[*]}|${mongo_to_test[*]}|${workflow_to_test[*]}"
 }
 
 # Run tests for PostgreSQL services
@@ -320,12 +400,17 @@ main() {
     # Get services to test
     local services_result
     services_result=$(get_services_to_test)
+
+    # Parse the pipe-separated result: pg|mongo|workflow
+    local temp="${services_result#*|}"           # Remove first segment (pg)
     local pg_services_str="${services_result%%|*}"
-    local mongo_services_str="${services_result##*|}"
+    local mongo_services_str="${temp%%|*}"
+    local workflow_services_str="${temp#*|}"
 
     # Convert to arrays
     read -ra pg_services_to_test <<< "$pg_services_str"
     read -ra mongo_services_to_test <<< "$mongo_services_str"
+    read -ra workflow_services_to_test <<< "$workflow_services_str"
 
     if [ "$RUN_ALL" = true ]; then
         log_info "Running: all services"
@@ -361,6 +446,20 @@ main() {
             run_mongo_tests "${mongo_services_to_test[@]}" || has_failures=true
         else
             log_error "MongoDB required for: ${mongo_services_to_test[*]}"
+            has_failures=true
+        fi
+        echo ""
+    fi
+
+    # Workflow tests (require all services running)
+    if [ ${#workflow_services_to_test[@]} -gt 0 ] && [ -n "${workflow_services_to_test[0]}" ]; then
+        log_info "Workflow tests to run: ${workflow_services_to_test[*]}"
+
+        if check_services_running; then
+            run_workflow_tests || has_failures=true
+        else
+            log_error "All services must be running for workflow tests"
+            log_error "Start services with: ./scripts/dev-up.sh"
             has_failures=true
         fi
         echo ""

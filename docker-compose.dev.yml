@@ -124,6 +124,8 @@ services:
       - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-http://notification-service:3001}
       - NOTIFICATION_SERVICE_ENABLED=${NOTIFICATION_SERVICE_ENABLED:-false}
       - NOTIFICATION_SERVICE_TIMEOUT=${NOTIFICATION_SERVICE_TIMEOUT:-30}
+      # Admin API Key (required)
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
     labels:
       - "prometheus.io/scrape=true"
       - "prometheus.io/port=3000"
@@ -379,6 +381,42 @@ services:
       - GENAI_SERVICE_URL=${GENAI_SERVICE_URL:-http://genai-service:8081}
       # Document Service Integration (gRPC)
       - DOCUMENT_SERVICE_URL=${DOCUMENT_SERVICE_URL:-http://document-service:8081}
+      # Auth Service Integration
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=8080"
+      - "prometheus.io/path=/health"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    networks:
+      - micros-net
+
+  invoicing-service:
+    build:
+      context: .
+      dockerfile: invoicing-service/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-invoicing-service
+    ports:
+      - "${INVOICING_SERVICE_HEALTH_PORT:-9014}:8080"
+      - "${INVOICING_SERVICE_GRPC_PORT:-50059}:8081"
+    environment:
+      - APP__PORT=8080
+      - GRPC_PORT=8081
+      - ENVIRONMENT=${ENVIRONMENT:-dev}
+      - DATABASE_URL=${INVOICING_DATABASE_URL:-postgres://postgres:password@host.docker.internal:5432/invoicing_db}
+      - DATABASE_MAX_CONNECTIONS=${INVOICING_DATABASE_MAX_CONNECTIONS:-10}
+      - DATABASE_MIN_CONNECTIONS=${INVOICING_DATABASE_MIN_CONNECTIONS:-2}
+      - RUST_LOG=${LOG_LEVEL:-info}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      # Ledger Service Integration (gRPC)
+      - LEDGER_SERVICE_URL=${LEDGER_SERVICE_URL:-http://ledger-service:8081}
+      # Payment Service Integration (gRPC)
+      - PAYMENT_SERVICE_URL=${PAYMENT_SERVICE_URL:-http://payment-service:3004}
       # Auth Service Integration
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
     labels:

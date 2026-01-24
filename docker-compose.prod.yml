@@ -180,6 +180,8 @@ services:
       - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-http://notification-service:3001}
       - NOTIFICATION_SERVICE_ENABLED=${NOTIFICATION_SERVICE_ENABLED:-true}
       - NOTIFICATION_SERVICE_TIMEOUT=${NOTIFICATION_SERVICE_TIMEOUT:-30}
+      # Admin API Key (required)
+      - ADMIN_API_KEY=${ADMIN_API_KEY}
     labels:
       - "prometheus.io/scrape=true"
       - "prometheus.io/port=3000"
@@ -427,6 +429,76 @@ services:
       - GENAI_SERVICE_URL=${GENAI_SERVICE_URL:-http://genai-service:8081}
       # Document Service Integration (gRPC)
       - DOCUMENT_SERVICE_URL=${DOCUMENT_SERVICE_URL:-http://document-service:8081}
+      # Auth Service Integration
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=8080"
+      - "prometheus.io/path=/health"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - micros-net
+
+  ledger-service:
+    build:
+      context: .
+      dockerfile: ledger-service/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-ledger-service
+    ports:
+      - "${LEDGER_SERVICE_HEALTH_PORT:-10011}:8080"
+      - "${LEDGER_SERVICE_GRPC_PORT:-50056}:8081"
+    environment:
+      - APP__PORT=8080
+      - GRPC_PORT=8081
+      - ENVIRONMENT=${ENVIRONMENT:-prod}
+      - DATABASE_URL=${LEDGER_DATABASE_URL:-postgres://postgres:password@postgres:5432/ledger_db}
+      - DATABASE_MAX_CONNECTIONS=${LEDGER_DATABASE_MAX_CONNECTIONS:-10}
+      - DATABASE_MIN_CONNECTIONS=${LEDGER_DATABASE_MIN_CONNECTIONS:-2}
+      - RUST_LOG=${LOG_LEVEL:-info}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      # Auth Service Integration
+      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
+    labels:
+      - "prometheus.io/scrape=true"
+      - "prometheus.io/port=8080"
+      - "prometheus.io/path=/health"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+        tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - micros-net
+
+  invoicing-service:
+    build:
+      context: .
+      dockerfile: invoicing-service/Dockerfile
+    container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-invoicing-service
+    ports:
+      - "${INVOICING_SERVICE_HEALTH_PORT:-10014}:8080"
+      - "${INVOICING_SERVICE_GRPC_PORT:-50059}:8081"
+    environment:
+      - APP__PORT=8080
+      - GRPC_PORT=8081
+      - ENVIRONMENT=${ENVIRONMENT:-prod}
+      - DATABASE_URL=${INVOICING_DATABASE_URL:-postgres://postgres:password@postgres:5432/invoicing_db}
+      - DATABASE_MAX_CONNECTIONS=${INVOICING_DATABASE_MAX_CONNECTIONS:-10}
+      - DATABASE_MIN_CONNECTIONS=${INVOICING_DATABASE_MIN_CONNECTIONS:-2}
+      - RUST_LOG=${LOG_LEVEL:-info}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
       # Auth Service Integration
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
     labels:

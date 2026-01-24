@@ -71,25 +71,46 @@ if [ ! -f auth-service/keys/private.pem ]; then
 fi
 
 echo ""
+
+# Build the centralized builder image (compiles all binaries once)
+BUILDER_EXISTS=$(docker images -q micros-builder 2>/dev/null)
+
+if [ -n "$REBUILD_FLAG" ] || [ -z "$BUILDER_EXISTS" ]; then
+    if [ -n "$NO_CACHE_FLAG" ]; then
+        ./scripts/build-builder.sh --no-cache
+    else
+        ./scripts/build-builder.sh
+    fi
+fi
+
 echo -e "${GREEN}Starting services with Docker Compose...${NC}"
 docker-compose -f docker-compose.prod.yml --env-file .env.prod up -d $REBUILD_FLAG $NO_CACHE_FLAG
 
 echo ""
 echo -e "${GREEN}Services started!${NC}"
 echo ""
-echo "Access points (Prod: ports 10000-10010):"
+echo "Access points (Prod: ports 10000-10014):"
 echo "  Health Endpoints:"
-echo "    - Auth Service:         http://localhost:10005/health"
-echo "    - Secure Frontend:      http://localhost:10006"
-echo "    - Document Service:     http://localhost:10007/health"
-echo "    - Notification Service: http://localhost:10008/health"
-echo "    - Payment Service:      http://localhost:10009/health"
+echo "    - Auth Service:           http://localhost:10005/health"
+echo "    - Document Service:       http://localhost:10007/health"
+echo "    - Notification Service:   http://localhost:10008/health"
+echo "    - Payment Service:        http://localhost:10009/health"
+echo "    - GenAI Service:          http://localhost:10010/health"
+echo "    - Ledger Service:         http://localhost:10011/health"
+echo "    - Billing Service:        http://localhost:10012/health"
+echo "    - Reconciliation Service: http://localhost:10013/health"
+echo "    - Invoicing Service:      http://localhost:10014/health"
 echo ""
 echo "  gRPC Endpoints:"
-echo "    - Auth Service:         localhost:50051"
-echo "    - Document Service:     localhost:50052"
-echo "    - Notification Service: localhost:50053"
-echo "    - Payment Service:      localhost:50054"
+echo "    - Auth Service:           localhost:50051"
+echo "    - Document Service:       localhost:50052"
+echo "    - Notification Service:   localhost:50053"
+echo "    - Payment Service:        localhost:50054"
+echo "    - GenAI Service:          localhost:50055"
+echo "    - Ledger Service:         localhost:50056"
+echo "    - Billing Service:        localhost:50057"
+echo "    - Reconciliation Service: localhost:50058"
+echo "    - Invoicing Service:      localhost:50059"
 echo ""
 echo "  Observability:"
 echo "    - Prometheus:           http://localhost:10000"
@@ -98,9 +119,9 @@ echo "    - Grafana:              http://localhost:10002"
 echo "    - Tempo:                http://localhost:10003"
 echo ""
 echo "Databases (containerized):"
-echo "  - PostgreSQL:          localhost:10010 (auth-service)"
-echo "  - MongoDB:             localhost:10008 (document/notification/payment)"
-echo "  - Redis:               localhost:10009 (all services)"
+echo "  - PostgreSQL: localhost:10010 (auth, ledger, billing, reconciliation, invoicing)"
+echo "  - MongoDB:    localhost:10008 (document, notification, payment, genai)"
+echo "  - Redis:      localhost:10009 (auth, session cache)"
 echo ""
 echo "View logs:"
 echo "  docker-compose -f docker-compose.prod.yml logs -f"

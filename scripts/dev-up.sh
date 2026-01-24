@@ -102,13 +102,25 @@ else
 fi
 
 echo ""
+
+# Build the centralized builder image (compiles all binaries once)
+BUILDER_EXISTS=$(docker images -q micros-builder 2>/dev/null)
+
+if [ -n "$REBUILD_FLAG" ] || [ -z "$BUILDER_EXISTS" ]; then
+    if [ -n "$NO_CACHE_FLAG" ]; then
+        ./scripts/build-builder.sh --no-cache
+    else
+        ./scripts/build-builder.sh
+    fi
+fi
+
 echo -e "${GREEN}Starting services with Docker Compose...${NC}"
 docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d $REBUILD_FLAG $NO_CACHE_FLAG
 
 echo ""
 echo -e "${GREEN}Services started!${NC}"
 echo ""
-echo "Access points (Dev: ports 9000-9013):"
+echo "Access points (Dev: ports 9000-9014):"
 echo "  Health Endpoints:"
 echo "    - Auth Service:           http://localhost:9005/health"
 echo "    - Document Service:       http://localhost:9007/health"
@@ -118,6 +130,7 @@ echo "    - GenAI Service:          http://localhost:9010/health"
 echo "    - Ledger Service:         http://localhost:9011/health"
 echo "    - Billing Service:        http://localhost:9012/health"
 echo "    - Reconciliation Service: http://localhost:9013/health"
+echo "    - Invoicing Service:      http://localhost:9014/health"
 echo ""
 echo "  gRPC Endpoints:"
 echo "    - Auth Service:           localhost:50051"
@@ -128,6 +141,7 @@ echo "    - GenAI Service:          localhost:50055"
 echo "    - Ledger Service:         localhost:50056"
 echo "    - Billing Service:        localhost:50057"
 echo "    - Reconciliation Service: localhost:50058"
+echo "    - Invoicing Service:      localhost:50059"
 echo ""
 echo "  Observability:"
 echo "    - Prometheus:           http://localhost:9000"

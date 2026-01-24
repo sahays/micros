@@ -6516,6 +6516,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
 
 [[package]]
+name = "workflow-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "billing-service",
+ "chrono",
+ "invoicing-service",
+ "prost 0.13.5",
+ "reconciliation-service",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "service-core",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-test",
+ "tonic 0.12.3",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "writeable"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
