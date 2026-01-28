@@ -77,6 +77,9 @@ pub struct SecurityConfig {
     pub allowed_origins: Vec<String>,
     pub require_signatures: bool,
     pub admin_api_key: String,
+    /// When true, internal service callers are trusted without JWT validation.
+    /// Auth context is extracted from x-user-id and x-tenant-id headers.
+    pub trust_internal_services: bool,
     #[serde(skip, default)]
     pub signature_config: service_core::middleware::signature::SignatureConfig,
 }
@@ -200,6 +203,10 @@ impl AuthConfig {
                 let require_signatures = get_env("REQUIRE_SIGNATURES", Some("false"), is_prod)?
                     .parse()
                     .unwrap_or(false);
+                let trust_internal_services =
+                    get_env("TRUST_INTERNAL_SERVICES", Some("true"), is_prod)?
+                        .parse()
+                        .unwrap_or(true);
                 SecurityConfig {
                     allowed_origins: get_env(
                         "ALLOWED_ORIGINS",
@@ -211,6 +218,7 @@ impl AuthConfig {
                     .collect(),
                     require_signatures,
                     admin_api_key: get_env("ADMIN_API_KEY", None, true)?,
+                    trust_internal_services,
                     signature_config: service_core::middleware::signature::SignatureConfig {
                         require_signatures,
                         excluded_paths: vec![

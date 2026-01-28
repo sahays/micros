@@ -70,6 +70,12 @@ services:
         tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
     volumes:
       - ./auth-service/keys:/app/keys
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     networks:
       - micros-net
 
@@ -261,6 +267,9 @@ services:
       context: .
       dockerfile: billing-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-billing-service
+    depends_on:
+      auth-service:
+        condition: service_healthy
     ports:
       - "${BILLING_SERVICE_HEALTH_PORT:-9012}:8080"
       - "${BILLING_SERVICE_GRPC_PORT:-50057}:8081"
@@ -295,6 +304,9 @@ services:
       context: .
       dockerfile: reconciliation-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-reconciliation-service
+    depends_on:
+      auth-service:
+        condition: service_healthy
     ports:
       - "${RECONCILIATION_SERVICE_HEALTH_PORT:-9013}:8080"
       - "${RECONCILIATION_SERVICE_GRPC_PORT:-50058}:8081"
@@ -333,6 +345,9 @@ services:
       context: .
       dockerfile: invoicing-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-invoicing-service
+    depends_on:
+      auth-service:
+        condition: service_healthy
     ports:
       - "${INVOICING_SERVICE_HEALTH_PORT:-9014}:8080"
       - "${INVOICING_SERVICE_GRPC_PORT:-50059}:8081"
