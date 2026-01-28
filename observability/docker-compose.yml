@@ -1,0 +1,92 @@
+# ==============================================================================
+# PLG+T Observability Stack (Host Machine)
+# ==============================================================================
+# Runs Prometheus, Loki, Grafana, and Tempo on standard ports.
+# Start with: ./start.sh
+# Stop with:  ./stop.sh
+# ==============================================================================
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-observability-dev}-prometheus
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    restart: unless-stopped
+    networks:
+      - observability-net
+
+  loki:
+    image: grafana/loki:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-observability-dev}-loki
+    volumes:
+      - ./loki:/etc/loki
+      - loki_data:/loki
+    command: -config.file=/etc/loki/loki.yaml
+    ports:
+      - "3100:3100"
+    restart: unless-stopped
+    networks:
+      - observability-net
+
+  tempo:
+    image: grafana/tempo:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-observability-dev}-tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+    user: "10001:10001"
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200"   # Tempo query API
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "14268:14268" # Jaeger ingest
+      - "9411:9411"   # Zipkin
+    restart: unless-stopped
+    networks:
+      - observability-net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-observability-dev}-grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    networks:
+      - observability-net
+
+networks:
+  observability-net:
+    driver: bridge
+    name: observability_network
+
+volumes:
+  prometheus_data:
+    name: ${COMPOSE_PROJECT_NAME:-observability-dev}_prometheus_data
+  loki_data:
+    name: ${COMPOSE_PROJECT_NAME:-observability-dev}_loki_data
+  tempo_data:
+    name: ${COMPOSE_PROJECT_NAME:-observability-dev}_tempo_data
+  grafana_data:
+    name: ${COMPOSE_PROJECT_NAME:-observability-dev}_grafana_data

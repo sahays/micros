@@ -39,7 +39,7 @@ if [ -n "$NO_CACHE_FLAG" ]; then
 fi
 
 echo -e "${GREEN}Starting Micros Development Stack${NC}"
-echo "PostgreSQL, MongoDB, and Redis must be running on your host machine"
+echo "Prerequisites: PostgreSQL, MongoDB, Redis, and PLG+T stack must be running"
 echo ""
 
 if [ -n "$REBUILD_FLAG" ]; then
@@ -101,6 +101,46 @@ else
     exit 1
 fi
 
+# Check if PLG+T observability stack is running
+echo ""
+echo "Checking PLG+T observability stack..."
+PLGT_MISSING=""
+
+if nc -z localhost 9090 2>/dev/null; then
+    echo -e "${GREEN}✓ Prometheus is accessible on port 9090${NC}"
+else
+    echo -e "${RED}✗ Prometheus is not accessible on port 9090${NC}"
+    PLGT_MISSING="true"
+fi
+
+if nc -z localhost 3100 2>/dev/null; then
+    echo -e "${GREEN}✓ Loki is accessible on port 3100${NC}"
+else
+    echo -e "${RED}✗ Loki is not accessible on port 3100${NC}"
+    PLGT_MISSING="true"
+fi
+
+if nc -z localhost 3000 2>/dev/null; then
+    echo -e "${GREEN}✓ Grafana is accessible on port 3000${NC}"
+else
+    echo -e "${RED}✗ Grafana is not accessible on port 3000${NC}"
+    PLGT_MISSING="true"
+fi
+
+if nc -z localhost 4317 2>/dev/null; then
+    echo -e "${GREEN}✓ Tempo OTLP is accessible on port 4317${NC}"
+else
+    echo -e "${RED}✗ Tempo OTLP is not accessible on port 4317${NC}"
+    PLGT_MISSING="true"
+fi
+
+if [ -n "$PLGT_MISSING" ]; then
+    echo ""
+    echo -e "${RED}PLG+T observability stack is not fully running${NC}"
+    echo "Please start it first: cd observability && ./start.sh"
+    exit 1
+fi
+
 echo ""
 
 # Build the centralized builder image (compiles all binaries once)
@@ -120,7 +160,7 @@ docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d $REBUILD_FLAG
 echo ""
 echo -e "${GREEN}Services started!${NC}"
 echo ""
-echo "Access points (Dev: ports 9000-9014):"
+echo "Access points (Dev: ports 9005-9014):"
 echo "  Health Endpoints:"
 echo "    - Auth Service:           http://localhost:9005/health"
 echo "    - Document Service:       http://localhost:9007/health"
@@ -143,16 +183,16 @@ echo "    - Billing Service:        localhost:50057"
 echo "    - Reconciliation Service: localhost:50058"
 echo "    - Invoicing Service:      localhost:50059"
 echo ""
-echo "  Observability:"
-echo "    - Prometheus:           http://localhost:9000"
-echo "    - Loki:                 http://localhost:9001"
-echo "    - Grafana:              http://localhost:9002 (admin/admin)"
-echo "    - Tempo:                http://localhost:9003"
-echo ""
 echo "Databases (on host machine):"
 echo "  - PostgreSQL: localhost:5432  (auth, ledger, billing, reconciliation, invoicing)"
 echo "  - MongoDB:    localhost:27017 (document, notification, payment, genai)"
 echo "  - Redis:      localhost:6379  (auth, session cache)"
+echo ""
+echo "Observability (PLG+T on host):"
+echo "  - Prometheus: http://localhost:9090"
+echo "  - Loki:       http://localhost:3100"
+echo "  - Grafana:    http://localhost:3000 (admin/admin)"
+echo "  - Tempo:      http://localhost:3200"
 echo ""
 echo "View logs:"
 echo "  docker-compose -f docker-compose.dev.yml logs -f"

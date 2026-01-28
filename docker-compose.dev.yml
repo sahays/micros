@@ -3,77 +3,11 @@ services:
   # Development Configuration
   # ==============================================================================
   # PostgreSQL, MongoDB, and Redis run on HOST machine (not included here)
+  # PLG+T observability stack runs on HOST (see observability/ directory)
   # Services connect via host.docker.internal
   # ==============================================================================
 
-  # Observability Stack
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-prometheus
-    volumes:
-      - ./config/prometheus:/etc/prometheus
-      - prometheus_data:/prometheus
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--storage.tsdb.retention.time=15d"
-    ports:
-      - "${PROMETHEUS_PORT:-9000}:9090"
-    restart: unless-stopped
-    networks:
-      - micros-net
-
-  loki:
-    image: grafana/loki:latest
-    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-loki
-    volumes:
-      - ./config/loki:/etc/loki
-      - loki_data:/loki
-    command: -config.file=/etc/loki/loki.yaml
-    ports:
-      - "${LOKI_PORT:-9001}:3100"
-    restart: unless-stopped
-    networks:
-      - micros-net
-
-  tempo:
-    image: grafana/tempo:latest
-    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-tempo
-    command: ["-config.file=/etc/tempo.yaml"]
-    user: "10001:10001"
-    volumes:
-      - ./config/tempo/tempo.yaml:/etc/tempo.yaml:ro
-      - tempo_data:/var/tempo
-    ports:
-      - "14268:14268"
-      - "${TEMPO_PORT:-9003}:3200"
-      - "4317:4317"
-      - "4318:4318"
-      - "9411:9411"
-    restart: unless-stopped
-    networks:
-      - micros-net
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-grafana
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./config/grafana/provisioning:/etc/grafana/provisioning
-      - ./config/grafana/dashboards:/var/lib/grafana/dashboards
-    environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
-    ports:
-      - "${GRAFANA_PORT:-9002}:3000"
-    restart: unless-stopped
-    depends_on:
-      - prometheus
-      - loki
-    networks:
-      - micros-net
-
+  # Log Collection (sends to host Loki)
   promtail:
     image: grafana/promtail:latest
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-promtail
@@ -86,8 +20,6 @@ services:
     ports:
       - "${PROMTAIL_PORT:-9004}:9080"
     restart: unless-stopped
-    depends_on:
-      - loki
     networks:
       - micros-net
 
@@ -103,7 +35,7 @@ services:
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgres://postgres:password@host.docker.internal:5432/auth_db}
       - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
-      - RUST_LOG=${LOG_LEVEL:-info}
+      - RUST_LOG=${RUST_LOG:-auth_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
       - APP__PORT=3000
       - GRPC_PORT=3001
       - ENVIRONMENT=${ENVIRONMENT:-dev}
@@ -119,7 +51,7 @@ services:
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-}
       - GMAIL_USER=${GMAIL_USER:-}
       - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD:-}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://host.docker.internal:4317}
       # Notification Service Integration (gRPC)
       - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-http://notification-service:3001}
       - NOTIFICATION_SERVICE_ENABLED=${NOTIFICATION_SERVICE_ENABLED:-false}
@@ -154,8 +86,8 @@ services:
       - GRPC_PORT=8081
       - MONGODB_URI=${MONGODB_URI:-mongodb://host.docker.internal:27017}
       - MONGODB_DATABASE=${MONGODB_DATABASE:-micros_db}
-      - RUST_LOG=${DOCUMENT_SERVICE_LOG_LEVEL:-info}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      - RUST_LOG=${RUST_LOG:-document_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://host.docker.internal:4317}
       - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
       - STORAGE_LOCAL_PATH=${STORAGE_LOCAL_PATH:-./storage}
       - REQUIRE_SIGNATURES=${REQUIRE_SIGNATURES:-false}
@@ -187,8 +119,8 @@ services:
       - ENVIRONMENT=${ENVIRONMENT:-dev}
       - MONGODB_URI=${NOTIFICATION_MONGODB_URI:-mongodb://host.docker.internal:27017}
       - MONGODB_DATABASE=${NOTIFICATION_MONGODB_DATABASE:-notification_db}
-      - RUST_LOG=${LOG_LEVEL:-info}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      - RUST_LOG=${RUST_LOG:-notification_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://host.docker.internal:4317}
       # SMTP Configuration
       - SMTP_HOST=${NOTIFICATION_SMTP_HOST:-smtp.gmail.com}
       - SMTP_PORT=${NOTIFICATION_SMTP_PORT:-587}
@@ -232,8 +164,8 @@ services:
       - ENVIRONMENT=${ENVIRONMENT:-dev}
       - MONGODB_URI=${GENAI_MONGODB_URI:-mongodb://host.docker.internal:27017}
       - MONGODB_DATABASE=${GENAI_MONGODB_DATABASE:-genai_db}
-      - RUST_LOG=${LOG_LEVEL:-info}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      - RUST_LOG=${RUST_LOG:-genai_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://host.docker.internal:4317}
       # Model Configuration
       - GENAI_TEXT_MODEL=${GENAI_TEXT_MODEL:-gemini-2.0-flash}
       - GENAI_AUDIO_MODEL=${GENAI_AUDIO_MODEL:-gemini-2.0-flash}
@@ -271,8 +203,8 @@ services:
       - DATABASE_URL=${LEDGER_DATABASE_URL:-postgres://postgres:password@host.docker.internal:5432/ledger_db}
       - DATABASE_MAX_CONNECTIONS=${LEDGER_DATABASE_MAX_CONNECTIONS:-10}
       - DATABASE_MIN_CONNECTIONS=${LEDGER_DATABASE_MIN_CONNECTIONS:-2}
-      - RUST_LOG=${LOG_LEVEL:-info}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      - RUST_LOG=${RUST_LOG:-ledger_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://host.docker.internal:4317}
     labels:
       - "prometheus.io/scrape=true"
       - "prometheus.io/port=8080"
@@ -301,8 +233,8 @@ services:
       - PAYMENT_DATABASE_URL=${PAYMENT_DATABASE_URL:-mongodb://host.docker.internal:27017}
       - PAYMENT_DATABASE_NAME=${PAYMENT_DATABASE_NAME:-payment_db}
       - PAYMENT_REDIS_URL=${PAYMENT_REDIS_URL:-redis://host.docker.internal:6379/0}
-      - RUST_LOG=${LOG_LEVEL:-info}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      - RUST_LOG=${RUST_LOG:-payment_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://host.docker.internal:4317}
       - PAYMENT_SIGNATURE_ENABLED=${PAYMENT_SIGNATURE_ENABLED:-false}
       - PAYMENT_SIGNATURE_SECRET=${PAYMENT_SIGNATURE_SECRET:-dev-secret}
       - PAYMENT_UPI_VPA=${PAYMENT_UPI_VPA:-merchant@upi}
@@ -339,8 +271,8 @@ services:
       - DATABASE_URL=${BILLING_DATABASE_URL:-postgres://postgres:password@host.docker.internal:5432/billing_db}
       - DATABASE_MAX_CONNECTIONS=${BILLING_DATABASE_MAX_CONNECTIONS:-10}
       - DATABASE_MIN_CONNECTIONS=${BILLING_DATABASE_MIN_CONNECTIONS:-2}
-      - RUST_LOG=${LOG_LEVEL:-info}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      - RUST_LOG=${RUST_LOG:-billing_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://host.docker.internal:4317}
       # Invoicing Service Integration (gRPC)
       - INVOICING_SERVICE_URL=${INVOICING_SERVICE_URL:-http://invoicing-service:8081}
       # Auth Service Integration
@@ -373,8 +305,8 @@ services:
       - DATABASE_URL=${RECONCILIATION_DATABASE_URL:-postgres://postgres:password@host.docker.internal:5432/reconciliation_db}
       - DATABASE_MAX_CONNECTIONS=${RECONCILIATION_DATABASE_MAX_CONNECTIONS:-10}
       - DATABASE_MIN_CONNECTIONS=${RECONCILIATION_DATABASE_MIN_CONNECTIONS:-2}
-      - RUST_LOG=${LOG_LEVEL:-info}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      - RUST_LOG=${RUST_LOG:-reconciliation_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://host.docker.internal:4317}
       # Ledger Service Integration (gRPC)
       - LEDGER_SERVICE_URL=${LEDGER_SERVICE_URL:-http://ledger-service:8081}
       # GenAI Service Integration (gRPC)
@@ -411,8 +343,8 @@ services:
       - DATABASE_URL=${INVOICING_DATABASE_URL:-postgres://postgres:password@host.docker.internal:5432/invoicing_db}
       - DATABASE_MAX_CONNECTIONS=${INVOICING_DATABASE_MAX_CONNECTIONS:-10}
       - DATABASE_MIN_CONNECTIONS=${INVOICING_DATABASE_MIN_CONNECTIONS:-2}
-      - RUST_LOG=${LOG_LEVEL:-info}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://tempo:4317}
+      - RUST_LOG=${RUST_LOG:-invoicing_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
+      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://host.docker.internal:4317}
       # Ledger Service Integration (gRPC)
       - LEDGER_SERVICE_URL=${LEDGER_SERVICE_URL:-http://ledger-service:8081}
       # Payment Service Integration (gRPC)
@@ -437,12 +369,4 @@ networks:
     driver: bridge
     name: ${COMPOSE_PROJECT_NAME:-micros-dev}_network
 
-volumes:
-  prometheus_data:
-    name: ${COMPOSE_PROJECT_NAME:-micros-dev}_prometheus_data
-  loki_data:
-    name: ${COMPOSE_PROJECT_NAME:-micros-dev}_loki_data
-  tempo_data:
-    name: ${COMPOSE_PROJECT_NAME:-micros-dev}_tempo_data
-  grafana_data:
-    name: ${COMPOSE_PROJECT_NAME:-micros-dev}_grafana_data
+volumes: {}

@@ -1,0 +1,62 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'loki'
+    static_configs:
+      - targets: ['loki:3100']
+
+  - job_name: 'tempo'
+    static_configs:
+      - targets: ['tempo:3200']
+
+  # Micros services (running in Docker, accessed via host.docker.internal)
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['host.docker.internal:9005']
+    metrics_path: /health
+
+  - job_name: 'document-service'
+    static_configs:
+      - targets: ['host.docker.internal:9007']
+    metrics_path: /health
+
+  - job_name: 'notification-service'
+    static_configs:
+      - targets: ['host.docker.internal:9008']
+    metrics_path: /health
+
+  - job_name: 'payment-service'
+    static_configs:
+      - targets: ['host.docker.internal:9009']
+    metrics_path: /health
+
+  - job_name: 'genai-service'
+    static_configs:
+      - targets: ['host.docker.internal:9010']
+    metrics_path: /health
+
+  - job_name: 'ledger-service'
+    static_configs:
+      - targets: ['host.docker.internal:9011']
+    metrics_path: /health
+
+  - job_name: 'billing-service'
+    static_configs:
+      - targets: ['host.docker.internal:9012']
+    metrics_path: /health
+
+  - job_name: 'reconciliation-service'
+    static_configs:
+      - targets: ['host.docker.internal:9013']
+    metrics_path: /health
+
+  - job_name: 'invoicing-service'
+    static_configs:
+      - targets: ['host.docker.internal:9014']
+    metrics_path: /health

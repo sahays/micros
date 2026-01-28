@@ -275,6 +275,7 @@ pub fn create_test_config(private_key_path: &str, public_key_path: &str) -> Auth
             allowed_origins: vec!["http://localhost:3000".to_string()],
             require_signatures: false,
             admin_api_key: TEST_ADMIN_API_KEY.to_string(),
+            trust_internal_services: true,
             signature_config: service_core::middleware::signature::SignatureConfig {
                 require_signatures: false,
                 excluded_paths: vec!["/health".to_string()],
