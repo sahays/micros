@@ -107,6 +107,7 @@ message Invitation {
 // CreateInvitationResponse wraps a created invitation.
 message CreateInvitationResponse {
   Invitation invitation = 1;
+  string raw_token = 2;
 }
 
 // GetInvitationResponse wraps a fetched invitation.

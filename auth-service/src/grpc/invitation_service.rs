@@ -137,6 +137,7 @@ impl InvitationService for InvitationServiceImpl {
                 created_utc: Some(datetime_to_timestamp(invitation.created_utc)),
                 inviter_user_id: invitation.created_by_user_id.to_string(),
             }),
+            raw_token: token,
         }))
     }
 
