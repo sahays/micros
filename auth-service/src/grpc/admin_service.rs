@@ -73,19 +73,7 @@ impl AdminService for AdminServiceImpl {
             ));
         }
 
-        // Check if bootstrap has already been performed
-        let tenant_count = self.state.db.count_tenants().await.map_err(|e| {
-            tracing::error!(error = %e, "Failed to count tenants");
-            Status::internal("Database error")
-        })?;
-
-        if tenant_count > 0 {
-            return Err(Status::failed_precondition(
-                "Bootstrap already completed. System already has tenants.",
-            ));
-        }
-
-        // Check if tenant slug is already taken (extra safety)
+        // Check if tenant slug is already taken
         if self
             .state
             .db
