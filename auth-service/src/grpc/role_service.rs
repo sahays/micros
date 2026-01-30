@@ -3,13 +3,14 @@
 use crate::grpc::capability_check::require_capability;
 use crate::grpc::proto::auth::{
     role_service_server::RoleService, AssignCapabilityRequest, AssignCapabilityResponse,
-    Capability as ProtoCapability, CreateRoleRequest, CreateRoleResponse,
-    EnsureCapabilitiesRequest, EnsureCapabilitiesResponse, GetCapabilityRequest,
-    GetCapabilityResponse, GetRoleCapabilitiesRequest, GetRoleCapabilitiesResponse, GetRoleRequest,
-    GetRoleResponse, ListCapabilitiesRequest, ListCapabilitiesResponse, ListTenantRolesRequest,
-    ListTenantRolesResponse, Role as ProtoRole,
+    Capability as ProtoCapability, CreateRoleRequest, CreateRoleResponse, DeleteRoleRequest,
+    DeleteRoleResponse, EnsureCapabilitiesRequest, EnsureCapabilitiesResponse,
+    GetCapabilityRequest, GetCapabilityResponse, GetRoleCapabilitiesRequest,
+    GetRoleCapabilitiesResponse, GetRoleRequest, GetRoleResponse, ListCapabilitiesRequest,
+    ListCapabilitiesResponse, ListTenantRolesRequest, ListTenantRolesResponse,
+    RevokeCapabilityRequest, RevokeCapabilityResponse, Role as ProtoRole,
 };
-use crate::models::{Capability, Role};
+use crate::models::{AuditEvent, AuditEventType, Capability, Role};
 use crate::AppState;
 use prost_types::Timestamp;
 use service_core::grpc::IntoStatus;
@@ -60,7 +61,7 @@ impl RoleService for RoleServiceImpl {
         request: Request<CreateRoleRequest>,
     ) -> Result<Response<CreateRoleResponse>, Status> {
         // Require role:create capability
-        let _auth = require_capability(&self.state, &request, "role:create").await?;
+        let auth = require_capability(&self.state, &request, "role:create").await?;
 
         let req = request.into_inner();
 
@@ -88,6 +89,21 @@ impl RoleService for RoleServiceImpl {
             .insert_role(&role)
             .await
             .map_err(|e| e.into_status())?;
+
+        // Audit log
+        let audit = AuditEvent::user_action(
+            auth.tenant_id,
+            auth.user_id,
+            AuditEventType::RoleCreated,
+            Some("role".to_string()),
+            Some(role.role_id),
+            Some(serde_json::json!({ "role_label": &role.role_label })),
+            None,
+            None,
+        );
+        if let Err(e) = self.state.db.insert_audit_event(&audit).await {
+            tracing::error!(error = %e, "Failed to insert audit event");
+        }
 
         Ok(Response::new(CreateRoleResponse {
             role: Some(role_to_proto(role)),
@@ -196,7 +212,7 @@ impl RoleService for RoleServiceImpl {
         request: Request<AssignCapabilityRequest>,
     ) -> Result<Response<AssignCapabilityResponse>, Status> {
         // Require role.capability:assign capability
-        let _auth = require_capability(&self.state, &request, "role.capability:assign").await?;
+        let auth = require_capability(&self.state, &request, "role.capability:assign").await?;
 
         let req = request.into_inner();
 
@@ -226,6 +242,21 @@ impl RoleService for RoleServiceImpl {
             .assign_capability_to_role(role_id, capability.cap_id)
             .await
             .map_err(|e| e.into_status())?;
+
+        // Audit log
+        let audit = AuditEvent::user_action(
+            auth.tenant_id,
+            auth.user_id,
+            AuditEventType::CapabilityAssigned,
+            Some("role".to_string()),
+            Some(role_id),
+            Some(serde_json::json!({ "role_id": role_id.to_string(), "capability_key": &req.capability_key })),
+            None,
+            None,
+        );
+        if let Err(e) = self.state.db.insert_audit_event(&audit).await {
+            tracing::error!(error = %e, "Failed to insert audit event");
+        }
 
         Ok(Response::new(AssignCapabilityResponse {
             message: format!("Capability '{}' assigned to role", req.capability_key),
@@ -273,6 +304,106 @@ impl RoleService for RoleServiceImpl {
 
         Ok(Response::new(GetCapabilityResponse {
             capability: Some(capability_to_proto(capability)),
+        }))
+    }
+
+    async fn delete_role(
+        &self,
+        request: Request<DeleteRoleRequest>,
+    ) -> Result<Response<DeleteRoleResponse>, Status> {
+        let auth = require_capability(&self.state, &request, "role:create").await?;
+
+        let req = request.into_inner();
+
+        let role_id = Uuid::parse_str(&req.role_id)
+            .map_err(|_| Status::invalid_argument("Invalid role_id"))?;
+
+        let role = self
+            .state
+            .db
+            .find_role_by_id(role_id)
+            .await
+            .map_err(|e| e.into_status())?
+            .ok_or_else(|| Status::not_found("Role not found"))?;
+
+        self.state
+            .db
+            .delete_role(role_id)
+            .await
+            .map_err(|e| e.into_status())?;
+
+        // Audit log
+        let audit = AuditEvent::user_action(
+            auth.tenant_id,
+            auth.user_id,
+            AuditEventType::RoleDeleted,
+            Some("role".to_string()),
+            Some(role_id),
+            Some(serde_json::json!({ "role_label": &role.role_label })),
+            None,
+            None,
+        );
+        if let Err(e) = self.state.db.insert_audit_event(&audit).await {
+            tracing::error!(error = %e, "Failed to insert audit event");
+        }
+
+        Ok(Response::new(DeleteRoleResponse {
+            message: format!("Role '{}' deleted", role.role_label),
+        }))
+    }
+
+    async fn revoke_capability(
+        &self,
+        request: Request<RevokeCapabilityRequest>,
+    ) -> Result<Response<RevokeCapabilityResponse>, Status> {
+        let auth =
+            require_capability(&self.state, &request, "role.capability:revoke").await?;
+
+        let req = request.into_inner();
+
+        let role_id = Uuid::parse_str(&req.role_id)
+            .map_err(|_| Status::invalid_argument("Invalid role_id"))?;
+
+        // Verify role exists
+        self.state
+            .db
+            .find_role_by_id(role_id)
+            .await
+            .map_err(|e| e.into_status())?
+            .ok_or_else(|| Status::not_found("Role not found"))?;
+
+        // Verify capability exists
+        let capability = self
+            .state
+            .db
+            .find_capability_by_key(&req.capability_key)
+            .await
+            .map_err(|e| e.into_status())?
+            .ok_or_else(|| Status::not_found("Capability not found"))?;
+
+        self.state
+            .db
+            .revoke_capability_from_role(role_id, capability.cap_id)
+            .await
+            .map_err(|e| e.into_status())?;
+
+        // Audit log
+        let audit = AuditEvent::user_action(
+            auth.tenant_id,
+            auth.user_id,
+            AuditEventType::CapabilityRevoked,
+            Some("role".to_string()),
+            Some(role_id),
+            Some(serde_json::json!({ "role_id": role_id.to_string(), "capability_key": &req.capability_key })),
+            None,
+            None,
+        );
+        if let Err(e) = self.state.db.insert_audit_event(&audit).await {
+            tracing::error!(error = %e, "Failed to insert audit event");
+        }
+
+        Ok(Response::new(RevokeCapabilityResponse {
+            message: format!("Capability '{}' revoked from role", req.capability_key),
         }))
     }
 

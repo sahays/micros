@@ -28,6 +28,12 @@ service RoleService {
   // Get a capability by key.
   rpc GetCapability(GetCapabilityRequest) returns (GetCapabilityResponse);
 
+  // Delete a role.
+  rpc DeleteRole(DeleteRoleRequest) returns (DeleteRoleResponse);
+
+  // Revoke a capability from a role.
+  rpc RevokeCapability(RevokeCapabilityRequest) returns (RevokeCapabilityResponse);
+
   // Ensure capabilities exist (idempotent registration).
   // Creates capabilities that don't exist, skips those that do.
   rpc EnsureCapabilities(EnsureCapabilitiesRequest) returns (EnsureCapabilitiesResponse);
@@ -154,4 +160,29 @@ message EnsureCapabilitiesResponse {
 
   // Number of capabilities that already existed.
   int32 existing = 2;
+}
+
+// DeleteRoleRequest for deleting a role.
+message DeleteRoleRequest {
+  // Role ID (UUID).
+  string role_id = 1;
+}
+
+// DeleteRoleResponse after role deletion.
+message DeleteRoleResponse {
+  string message = 1;
+}
+
+// RevokeCapabilityRequest for revoking a capability from a role.
+message RevokeCapabilityRequest {
+  // Role ID (UUID).
+  string role_id = 1;
+
+  // Capability key to revoke.
+  string capability_key = 2;
+}
+
+// RevokeCapabilityResponse after capability revocation.
+message RevokeCapabilityResponse {
+  string message = 1;
 }
