@@ -470,6 +470,31 @@ impl Database {
         Ok(())
     }
 
+    /// Delete a role by ID.
+    pub async fn delete_role(&self, role_id: Uuid) -> Result<(), AppError> {
+        sqlx::query("DELETE FROM roles WHERE role_id = $1")
+            .bind(role_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
+        Ok(())
+    }
+
+    /// Revoke a capability from a role.
+    pub async fn revoke_capability_from_role(
+        &self,
+        role_id: Uuid,
+        cap_id: Uuid,
+    ) -> Result<(), AppError> {
+        sqlx::query("DELETE FROM role_capabilities WHERE role_id = $1 AND cap_id = $2")
+            .bind(role_id)
+            .bind(cap_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
+        Ok(())
+    }
+
     // ==================== Capability Operations ====================
 
     /// Find capability by ID.
