@@ -27,6 +27,10 @@ service RoleService {
 
   // Get a capability by key.
   rpc GetCapability(GetCapabilityRequest) returns (GetCapabilityResponse);
+
+  // Ensure capabilities exist (idempotent registration).
+  // Creates capabilities that don't exist, skips those that do.
+  rpc EnsureCapabilities(EnsureCapabilitiesRequest) returns (EnsureCapabilitiesResponse);
 }
 
 // CreateRoleRequest for creating a new role.
@@ -135,4 +139,19 @@ message Capability {
 // GetCapabilityResponse wraps a fetched capability.
 message GetCapabilityResponse {
   Capability capability = 1;
+}
+
+// EnsureCapabilitiesRequest for idempotent capability registration.
+message EnsureCapabilitiesRequest {
+  // List of capability keys to ensure exist.
+  repeated string cap_keys = 1;
+}
+
+// EnsureCapabilitiesResponse with registration results.
+message EnsureCapabilitiesResponse {
+  // Number of newly created capabilities.
+  int32 created = 1;
+
+  // Number of capabilities that already existed.
+  int32 existing = 2;
 }

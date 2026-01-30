@@ -19,15 +19,10 @@ scrape_configs:
         target_label: 'container'
     pipeline_stages:
       - docker: {}
-      - match:
-          selector: '{container=~"auth-service|secure-frontend"}'
-          stages:
-            - json:
-                expressions:
-                  level: level
-            - template:
-                source: service
-                template: '{{ .container }}'
-            - labels:
-                level:
-                service:
+      - json:
+          expressions:
+            level: level
+      - labels:
+          level:
+      - label_drop:
+          - filename
