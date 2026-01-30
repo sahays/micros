@@ -3,7 +3,8 @@
 use crate::grpc::capability_check::require_capability;
 use crate::grpc::proto::auth::{
     role_service_server::RoleService, AssignCapabilityRequest, AssignCapabilityResponse,
-    Capability as ProtoCapability, CreateRoleRequest, CreateRoleResponse, GetCapabilityRequest,
+    Capability as ProtoCapability, CreateRoleRequest, CreateRoleResponse,
+    EnsureCapabilitiesRequest, EnsureCapabilitiesResponse, GetCapabilityRequest,
     GetCapabilityResponse, GetRoleCapabilitiesRequest, GetRoleCapabilitiesResponse, GetRoleRequest,
     GetRoleResponse, ListCapabilitiesRequest, ListCapabilitiesResponse, ListTenantRolesRequest,
     ListTenantRolesResponse, Role as ProtoRole,
@@ -272,6 +273,53 @@ impl RoleService for RoleServiceImpl {
 
         Ok(Response::new(GetCapabilityResponse {
             capability: Some(capability_to_proto(capability)),
+        }))
+    }
+
+    async fn ensure_capabilities(
+        &self,
+        request: Request<EnsureCapabilitiesRequest>,
+    ) -> Result<Response<EnsureCapabilitiesResponse>, Status> {
+        // Internal service call — no capability check required (services self-register)
+        let req = request.into_inner();
+
+        let mut created = 0i32;
+        let mut existing = 0i32;
+
+        for cap_key in &req.cap_keys {
+            if cap_key.is_empty() {
+                continue;
+            }
+            match self.state.db.find_capability_by_key(cap_key).await {
+                Ok(Some(_)) => {
+                    existing += 1;
+                }
+                Ok(None) => {
+                    let cap = Capability::new(cap_key.clone());
+                    self.state
+                        .db
+                        .insert_capability(&cap)
+                        .await
+                        .map_err(|e| e.into_status())?;
+                    created += 1;
+                    tracing::info!(cap_key = %cap_key, "Registered new capability");
+                }
+                Err(e) => {
+                    return Err(e.into_status());
+                }
+            }
+        }
+
+        tracing::info!(
+            created = created,
+            existing = existing,
+            total = req.cap_keys.len(),
+            "EnsureCapabilities completed"
+        );
+
+        Ok(Response::new(EnsureCapabilitiesResponse {
+            created,
+            existing,
         }))
     }
 }
