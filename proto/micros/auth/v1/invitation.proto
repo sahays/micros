@@ -15,6 +15,9 @@ service InvitationService {
 
   // Accept an invitation (creates user and assignments).
   rpc AcceptInvitation(AcceptInvitationRequest) returns (AcceptInvitationResponse);
+
+  // Accept an invitation by phone (OTP pre-verified, no password required).
+  rpc AcceptInvitationByPhone(AcceptInvitationByPhoneRequest) returns (AcceptInvitationResponse);
 }
 
 // CreateInvitationRequest for creating an invitation.
@@ -36,6 +39,15 @@ message CreateInvitationRequest {
 
   // Inviter user ID (UUID).
   string inviter_user_id = 6;
+
+  // Optional phone number for phone-based invitations.
+  optional string phone = 7;
+
+  // Verification type: "email" (default) or "phone".
+  optional string verification_type = 8;
+
+  // Arbitrary key-value metadata (e.g., context about the invitation).
+  map<string, string> metadata = 9;
 }
 
 // GetInvitationRequest for fetching an invitation.
@@ -54,6 +66,21 @@ message AcceptInvitationRequest {
 
   // Optional display name.
   optional string display_name = 3;
+}
+
+// AcceptInvitationByPhoneRequest for phone-based invitation acceptance.
+message AcceptInvitationByPhoneRequest {
+  // Invitation token.
+  string token = 1;
+
+  // Display name for the new user.
+  string display_name = 2;
+
+  // Optional password (can use OTP-only login if omitted).
+  optional string password = 3;
+
+  // Arbitrary profile data (e.g., relationship, preferences).
+  map<string, string> profile_data = 4;
 }
 
 // AcceptInvitationResponse after accepting invitation.
@@ -102,6 +129,15 @@ message Invitation {
 
   // Inviter user ID (UUID).
   string inviter_user_id = 9;
+
+  // Phone number (if phone-based invitation).
+  string phone = 10;
+
+  // Verification type: "email" or "phone".
+  string verification_type = 11;
+
+  // Arbitrary key-value metadata.
+  map<string, string> metadata = 12;
 }
 
 // CreateInvitationResponse wraps a created invitation.

@@ -756,8 +756,8 @@ impl Database {
     pub async fn insert_invitation(&self, invitation: &Invitation) -> Result<(), AppError> {
         sqlx::query(
             r#"
-            INSERT INTO invitations (invitation_id, tenant_id, email, org_node_id, role_id, token_hash, state_code, expiry_utc, accepted_utc, created_by_user_id, created_utc)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            INSERT INTO invitations (invitation_id, tenant_id, email, org_node_id, role_id, token_hash, state_code, expiry_utc, accepted_utc, created_by_user_id, created_utc, phone, verification_type, metadata_json)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             "#,
         )
         .bind(invitation.invitation_id)
@@ -771,6 +771,9 @@ impl Database {
         .bind(invitation.accepted_utc)
         .bind(invitation.created_by_user_id)
         .bind(invitation.created_utc)
+        .bind(&invitation.phone)
+        .bind(&invitation.verification_type)
+        .bind(&invitation.metadata_json)
         .execute(&self.pool)
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))?;
