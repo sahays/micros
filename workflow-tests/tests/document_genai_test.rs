@@ -7,10 +7,10 @@ mod common;
 
 use tonic::Request;
 use uuid::Uuid;
-use workflow_tests::proto::genai::{
-    ListModelsRequest, ProcessRequest, OutputFormat, RequestMetadata,
-};
 use workflow_tests::proto::document::ListDocumentsRequest;
+use workflow_tests::proto::genai::{
+    ListModelsRequest, OutputFormat, ProcessRequest, RequestMetadata,
+};
 use workflow_tests::ServiceEndpoints;
 
 /// Test: GenAI service lists available models.
@@ -28,8 +28,12 @@ async fn genai_lists_models() {
 
     let mut request = Request::new(ListModelsRequest {});
 
-    request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
 
     let response = genai_client
         .list_models(request)
@@ -37,7 +41,10 @@ async fn genai_lists_models() {
         .expect("Failed to list models");
 
     let models = response.into_inner().models;
-    assert!(!models.is_empty(), "Should have at least one model configured");
+    assert!(
+        !models.is_empty(),
+        "Should have at least one model configured"
+    );
 
     // Verify model has expected fields
     let model = &models[0];
@@ -72,8 +79,12 @@ async fn genai_processes_text_prompt() {
         }),
     });
 
-    request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
 
     // This may fail if API key is not configured - that's acceptable in tests
     let response = genai_client.process(request).await;
@@ -87,9 +98,9 @@ async fn genai_processes_text_prompt() {
         Err(status) => {
             // API key not configured is acceptable
             assert!(
-                status.code() == tonic::Code::FailedPrecondition ||
-                status.code() == tonic::Code::Unavailable ||
-                status.code() == tonic::Code::Internal,
+                status.code() == tonic::Code::FailedPrecondition
+                    || status.code() == tonic::Code::Unavailable
+                    || status.code() == tonic::Code::Internal,
                 "Unexpected error: {:?}",
                 status
             );
@@ -117,10 +128,18 @@ async fn document_service_lists_documents() {
         mime_type: None,
     });
 
-    request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    request.metadata_mut().insert("x-app-id", tenant_id.parse().unwrap());
-    request.metadata_mut().insert("x-org-id", tenant_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-app-id", tenant_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-org-id", tenant_id.parse().unwrap());
 
     let response = doc_client
         .list_documents(request)

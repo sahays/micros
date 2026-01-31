@@ -121,15 +121,51 @@ impl ServiceEndpoints {
     /// Get health check URLs for all services.
     pub fn health_urls(&self) -> Vec<(&'static str, String)> {
         vec![
-            ("auth", std::env::var("AUTH_HEALTH_URL").unwrap_or_else(|_| "http://localhost:9005/health".to_string())),
-            ("billing", std::env::var("BILLING_HEALTH_URL").unwrap_or_else(|_| "http://localhost:9012/health".to_string())),
-            ("document", std::env::var("DOCUMENT_HEALTH_URL").unwrap_or_else(|_| "http://localhost:9007/health".to_string())),
-            ("genai", std::env::var("GENAI_HEALTH_URL").unwrap_or_else(|_| "http://localhost:9010/health".to_string())),
-            ("invoicing", std::env::var("INVOICING_HEALTH_URL").unwrap_or_else(|_| "http://localhost:9014/health".to_string())),
-            ("ledger", std::env::var("LEDGER_HEALTH_URL").unwrap_or_else(|_| "http://localhost:9011/health".to_string())),
-            ("notification", std::env::var("NOTIFICATION_HEALTH_URL").unwrap_or_else(|_| "http://localhost:9008/health".to_string())),
-            ("payment", std::env::var("PAYMENT_HEALTH_URL").unwrap_or_else(|_| "http://localhost:9009/health".to_string())),
-            ("reconciliation", std::env::var("RECONCILIATION_HEALTH_URL").unwrap_or_else(|_| "http://localhost:9013/health".to_string())),
+            (
+                "auth",
+                std::env::var("AUTH_HEALTH_URL")
+                    .unwrap_or_else(|_| "http://localhost:9005/health".to_string()),
+            ),
+            (
+                "billing",
+                std::env::var("BILLING_HEALTH_URL")
+                    .unwrap_or_else(|_| "http://localhost:9012/health".to_string()),
+            ),
+            (
+                "document",
+                std::env::var("DOCUMENT_HEALTH_URL")
+                    .unwrap_or_else(|_| "http://localhost:9007/health".to_string()),
+            ),
+            (
+                "genai",
+                std::env::var("GENAI_HEALTH_URL")
+                    .unwrap_or_else(|_| "http://localhost:9010/health".to_string()),
+            ),
+            (
+                "invoicing",
+                std::env::var("INVOICING_HEALTH_URL")
+                    .unwrap_or_else(|_| "http://localhost:9014/health".to_string()),
+            ),
+            (
+                "ledger",
+                std::env::var("LEDGER_HEALTH_URL")
+                    .unwrap_or_else(|_| "http://localhost:9011/health".to_string()),
+            ),
+            (
+                "notification",
+                std::env::var("NOTIFICATION_HEALTH_URL")
+                    .unwrap_or_else(|_| "http://localhost:9008/health".to_string()),
+            ),
+            (
+                "payment",
+                std::env::var("PAYMENT_HEALTH_URL")
+                    .unwrap_or_else(|_| "http://localhost:9009/health".to_string()),
+            ),
+            (
+                "reconciliation",
+                std::env::var("RECONCILIATION_HEALTH_URL")
+                    .unwrap_or_else(|_| "http://localhost:9013/health".to_string()),
+            ),
         ]
     }
 }
@@ -235,8 +271,10 @@ impl WorkflowTestContext {
 
         // Add Bearer token if available
         if let Some(ref token) = self.auth_token {
-            req.metadata_mut()
-                .insert("authorization", format!("Bearer {}", token).parse().unwrap());
+            req.metadata_mut().insert(
+                "authorization",
+                format!("Bearer {}", token).parse().unwrap(),
+            );
         }
 
         // Always add tenant and user ID (used when capability checking is disabled)
@@ -264,7 +302,10 @@ pub async fn wait_for_services(timeout: Duration) -> Result<()> {
     let client = reqwest::Client::new();
     let start = std::time::Instant::now();
 
-    tracing::info!("Waiting for {} services to be healthy...", health_urls.len());
+    tracing::info!(
+        "Waiting for {} services to be healthy...",
+        health_urls.len()
+    );
 
     loop {
         let mut all_healthy = true;

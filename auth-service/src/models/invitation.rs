@@ -40,10 +40,14 @@ pub struct Invitation {
     pub accepted_utc: Option<DateTime<Utc>>,
     pub created_by_user_id: Uuid,
     pub created_utc: DateTime<Utc>,
+    pub phone: Option<String>,
+    pub verification_type: String,
+    pub metadata_json: Option<serde_json::Value>,
 }
 
 impl Invitation {
     /// Create a new invitation.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         tenant_id: Uuid,
         email: String,
@@ -65,7 +69,23 @@ impl Invitation {
             accepted_utc: None,
             created_by_user_id,
             created_utc: Utc::now(),
+            phone: None,
+            verification_type: "email".to_string(),
+            metadata_json: None,
         }
+    }
+
+    /// Set phone and verification type for phone-based invitation.
+    pub fn with_phone(mut self, phone: String) -> Self {
+        self.phone = Some(phone);
+        self.verification_type = "phone".to_string();
+        self
+    }
+
+    /// Set metadata.
+    pub fn with_metadata(mut self, metadata: serde_json::Value) -> Self {
+        self.metadata_json = Some(metadata);
+        self
     }
 
     /// Check if invitation is pending and not expired.

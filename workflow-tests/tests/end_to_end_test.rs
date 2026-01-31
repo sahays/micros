@@ -8,16 +8,16 @@ mod common;
 use tonic::{Code, Request};
 use uuid::Uuid;
 use workflow_tests::proto::billing::{
-    BillingInterval, CreatePlanRequest, CreateSubscriptionRequest, RecordUsageRequest,
-    RunBillingForSubscriptionRequest, CreateUsageComponentInput,
+    BillingInterval, CreatePlanRequest, CreateSubscriptionRequest, CreateUsageComponentInput,
+    RecordUsageRequest, RunBillingForSubscriptionRequest,
 };
 use workflow_tests::proto::ledger::{
-    AccountType, CreateAccountRequest, PostTransactionRequest, PostTransactionEntry,
-    Direction, GetBalanceRequest,
+    AccountType, CreateAccountRequest, Direction, GetBalanceRequest, PostTransactionEntry,
+    PostTransactionRequest,
 };
 // Reconciliation types available but not used in these end-to-end tests
 use workflow_tests::proto::payment::{
-    CreateTransactionRequest, UpdateTransactionStatusRequest, TransactionStatus,
+    CreateTransactionRequest, TransactionStatus, UpdateTransactionStatusRequest,
 };
 use workflow_tests::ServiceEndpoints;
 
@@ -33,9 +33,10 @@ async fn full_billing_cycle() {
     let user_id = Uuid::new_v4().to_string();
 
     // 1. Create billing plan
-    let mut billing_client = workflow_tests::BillingServiceClient::connect(endpoints.billing.clone())
-        .await
-        .expect("Failed to connect to billing service");
+    let mut billing_client =
+        workflow_tests::BillingServiceClient::connect(endpoints.billing.clone())
+            .await
+            .expect("Failed to connect to billing service");
 
     let mut plan_request = Request::new(CreatePlanRequest {
         tenant_id: tenant_id.clone(),
@@ -63,9 +64,15 @@ async fn full_billing_cycle() {
         metadata: "{}".to_string(),
     });
 
-    plan_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    plan_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    plan_request.metadata_mut().insert("authorization", "Bearer dev-test-token".parse().unwrap());
+    plan_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    plan_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    plan_request
+        .metadata_mut()
+        .insert("authorization", "Bearer dev-test-token".parse().unwrap());
 
     let plan = match billing_client.create_plan(plan_request).await {
         Ok(response) => response.into_inner().plan.unwrap(),
@@ -90,9 +97,15 @@ async fn full_billing_cycle() {
         metadata: "{}".to_string(),
     });
 
-    sub_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    sub_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    sub_request.metadata_mut().insert("authorization", "Bearer dev-test-token".parse().unwrap());
+    sub_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    sub_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    sub_request
+        .metadata_mut()
+        .insert("authorization", "Bearer dev-test-token".parse().unwrap());
 
     let subscription = billing_client
         .create_subscription(sub_request)
@@ -103,7 +116,9 @@ async fn full_billing_cycle() {
         .unwrap();
 
     // 3. Record usage
-    let api_component_id = plan.usage_components.iter()
+    let api_component_id = plan
+        .usage_components
+        .iter()
         .find(|c| c.name == "API Requests")
         .map(|c| c.component_id.clone())
         .expect("API Requests component not found");
@@ -118,9 +133,15 @@ async fn full_billing_cycle() {
         metadata: "{}".to_string(),
     });
 
-    usage_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    usage_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    usage_request.metadata_mut().insert("authorization", "Bearer dev-test-token".parse().unwrap());
+    usage_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    usage_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    usage_request
+        .metadata_mut()
+        .insert("authorization", "Bearer dev-test-token".parse().unwrap());
 
     billing_client
         .record_usage(usage_request)
@@ -133,9 +154,15 @@ async fn full_billing_cycle() {
         subscription_id: subscription.subscription_id.clone(),
     });
 
-    run_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    run_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    run_request.metadata_mut().insert("authorization", "Bearer dev-test-token".parse().unwrap());
+    run_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    run_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    run_request
+        .metadata_mut()
+        .insert("authorization", "Bearer dev-test-token".parse().unwrap());
 
     let result = billing_client
         .run_billing_for_subscription(run_request)
@@ -160,9 +187,10 @@ async fn payment_completion_flow() {
     let tenant_id = Uuid::new_v4().to_string();
     let user_id = Uuid::new_v4().to_string();
 
-    let mut payment_client = workflow_tests::PaymentServiceClient::connect(endpoints.payment.clone())
-        .await
-        .expect("Failed to connect to payment service");
+    let mut payment_client =
+        workflow_tests::PaymentServiceClient::connect(endpoints.payment.clone())
+            .await
+            .expect("Failed to connect to payment service");
 
     // 1. Create payment transaction
     let mut create_request = Request::new(CreateTransactionRequest {
@@ -170,10 +198,18 @@ async fn payment_completion_flow() {
         currency: "INR".to_string(),
     });
 
-    create_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    create_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    create_request.metadata_mut().insert("x-app-id", tenant_id.parse().unwrap());
-    create_request.metadata_mut().insert("x-org-id", tenant_id.parse().unwrap());
+    create_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    create_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    create_request
+        .metadata_mut()
+        .insert("x-app-id", tenant_id.parse().unwrap());
+    create_request
+        .metadata_mut()
+        .insert("x-org-id", tenant_id.parse().unwrap());
 
     let transaction = payment_client
         .create_transaction(create_request)
@@ -192,10 +228,18 @@ async fn payment_completion_flow() {
         status: TransactionStatus::Completed as i32,
     });
 
-    update_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    update_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    update_request.metadata_mut().insert("x-app-id", tenant_id.parse().unwrap());
-    update_request.metadata_mut().insert("x-org-id", tenant_id.parse().unwrap());
+    update_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    update_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    update_request
+        .metadata_mut()
+        .insert("x-app-id", tenant_id.parse().unwrap());
+    update_request
+        .metadata_mut()
+        .insert("x-org-id", tenant_id.parse().unwrap());
 
     let _response = payment_client
         .update_transaction_status(update_request)
@@ -230,8 +274,12 @@ async fn ledger_double_entry_balance() {
         metadata: "{}".to_string(),
     });
 
-    cash_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    cash_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
+    cash_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    cash_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
 
     let cash_account = ledger_client
         .create_account(cash_request)
@@ -251,8 +299,12 @@ async fn ledger_double_entry_balance() {
         metadata: "{}".to_string(),
     });
 
-    revenue_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    revenue_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
+    revenue_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    revenue_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
 
     let revenue_account = ledger_client
         .create_account(revenue_request)
@@ -282,8 +334,12 @@ async fn ledger_double_entry_balance() {
         metadata: r#"{"type": "sale"}"#.to_string(),
     });
 
-    post_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    post_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
+    post_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    post_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
 
     let transaction = ledger_client
         .post_transaction(post_request)
@@ -303,8 +359,12 @@ async fn ledger_double_entry_balance() {
         as_of_date: String::new(),
     });
 
-    cash_balance_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    cash_balance_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
+    cash_balance_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    cash_balance_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
 
     let cash_balance = ledger_client
         .get_balance(cash_balance_request)
@@ -314,7 +374,11 @@ async fn ledger_double_entry_balance() {
 
     // Ledger may return balance with or without decimal places
     let cash_value: f64 = cash_balance.balance.parse().expect("Invalid cash balance");
-    assert!((cash_value - 1000.0).abs() < 0.01, "Expected cash balance ~1000, got {}", cash_value);
+    assert!(
+        (cash_value - 1000.0).abs() < 0.01,
+        "Expected cash balance ~1000, got {}",
+        cash_value
+    );
 
     let mut revenue_balance_request = Request::new(GetBalanceRequest {
         tenant_id: tenant_id.clone(),
@@ -322,8 +386,12 @@ async fn ledger_double_entry_balance() {
         as_of_date: String::new(),
     });
 
-    revenue_balance_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    revenue_balance_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
+    revenue_balance_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    revenue_balance_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
 
     let revenue_balance = ledger_client
         .get_balance(revenue_balance_request)
@@ -333,7 +401,13 @@ async fn ledger_double_entry_balance() {
 
     // Revenue account has credit balance - representation may vary by implementation
     // Either -1000 (credit shown as negative) or 1000 (credit shown as positive)
-    let revenue_value: f64 = revenue_balance.balance.parse().expect("Invalid revenue balance");
-    assert!(revenue_value.abs() > 999.0 && revenue_value.abs() < 1001.0,
-        "Expected revenue balance magnitude ~1000, got {}", revenue_value);
+    let revenue_value: f64 = revenue_balance
+        .balance
+        .parse()
+        .expect("Invalid revenue balance");
+    assert!(
+        revenue_value.abs() > 999.0 && revenue_value.abs() < 1001.0,
+        "Expected revenue balance magnitude ~1000, got {}",
+        revenue_value
+    );
 }

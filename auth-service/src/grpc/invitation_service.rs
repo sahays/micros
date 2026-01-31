@@ -2,10 +2,10 @@
 
 use crate::grpc::capability_check::require_capability;
 use crate::grpc::proto::auth::{
-    invitation_service_server::InvitationService, AcceptInvitationRequest,
-    AcceptInvitationResponse, CreateInvitationRequest, CreateInvitationResponse,
-    GetInvitationRequest, GetInvitationResponse, Invitation, InvitationStatus, LoginResponse,
-    UserInfo,
+    invitation_service_server::InvitationService, AcceptInvitationByPhoneRequest,
+    AcceptInvitationRequest, AcceptInvitationResponse, CreateInvitationRequest,
+    CreateInvitationResponse, GetInvitationRequest, GetInvitationResponse, Invitation,
+    InvitationStatus, LoginResponse, UserInfo,
 };
 use crate::models::{
     Invitation as ModelInvitation, OrgAssignment, RefreshSession, User, UserIdentity,
@@ -109,7 +109,7 @@ impl InvitationService for InvitationServiceImpl {
         let expires_in_hours = req.expires_in_hours.unwrap_or(72) as i64;
         let expiry_utc = Utc::now() + Duration::hours(expires_in_hours);
 
-        let invitation = ModelInvitation::new(
+        let mut invitation = ModelInvitation::new(
             tenant_id,
             req.email.clone(),
             org_node_id,
@@ -119,11 +119,36 @@ impl InvitationService for InvitationServiceImpl {
             inviter_user_id,
         );
 
+        // Apply phone-based verification if specified
+        if let Some(phone) = req.phone {
+            if !phone.is_empty() {
+                invitation = invitation.with_phone(phone);
+            }
+        }
+        if let Some(ref vt) = req.verification_type {
+            if vt == "phone" {
+                invitation.verification_type = "phone".to_string();
+            }
+        }
+
+        // Store metadata if provided
+        if !req.metadata.is_empty() {
+            let metadata_value = serde_json::to_value(&req.metadata)
+                .map_err(|e| Status::internal(format!("Metadata serialization failed: {}", e)))?;
+            invitation = invitation.with_metadata(metadata_value);
+        }
+
         self.state
             .db
             .insert_invitation(&invitation)
             .await
             .map_err(|e| e.into_status())?;
+
+        let metadata: std::collections::HashMap<String, String> = invitation
+            .metadata_json
+            .as_ref()
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .unwrap_or_default();
 
         Ok(Response::new(CreateInvitationResponse {
             invitation: Some(Invitation {
@@ -136,6 +161,9 @@ impl InvitationService for InvitationServiceImpl {
                 expires_utc: Some(datetime_to_timestamp(invitation.expiry_utc)),
                 created_utc: Some(datetime_to_timestamp(invitation.created_utc)),
                 inviter_user_id: invitation.created_by_user_id.to_string(),
+                phone: invitation.phone.unwrap_or_default(),
+                verification_type: invitation.verification_type,
+                metadata,
             }),
             raw_token: token,
         }))
@@ -165,6 +193,12 @@ impl InvitationService for InvitationServiceImpl {
             InvitationStatus::Pending
         };
 
+        let metadata: std::collections::HashMap<String, String> = invitation
+            .metadata_json
+            .as_ref()
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .unwrap_or_default();
+
         Ok(Response::new(GetInvitationResponse {
             invitation: Some(Invitation {
                 invitation_id: invitation.invitation_id.to_string(),
@@ -176,6 +210,9 @@ impl InvitationService for InvitationServiceImpl {
                 expires_utc: Some(datetime_to_timestamp(invitation.expiry_utc)),
                 created_utc: Some(datetime_to_timestamp(invitation.created_utc)),
                 inviter_user_id: invitation.created_by_user_id.to_string(),
+                phone: invitation.phone.unwrap_or_default(),
+                verification_type: invitation.verification_type,
+                metadata,
             }),
         }))
     }
@@ -300,6 +337,137 @@ impl InvitationService for InvitationServiceImpl {
                 }),
             }),
             message: "Invitation accepted successfully".to_string(),
+        }))
+    }
+
+    async fn accept_invitation_by_phone(
+        &self,
+        request: Request<AcceptInvitationByPhoneRequest>,
+    ) -> Result<Response<AcceptInvitationResponse>, Status> {
+        let req = request.into_inner();
+
+        let token_hash = hash_token(&req.token);
+
+        let invitation = self
+            .state
+            .db
+            .find_invitation_by_token_hash(&token_hash)
+            .await
+            .map_err(|e| e.into_status())?
+            .ok_or_else(|| Status::not_found("Invitation not found"))?;
+
+        if invitation.accepted_utc.is_some() {
+            return Err(Status::failed_precondition("Invitation already accepted"));
+        }
+
+        if invitation.expiry_utc < Utc::now() {
+            return Err(Status::failed_precondition("Invitation has expired"));
+        }
+
+        // Use phone as email fallback for user creation (phone-based users
+        // get their phone stored in the email field if no email was provided).
+        let email = if invitation.email.is_empty() {
+            invitation
+                .phone
+                .clone()
+                .unwrap_or_else(|| format!("phone-{}@placeholder", Uuid::new_v4()))
+        } else {
+            invitation.email.clone()
+        };
+
+        let display_name = if req.display_name.is_empty() {
+            None
+        } else {
+            Some(req.display_name)
+        };
+
+        // Create user
+        let user = User::new(invitation.tenant_id, email, display_name);
+        let user_id = user.user_id;
+
+        self.state
+            .db
+            .insert_user(&user)
+            .await
+            .map_err(|e| e.into_status())?;
+
+        // Create password identity only if password was provided
+        if let Some(ref password) = req.password {
+            if password.len() >= 8 {
+                let password_hash = hash_password(password)
+                    .map_err(|e| Status::internal(format!("Password hashing failed: {}", e)))?;
+                let identity = UserIdentity::new_password(user_id, password_hash);
+                self.state
+                    .db
+                    .insert_user_identity(&identity)
+                    .await
+                    .map_err(|e| e.into_status())?;
+            }
+        }
+
+        // Create assignment
+        let assignment = OrgAssignment::new(
+            invitation.tenant_id,
+            user_id,
+            invitation.org_node_id,
+            invitation.role_id,
+        );
+
+        self.state
+            .db
+            .insert_org_assignment(&assignment)
+            .await
+            .map_err(|e| e.into_status())?;
+
+        // Mark invitation as accepted
+        self.state
+            .db
+            .accept_invitation(invitation.invitation_id)
+            .await
+            .map_err(|e| e.into_status())?;
+
+        // Generate tokens
+        let user_email = user.email.clone();
+        let (access_token, refresh_token, refresh_token_id) = self
+            .state
+            .jwt
+            .generate_token_pair(
+                &user_id.to_string(),
+                &invitation.tenant_id.to_string(),
+                "",
+                &user_email,
+            )
+            .map_err(|e| Status::internal(format!("Token generation failed: {}", e)))?;
+
+        // Store refresh session
+        let refresh_hash = hash_token(&refresh_token_id);
+        let session = RefreshSession::new(
+            user_id,
+            refresh_hash,
+            self.state.jwt.refresh_token_expiry_days(),
+        );
+        self.state
+            .db
+            .insert_refresh_session(&session)
+            .await
+            .map_err(|e| e.into_status())?;
+
+        let expires_in = self.state.config.jwt.access_token_expiry_minutes * 60;
+
+        Ok(Response::new(AcceptInvitationResponse {
+            auth: Some(LoginResponse {
+                access_token,
+                refresh_token,
+                token_type: "Bearer".to_string(),
+                expires_in,
+                user: Some(UserInfo {
+                    user_id: user_id.to_string(),
+                    email: user_email,
+                    display_name: user.display_name,
+                    tenant_id: invitation.tenant_id.to_string(),
+                }),
+            }),
+            message: "Invitation accepted via phone successfully".to_string(),
         }))
     }
 }

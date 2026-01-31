@@ -250,7 +250,9 @@ impl RoleService for RoleServiceImpl {
             AuditEventType::CapabilityAssigned,
             Some("role".to_string()),
             Some(role_id),
-            Some(serde_json::json!({ "role_id": role_id.to_string(), "capability_key": &req.capability_key })),
+            Some(
+                serde_json::json!({ "role_id": role_id.to_string(), "capability_key": &req.capability_key }),
+            ),
             None,
             None,
         );
@@ -356,8 +358,7 @@ impl RoleService for RoleServiceImpl {
         &self,
         request: Request<RevokeCapabilityRequest>,
     ) -> Result<Response<RevokeCapabilityResponse>, Status> {
-        let auth =
-            require_capability(&self.state, &request, "role.capability:revoke").await?;
+        let auth = require_capability(&self.state, &request, "role.capability:revoke").await?;
 
         let req = request.into_inner();
 
@@ -394,7 +395,9 @@ impl RoleService for RoleServiceImpl {
             AuditEventType::CapabilityRevoked,
             Some("role".to_string()),
             Some(role_id),
-            Some(serde_json::json!({ "role_id": role_id.to_string(), "capability_key": &req.capability_key })),
+            Some(
+                serde_json::json!({ "role_id": role_id.to_string(), "capability_key": &req.capability_key }),
+            ),
             None,
             None,
         );

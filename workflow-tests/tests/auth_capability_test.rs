@@ -8,7 +8,7 @@ mod common;
 use tonic::{Code, Request};
 use uuid::Uuid;
 use workflow_tests::proto::ledger::{
-    AccountType, CreateAccountRequest, PostTransactionRequest, PostTransactionEntry, Direction,
+    AccountType, CreateAccountRequest, Direction, PostTransactionEntry, PostTransactionRequest,
 };
 use workflow_tests::ServiceEndpoints;
 
@@ -39,19 +39,25 @@ async fn valid_capability_allows_access() {
     });
 
     // Add auth headers
-    request.metadata_mut().insert(
-        "x-tenant-id",
-        tenant_id.parse().unwrap(),
-    );
-    request.metadata_mut().insert(
-        "x-user-id",
-        user_id.parse().unwrap(),
-    );
+    request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
 
     let response = ledger_client.create_account(request).await;
-    assert!(response.is_ok(), "Expected success, got: {:?}", response.err());
+    assert!(
+        response.is_ok(),
+        "Expected success, got: {:?}",
+        response.err()
+    );
 
-    let account = response.unwrap().into_inner().account.expect("Account should be present");
+    let account = response
+        .unwrap()
+        .into_inner()
+        .account
+        .expect("Account should be present");
     assert!(!account.account_id.is_empty());
 }
 
@@ -123,17 +129,19 @@ async fn tenant_isolation_enforced() {
         metadata: "{}".to_string(),
     });
 
-    create_request.metadata_mut().insert(
-        "x-tenant-id",
-        tenant_a_id.parse().unwrap(),
-    );
-    create_request.metadata_mut().insert(
-        "x-user-id",
-        user_a_id.parse().unwrap(),
-    );
+    create_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_a_id.parse().unwrap());
+    create_request
+        .metadata_mut()
+        .insert("x-user-id", user_a_id.parse().unwrap());
 
     let create_response = ledger_client.create_account(create_request).await;
-    assert!(create_response.is_ok(), "Failed to create account: {:?}", create_response.err());
+    assert!(
+        create_response.is_ok(),
+        "Failed to create account: {:?}",
+        create_response.err()
+    );
 
     let account = create_response.unwrap().into_inner().account.unwrap();
     let account_id = account.account_id.clone();
@@ -147,19 +155,20 @@ async fn tenant_isolation_enforced() {
         account_id: account_id.clone(),
     });
 
-    get_request.metadata_mut().insert(
-        "x-tenant-id",
-        tenant_b_id.parse().unwrap(),
-    );
-    get_request.metadata_mut().insert(
-        "x-user-id",
-        user_b_id.parse().unwrap(),
-    );
+    get_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_b_id.parse().unwrap());
+    get_request
+        .metadata_mut()
+        .insert("x-user-id", user_b_id.parse().unwrap());
 
     let get_response = ledger_client.get_account(get_request).await;
 
     // Should return NotFound (not the actual data)
-    assert!(get_response.is_err(), "Expected error accessing other tenant's data");
+    assert!(
+        get_response.is_err(),
+        "Expected error accessing other tenant's data"
+    );
     assert_eq!(
         get_response.unwrap_err().code(),
         Code::NotFound,
@@ -187,22 +196,27 @@ async fn list_respects_tenant_boundary() {
         let mut request = Request::new(CreateAccountRequest {
             tenant_id: tenant_a_id.clone(),
             account_type: AccountType::Asset as i32,
-            account_code: format!("ACCOUNT-A-{}-{}", i, Uuid::new_v4().to_string()[..4].to_string()),
+            account_code: format!(
+                "ACCOUNT-A-{}-{}",
+                i,
+                Uuid::new_v4().to_string()[..4].to_string()
+            ),
             currency: "USD".to_string(),
             allow_negative: false,
             metadata: "{}".to_string(),
         });
 
-        request.metadata_mut().insert(
-            "x-tenant-id",
-            tenant_a_id.parse().unwrap(),
-        );
-        request.metadata_mut().insert(
-            "x-user-id",
-            user_a_id.parse().unwrap(),
-        );
+        request
+            .metadata_mut()
+            .insert("x-tenant-id", tenant_a_id.parse().unwrap());
+        request
+            .metadata_mut()
+            .insert("x-user-id", user_a_id.parse().unwrap());
 
-        ledger_client.create_account(request).await.expect("Failed to create account");
+        ledger_client
+            .create_account(request)
+            .await
+            .expect("Failed to create account");
     }
 
     // Create accounts in Tenant B
@@ -213,22 +227,27 @@ async fn list_respects_tenant_boundary() {
         let mut request = Request::new(CreateAccountRequest {
             tenant_id: tenant_b_id.clone(),
             account_type: AccountType::Asset as i32,
-            account_code: format!("ACCOUNT-B-{}-{}", i, Uuid::new_v4().to_string()[..4].to_string()),
+            account_code: format!(
+                "ACCOUNT-B-{}-{}",
+                i,
+                Uuid::new_v4().to_string()[..4].to_string()
+            ),
             currency: "USD".to_string(),
             allow_negative: false,
             metadata: "{}".to_string(),
         });
 
-        request.metadata_mut().insert(
-            "x-tenant-id",
-            tenant_b_id.parse().unwrap(),
-        );
-        request.metadata_mut().insert(
-            "x-user-id",
-            user_b_id.parse().unwrap(),
-        );
+        request
+            .metadata_mut()
+            .insert("x-tenant-id", tenant_b_id.parse().unwrap());
+        request
+            .metadata_mut()
+            .insert("x-user-id", user_b_id.parse().unwrap());
 
-        ledger_client.create_account(request).await.expect("Failed to create account");
+        ledger_client
+            .create_account(request)
+            .await
+            .expect("Failed to create account");
     }
 
     // List accounts as Tenant A
@@ -240,22 +259,29 @@ async fn list_respects_tenant_boundary() {
         page_token: String::new(),
     });
 
-    list_request.metadata_mut().insert(
-        "x-tenant-id",
-        tenant_a_id.parse().unwrap(),
-    );
-    list_request.metadata_mut().insert(
-        "x-user-id",
-        user_a_id.parse().unwrap(),
-    );
+    list_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_a_id.parse().unwrap());
+    list_request
+        .metadata_mut()
+        .insert("x-user-id", user_a_id.parse().unwrap());
 
-    let list_response = ledger_client.list_accounts(list_request).await.expect("Failed to list accounts");
+    let list_response = ledger_client
+        .list_accounts(list_request)
+        .await
+        .expect("Failed to list accounts");
     let accounts = list_response.into_inner().accounts;
 
     // Should only see Tenant A's accounts
-    assert!(accounts.len() >= 3, "Expected at least 3 accounts for Tenant A");
+    assert!(
+        accounts.len() >= 3,
+        "Expected at least 3 accounts for Tenant A"
+    );
     for account in &accounts {
-        assert_eq!(account.tenant_id, tenant_a_id, "Found account from wrong tenant");
+        assert_eq!(
+            account.tenant_id, tenant_a_id,
+            "Found account from wrong tenant"
+        );
     }
 }
 
@@ -287,8 +313,12 @@ async fn service_to_service_auth_works() {
         metadata: "{}".to_string(),
     });
 
-    cash_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    cash_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
+    cash_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    cash_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
 
     let cash_account = ledger_client
         .create_account(cash_request)
@@ -308,8 +338,12 @@ async fn service_to_service_auth_works() {
         metadata: "{}".to_string(),
     });
 
-    revenue_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    revenue_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
+    revenue_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    revenue_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
 
     let revenue_account = ledger_client
         .create_account(revenue_request)
@@ -339,8 +373,12 @@ async fn service_to_service_auth_works() {
         metadata: r#"{"type": "service-to-service-test"}"#.to_string(),
     });
 
-    post_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    post_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
+    post_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    post_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
 
     let transaction = ledger_client
         .post_transaction(post_request)
