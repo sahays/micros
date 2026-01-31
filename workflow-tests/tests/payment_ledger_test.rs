@@ -8,31 +8,36 @@ mod common;
 use tonic::Request;
 use uuid::Uuid;
 use workflow_tests::proto::payment::{
-    CreateTransactionRequest, UpdateTransactionStatusRequest,
-    TransactionStatus, GetTransactionRequest, ListTransactionsRequest,
+    CreateTransactionRequest, GetTransactionRequest, ListTransactionsRequest, TransactionStatus,
+    UpdateTransactionStatusRequest,
 };
 use workflow_tests::ServiceEndpoints;
 
 /// Helper to create a payment transaction.
-async fn create_test_transaction(
-    tenant_id: &str,
-    user_id: &str,
-    amount: f64,
-) -> String {
+async fn create_test_transaction(tenant_id: &str, user_id: &str, amount: f64) -> String {
     let endpoints = ServiceEndpoints::from_env();
-    let mut payment_client = workflow_tests::PaymentServiceClient::connect(endpoints.payment.clone())
-        .await
-        .expect("Failed to connect to payment service");
+    let mut payment_client =
+        workflow_tests::PaymentServiceClient::connect(endpoints.payment.clone())
+            .await
+            .expect("Failed to connect to payment service");
 
     let mut request = Request::new(CreateTransactionRequest {
         amount,
         currency: "INR".to_string(),
     });
 
-    request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    request.metadata_mut().insert("x-app-id", tenant_id.parse().unwrap());
-    request.metadata_mut().insert("x-org-id", tenant_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-app-id", tenant_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-org-id", tenant_id.parse().unwrap());
 
     let response = payment_client
         .create_transaction(request)
@@ -55,18 +60,27 @@ async fn create_payment_transaction() {
 
     // Verify transaction can be retrieved
     let endpoints = ServiceEndpoints::from_env();
-    let mut payment_client = workflow_tests::PaymentServiceClient::connect(endpoints.payment.clone())
-        .await
-        .expect("Failed to connect to payment service");
+    let mut payment_client =
+        workflow_tests::PaymentServiceClient::connect(endpoints.payment.clone())
+            .await
+            .expect("Failed to connect to payment service");
 
     let mut get_request = Request::new(GetTransactionRequest {
         transaction_id: transaction_id.clone(),
     });
 
-    get_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    get_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    get_request.metadata_mut().insert("x-app-id", tenant_id.parse().unwrap());
-    get_request.metadata_mut().insert("x-org-id", tenant_id.parse().unwrap());
+    get_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    get_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    get_request
+        .metadata_mut()
+        .insert("x-app-id", tenant_id.parse().unwrap());
+    get_request
+        .metadata_mut()
+        .insert("x-org-id", tenant_id.parse().unwrap());
 
     let response = payment_client
         .get_transaction(get_request)
@@ -89,9 +103,10 @@ async fn update_payment_status() {
     let transaction_id = create_test_transaction(&tenant_id, &user_id, 500.00).await;
 
     let endpoints = ServiceEndpoints::from_env();
-    let mut payment_client = workflow_tests::PaymentServiceClient::connect(endpoints.payment.clone())
-        .await
-        .expect("Failed to connect to payment service");
+    let mut payment_client =
+        workflow_tests::PaymentServiceClient::connect(endpoints.payment.clone())
+            .await
+            .expect("Failed to connect to payment service");
 
     // Update status to completed
     let mut update_request = Request::new(UpdateTransactionStatusRequest {
@@ -99,10 +114,18 @@ async fn update_payment_status() {
         status: TransactionStatus::Completed as i32,
     });
 
-    update_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    update_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    update_request.metadata_mut().insert("x-app-id", tenant_id.parse().unwrap());
-    update_request.metadata_mut().insert("x-org-id", tenant_id.parse().unwrap());
+    update_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    update_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    update_request
+        .metadata_mut()
+        .insert("x-app-id", tenant_id.parse().unwrap());
+    update_request
+        .metadata_mut()
+        .insert("x-org-id", tenant_id.parse().unwrap());
 
     let _response = payment_client
         .update_transaction_status(update_request)
@@ -114,10 +137,18 @@ async fn update_payment_status() {
         transaction_id: transaction_id.clone(),
     });
 
-    get_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    get_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    get_request.metadata_mut().insert("x-app-id", tenant_id.parse().unwrap());
-    get_request.metadata_mut().insert("x-org-id", tenant_id.parse().unwrap());
+    get_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    get_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    get_request
+        .metadata_mut()
+        .insert("x-app-id", tenant_id.parse().unwrap());
+    get_request
+        .metadata_mut()
+        .insert("x-org-id", tenant_id.parse().unwrap());
 
     let response = payment_client
         .get_transaction(get_request)
@@ -142,9 +173,10 @@ async fn list_payment_transactions() {
     }
 
     let endpoints = ServiceEndpoints::from_env();
-    let mut payment_client = workflow_tests::PaymentServiceClient::connect(endpoints.payment.clone())
-        .await
-        .expect("Failed to connect to payment service");
+    let mut payment_client =
+        workflow_tests::PaymentServiceClient::connect(endpoints.payment.clone())
+            .await
+            .expect("Failed to connect to payment service");
 
     let mut list_request = Request::new(ListTransactionsRequest {
         status: None,
@@ -152,10 +184,18 @@ async fn list_payment_transactions() {
         offset: 0,
     });
 
-    list_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    list_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    list_request.metadata_mut().insert("x-app-id", tenant_id.parse().unwrap());
-    list_request.metadata_mut().insert("x-org-id", tenant_id.parse().unwrap());
+    list_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    list_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    list_request
+        .metadata_mut()
+        .insert("x-app-id", tenant_id.parse().unwrap());
+    list_request
+        .metadata_mut()
+        .insert("x-org-id", tenant_id.parse().unwrap());
 
     let response = payment_client
         .list_transactions(list_request)
@@ -181,18 +221,27 @@ async fn payment_tenant_isolation() {
 
     // Try to access from Tenant B
     let endpoints = ServiceEndpoints::from_env();
-    let mut payment_client = workflow_tests::PaymentServiceClient::connect(endpoints.payment.clone())
-        .await
-        .expect("Failed to connect to payment service");
+    let mut payment_client =
+        workflow_tests::PaymentServiceClient::connect(endpoints.payment.clone())
+            .await
+            .expect("Failed to connect to payment service");
 
     let mut get_request = Request::new(GetTransactionRequest {
         transaction_id: transaction_id.clone(),
     });
 
-    get_request.metadata_mut().insert("x-tenant-id", tenant_b_id.parse().unwrap());
-    get_request.metadata_mut().insert("x-user-id", user_b_id.parse().unwrap());
-    get_request.metadata_mut().insert("x-app-id", tenant_b_id.parse().unwrap());
-    get_request.metadata_mut().insert("x-org-id", tenant_b_id.parse().unwrap());
+    get_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_b_id.parse().unwrap());
+    get_request
+        .metadata_mut()
+        .insert("x-user-id", user_b_id.parse().unwrap());
+    get_request
+        .metadata_mut()
+        .insert("x-app-id", tenant_b_id.parse().unwrap());
+    get_request
+        .metadata_mut()
+        .insert("x-org-id", tenant_b_id.parse().unwrap());
 
     let response = payment_client.get_transaction(get_request).await;
 

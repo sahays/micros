@@ -11,9 +11,9 @@ mod common;
 use tonic::{Code, Request};
 use uuid::Uuid;
 use workflow_tests::proto::billing::{
-    BillingInterval, CreatePlanRequest, CreateSubscriptionRequest, RecordUsageRequest,
-    GetSubscriptionRequest, RunBillingForSubscriptionRequest, ListBillingCyclesRequest,
-    CreateUsageComponentInput,
+    BillingInterval, CreatePlanRequest, CreateSubscriptionRequest, CreateUsageComponentInput,
+    GetSubscriptionRequest, ListBillingCyclesRequest, RecordUsageRequest,
+    RunBillingForSubscriptionRequest,
 };
 use workflow_tests::ServiceEndpoints;
 
@@ -21,9 +21,10 @@ use workflow_tests::ServiceEndpoints;
 /// Returns None if authentication is required but not available.
 async fn try_create_test_plan(tenant_id: &str, user_id: &str) -> Option<String> {
     let endpoints = ServiceEndpoints::from_env();
-    let mut billing_client = workflow_tests::BillingServiceClient::connect(endpoints.billing.clone())
-        .await
-        .expect("Failed to connect to billing service");
+    let mut billing_client =
+        workflow_tests::BillingServiceClient::connect(endpoints.billing.clone())
+            .await
+            .expect("Failed to connect to billing service");
 
     let mut request = Request::new(CreatePlanRequest {
         tenant_id: tenant_id.to_string(),
@@ -34,20 +35,24 @@ async fn try_create_test_plan(tenant_id: &str, user_id: &str) -> Option<String> 
         base_price: "99.99".to_string(),
         currency: "USD".to_string(),
         tax_rate_id: String::new(),
-        usage_components: vec![
-            CreateUsageComponentInput {
-                name: "API Calls".to_string(),
-                unit_name: "calls".to_string(),
-                unit_price: "0.01".to_string(),
-                included_units: 1000,
-            },
-        ],
+        usage_components: vec![CreateUsageComponentInput {
+            name: "API Calls".to_string(),
+            unit_name: "calls".to_string(),
+            unit_price: "0.01".to_string(),
+            included_units: 1000,
+        }],
         metadata: "{}".to_string(),
     });
 
-    request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    request.metadata_mut().insert("authorization", "Bearer dev-test-token".parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("authorization", "Bearer dev-test-token".parse().unwrap());
 
     match billing_client.create_plan(request).await {
         Ok(response) => Some(response.into_inner().plan.unwrap().plan_id),
@@ -61,11 +66,16 @@ async fn try_create_test_plan(tenant_id: &str, user_id: &str) -> Option<String> 
 
 /// Helper to create a subscription.
 /// Returns None if authentication is required but not available.
-async fn try_create_test_subscription(tenant_id: &str, user_id: &str, plan_id: &str) -> Option<String> {
+async fn try_create_test_subscription(
+    tenant_id: &str,
+    user_id: &str,
+    plan_id: &str,
+) -> Option<String> {
     let endpoints = ServiceEndpoints::from_env();
-    let mut billing_client = workflow_tests::BillingServiceClient::connect(endpoints.billing.clone())
-        .await
-        .expect("Failed to connect to billing service");
+    let mut billing_client =
+        workflow_tests::BillingServiceClient::connect(endpoints.billing.clone())
+            .await
+            .expect("Failed to connect to billing service");
 
     let mut request = Request::new(CreateSubscriptionRequest {
         tenant_id: tenant_id.to_string(),
@@ -78,9 +88,15 @@ async fn try_create_test_subscription(tenant_id: &str, user_id: &str, plan_id: &
         metadata: "{}".to_string(),
     });
 
-    request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    request.metadata_mut().insert("authorization", "Bearer dev-test-token".parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("authorization", "Bearer dev-test-token".parse().unwrap());
 
     match billing_client.create_subscription(request).await {
         Ok(response) => Some(response.into_inner().subscription.unwrap().subscription_id),
@@ -104,20 +120,30 @@ async fn create_plan_with_usage_components() {
 
     // Verify plan can be retrieved
     let endpoints = ServiceEndpoints::from_env();
-    let mut billing_client = workflow_tests::BillingServiceClient::connect(endpoints.billing.clone())
-        .await
-        .expect("Failed to connect to billing service");
+    let mut billing_client =
+        workflow_tests::BillingServiceClient::connect(endpoints.billing.clone())
+            .await
+            .expect("Failed to connect to billing service");
 
     let mut get_request = Request::new(workflow_tests::proto::billing::GetPlanRequest {
         tenant_id: tenant_id.clone(),
         plan_id: plan_id.clone(),
     });
 
-    get_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    get_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    get_request.metadata_mut().insert("authorization", "Bearer dev-test-token".parse().unwrap());
+    get_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    get_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    get_request
+        .metadata_mut()
+        .insert("authorization", "Bearer dev-test-token".parse().unwrap());
 
-    let response = billing_client.get_plan(get_request).await.expect("Failed to get plan");
+    let response = billing_client
+        .get_plan(get_request)
+        .await
+        .expect("Failed to get plan");
     let plan = response.into_inner().plan.unwrap();
 
     assert_eq!(plan.plan_id, plan_id);
@@ -136,24 +162,32 @@ async fn subscription_creates_billing_cycle() {
     let Some(plan_id) = try_create_test_plan(&tenant_id, &user_id).await else {
         return; // Skip if JWT auth required
     };
-    let Some(subscription_id) = try_create_test_subscription(&tenant_id, &user_id, &plan_id).await else {
+    let Some(subscription_id) = try_create_test_subscription(&tenant_id, &user_id, &plan_id).await
+    else {
         return; // Skip if JWT auth required
     };
 
     // Verify subscription has a billing cycle
     let endpoints = ServiceEndpoints::from_env();
-    let mut billing_client = workflow_tests::BillingServiceClient::connect(endpoints.billing.clone())
-        .await
-        .expect("Failed to connect to billing service");
+    let mut billing_client =
+        workflow_tests::BillingServiceClient::connect(endpoints.billing.clone())
+            .await
+            .expect("Failed to connect to billing service");
 
     let mut request = Request::new(GetSubscriptionRequest {
         tenant_id: tenant_id.clone(),
         subscription_id: subscription_id.clone(),
     });
 
-    request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    request.metadata_mut().insert("authorization", "Bearer dev-test-token".parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("authorization", "Bearer dev-test-token".parse().unwrap());
 
     let response = billing_client
         .get_subscription(request)
@@ -179,24 +213,32 @@ async fn record_usage_for_subscription() {
     let Some(plan_id) = try_create_test_plan(&tenant_id, &user_id).await else {
         return; // Skip if JWT auth required
     };
-    let Some(subscription_id) = try_create_test_subscription(&tenant_id, &user_id, &plan_id).await else {
+    let Some(subscription_id) = try_create_test_subscription(&tenant_id, &user_id, &plan_id).await
+    else {
         return; // Skip if JWT auth required
     };
 
     // Get the plan to find the component ID
     let endpoints = ServiceEndpoints::from_env();
-    let mut billing_client = workflow_tests::BillingServiceClient::connect(endpoints.billing.clone())
-        .await
-        .expect("Failed to connect to billing service");
+    let mut billing_client =
+        workflow_tests::BillingServiceClient::connect(endpoints.billing.clone())
+            .await
+            .expect("Failed to connect to billing service");
 
     let mut get_plan_request = Request::new(workflow_tests::proto::billing::GetPlanRequest {
         tenant_id: tenant_id.clone(),
         plan_id: plan_id.clone(),
     });
 
-    get_plan_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    get_plan_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    get_plan_request.metadata_mut().insert("authorization", "Bearer dev-test-token".parse().unwrap());
+    get_plan_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    get_plan_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    get_plan_request
+        .metadata_mut()
+        .insert("authorization", "Bearer dev-test-token".parse().unwrap());
 
     let plan = billing_client
         .get_plan(get_plan_request)
@@ -219,9 +261,15 @@ async fn record_usage_for_subscription() {
         metadata: "{}".to_string(),
     });
 
-    usage_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    usage_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    usage_request.metadata_mut().insert("authorization", "Bearer dev-test-token".parse().unwrap());
+    usage_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    usage_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    usage_request
+        .metadata_mut()
+        .insert("authorization", "Bearer dev-test-token".parse().unwrap());
 
     let response = billing_client
         .record_usage(usage_request)
@@ -243,14 +291,16 @@ async fn billing_run_creates_invoice() {
     let Some(plan_id) = try_create_test_plan(&tenant_id, &user_id).await else {
         return; // Skip if JWT auth required
     };
-    let Some(subscription_id) = try_create_test_subscription(&tenant_id, &user_id, &plan_id).await else {
+    let Some(subscription_id) = try_create_test_subscription(&tenant_id, &user_id, &plan_id).await
+    else {
         return; // Skip if JWT auth required
     };
 
     let endpoints = ServiceEndpoints::from_env();
-    let mut billing_client = workflow_tests::BillingServiceClient::connect(endpoints.billing.clone())
-        .await
-        .expect("Failed to connect to billing service");
+    let mut billing_client =
+        workflow_tests::BillingServiceClient::connect(endpoints.billing.clone())
+            .await
+            .expect("Failed to connect to billing service");
 
     // Run billing for this subscription
     let mut run_request = Request::new(RunBillingForSubscriptionRequest {
@@ -258,9 +308,15 @@ async fn billing_run_creates_invoice() {
         subscription_id: subscription_id.clone(),
     });
 
-    run_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    run_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    run_request.metadata_mut().insert("authorization", "Bearer dev-test-token".parse().unwrap());
+    run_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    run_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    run_request
+        .metadata_mut()
+        .insert("authorization", "Bearer dev-test-token".parse().unwrap());
 
     let run_response = billing_client
         .run_billing_for_subscription(run_request)
@@ -279,9 +335,15 @@ async fn billing_run_creates_invoice() {
         page_token: String::new(),
     });
 
-    cycles_request.metadata_mut().insert("x-tenant-id", tenant_id.parse().unwrap());
-    cycles_request.metadata_mut().insert("x-user-id", user_id.parse().unwrap());
-    cycles_request.metadata_mut().insert("authorization", "Bearer dev-test-token".parse().unwrap());
+    cycles_request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.parse().unwrap());
+    cycles_request
+        .metadata_mut()
+        .insert("x-user-id", user_id.parse().unwrap());
+    cycles_request
+        .metadata_mut()
+        .insert("authorization", "Bearer dev-test-token".parse().unwrap());
 
     let cycles_response = billing_client
         .list_billing_cycles(cycles_request)

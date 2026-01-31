@@ -398,4 +398,3 @@ mod tenant_isolation_tests {
     // 2. Tenant A cannot modify Tenant B's data
     // 3. List operations only return data for the requesting tenant
 }
-
