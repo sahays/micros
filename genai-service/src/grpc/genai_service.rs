@@ -1,5 +1,5 @@
 use crate::config::OutputFormat;
-use crate::grpc::capability_check::{capabilities, CapabilityMetadata};
+use crate::grpc::capability_check::capabilities;
 use crate::grpc::proto::{
     gen_ai_service_server::GenAiService, CreateSessionRequest, CreateSessionResponse,
     DeleteSessionRequest, DeleteSessionResponse, FinishReason, GetSessionRequest,
@@ -267,13 +267,12 @@ impl GenAiService for GenaiGrpcService {
         let method = "Process";
         inc_grpc_in_flight(method);
 
-        // Check capability
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::GENAI_PROCESS)
-                .await?;
-        }
+        // Check capability - derive tenant_id from auth context
+        let auth = self
+            .state
+            .capability_checker
+            .require_capability(&request, capabilities::GENAI_PROCESS)
+            .await?;
 
         let req = request.into_inner();
         let request_id = uuid::Uuid::new_v4().to_string();
@@ -281,10 +280,8 @@ impl GenAiService for GenaiGrpcService {
         // Record span fields
         let span = tracing::Span::current();
         span.record("request_id", &request_id);
-        if let Some(ref metadata) = req.metadata {
-            span.record("tenant_id", &metadata.tenant_id);
-            span.record("user_id", &metadata.user_id);
-        }
+        span.record("tenant_id", &auth.tenant_id);
+        span.record("user_id", &auth.user_id);
         span.record("prompt_len", req.prompt.len());
         span.record("doc_count", req.documents.len());
 
@@ -410,19 +407,14 @@ impl GenAiService for GenaiGrpcService {
         };
 
         // Record metrics with tenant_id for billing
-        let tenant_id = req
-            .metadata
-            .as_ref()
-            .map(|m| m.tenant_id.as_str())
-            .unwrap_or("unknown");
         record_tokens(
-            tenant_id,
+            &auth.tenant_id,
             &model,
             provider_response.input_tokens,
             provider_response.output_tokens,
         );
         record_genai_request(
-            tenant_id,
+            &auth.tenant_id,
             output_format_str(output_format),
             &model,
             finish_reason_str(provider_response.finish_reason),
@@ -442,17 +434,22 @@ impl GenAiService for GenaiGrpcService {
         );
 
         // Record usage
-        if let Some(ref metadata) = req.metadata {
+        {
+            let tags = req
+                .metadata
+                .as_ref()
+                .map(|m| m.tags.clone())
+                .unwrap_or_default();
             let usage_record = UsageRecord::new(
                 request_id.clone(),
                 req.session_id.clone(),
-                metadata.tenant_id.clone(),
-                metadata.user_id.clone(),
+                auth.tenant_id.clone(),
+                auth.user_id.clone(),
                 model.clone(),
                 provider_response.input_tokens,
                 provider_response.output_tokens,
                 output_format_str(output_format).to_string(),
-                metadata.tags.clone(),
+                tags,
             );
 
             if let Err(e) = self.state.db.record_usage(&usage_record).await {
@@ -497,13 +494,12 @@ impl GenAiService for GenaiGrpcService {
         let method = "ProcessStream";
         inc_grpc_in_flight(method);
 
-        // Check capability
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::GENAI_PROCESS)
-                .await?;
-        }
+        // Check capability - derive tenant_id from auth context
+        let auth = self
+            .state
+            .capability_checker
+            .require_capability(&request, capabilities::GENAI_PROCESS)
+            .await?;
 
         let req = request.into_inner();
         let request_id = uuid::Uuid::new_v4().to_string();
@@ -511,10 +507,8 @@ impl GenAiService for GenaiGrpcService {
         // Record span fields
         let span = tracing::Span::current();
         span.record("request_id", &request_id);
-        if let Some(ref metadata) = req.metadata {
-            span.record("tenant_id", &metadata.tenant_id);
-            span.record("user_id", &metadata.user_id);
-        }
+        span.record("tenant_id", &auth.tenant_id);
+        span.record("user_id", &auth.user_id);
         span.record("prompt_len", req.prompt.len());
         span.record("doc_count", req.documents.len());
 
@@ -631,11 +625,7 @@ impl GenAiService for GenaiGrpcService {
         let model_clone = model.clone();
         let request_id_clone = request_id.clone();
         let output_format_clone = output_format;
-        let tenant_id_clone = req
-            .metadata
-            .as_ref()
-            .map(|m| m.tenant_id.clone())
-            .unwrap_or_else(|| "unknown".to_string());
+        let tenant_id_clone = auth.tenant_id.clone();
 
         // Spawn task to transform provider stream to gRPC stream
         tokio::spawn(async move {
@@ -774,27 +764,18 @@ impl GenAiService for GenaiGrpcService {
         let method = "CreateSession";
         inc_grpc_in_flight(method);
 
-        // Check capability
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::GENAI_SESSION_CREATE)
-                .await?;
-        }
+        // Check capability - derive tenant_id from auth context
+        let auth = self
+            .state
+            .capability_checker
+            .require_capability(&request, capabilities::GENAI_SESSION_CREATE)
+            .await?;
 
         let req = request.into_inner();
 
-        // Extract metadata
-        let metadata = req.metadata.ok_or_else(|| {
-            dec_grpc_in_flight(method);
-            record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
-            tracing::warn!("CreateSession called without metadata");
-            Status::invalid_argument("metadata is required")
-        })?;
-
         let span = tracing::Span::current();
-        span.record("tenant_id", &metadata.tenant_id);
-        span.record("user_id", &metadata.user_id);
+        span.record("tenant_id", &auth.tenant_id);
+        span.record("user_id", &auth.user_id);
 
         // Convert proto documents to session documents
         let documents: Vec<SessionDocument> = req
@@ -812,8 +793,8 @@ impl GenAiService for GenaiGrpcService {
 
         // Create session
         let session = Session::new(
-            metadata.tenant_id.clone(),
-            metadata.user_id.clone(),
+            auth.tenant_id.clone(),
+            auth.user_id.clone(),
             req.title,
             req.system_prompt,
             documents,
@@ -854,13 +835,12 @@ impl GenAiService for GenaiGrpcService {
         let method = "GetSession";
         inc_grpc_in_flight(method);
 
-        // Check capability
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::GENAI_SESSION_READ)
-                .await?;
-        }
+        // Check capability - derive tenant_id from auth context
+        let auth = self
+            .state
+            .capability_checker
+            .require_capability(&request, capabilities::GENAI_SESSION_READ)
+            .await?;
 
         let req = request.into_inner();
 
@@ -876,7 +856,12 @@ impl GenAiService for GenaiGrpcService {
 
         tracing::info!(include_messages = req.include_messages, "Getting session");
 
-        let session = match self.state.db.find_session(&req.session_id).await {
+        let session = match self
+            .state
+            .db
+            .find_session(&auth.tenant_id, &req.session_id)
+            .await
+        {
             Ok(Some(s)) => s,
             Ok(None) => {
                 dec_grpc_in_flight(method);
@@ -931,13 +916,12 @@ impl GenAiService for GenaiGrpcService {
         let method = "DeleteSession";
         inc_grpc_in_flight(method);
 
-        // Check capability
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::GENAI_SESSION_DELETE)
-                .await?;
-        }
+        // Check capability - derive tenant_id from auth context
+        let auth = self
+            .state
+            .capability_checker
+            .require_capability(&request, capabilities::GENAI_SESSION_DELETE)
+            .await?;
 
         let req = request.into_inner();
 
@@ -953,7 +937,12 @@ impl GenAiService for GenaiGrpcService {
 
         tracing::info!("Deleting session");
 
-        let success = match self.state.db.delete_session(&req.session_id).await {
+        let success = match self
+            .state
+            .db
+            .delete_session(&auth.tenant_id, &req.session_id)
+            .await
+        {
             Ok(deleted) => deleted,
             Err(e) => {
                 dec_grpc_in_flight(method);
@@ -991,20 +980,17 @@ impl GenAiService for GenaiGrpcService {
         let method = "GetUsage";
         inc_grpc_in_flight(method);
 
-        // Check capability
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::GENAI_USAGE_READ)
-                .await?;
-        }
+        // Check capability - derive tenant_id from auth context
+        let auth = self
+            .state
+            .capability_checker
+            .require_capability(&request, capabilities::GENAI_USAGE_READ)
+            .await?;
 
         let req = request.into_inner();
 
         let span = tracing::Span::current();
-        if let Some(ref tid) = req.tenant_id {
-            span.record("tenant_id", tid);
-        }
+        span.record("tenant_id", &auth.tenant_id);
         if let Some(ref uid) = req.user_id {
             span.record("user_id", uid);
         }
@@ -1038,12 +1024,12 @@ impl GenAiService for GenaiGrpcService {
             "Getting usage statistics"
         );
 
-        // Query usage records
+        // Query usage records - always scoped to authenticated tenant
         let records = match self
             .state
             .db
             .get_usage(
-                req.tenant_id.as_deref(),
+                &auth.tenant_id,
                 req.user_id.as_deref(),
                 start_time,
                 end_time,
@@ -1102,13 +1088,12 @@ impl GenAiService for GenaiGrpcService {
         let method = "ListModels";
         inc_grpc_in_flight(method);
 
-        // Check capability
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::GENAI_MODELS_READ)
-                .await?;
-        }
+        // Check capability - mandatory auth
+        let _auth = self
+            .state
+            .capability_checker
+            .require_capability(&request, capabilities::GENAI_MODELS_READ)
+            .await?;
 
         tracing::debug!("Listing available models");
 

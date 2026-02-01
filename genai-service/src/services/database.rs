@@ -262,13 +262,20 @@ impl GenaiDb {
         result.map(|_| ())
     }
 
-    #[tracing::instrument(skip(self), fields(session_id = %session_id))]
-    pub async fn find_session(&self, session_id: &str) -> Result<Option<Session>, AppError> {
+    #[tracing::instrument(skip(self), fields(session_id = %session_id, tenant_id = %tenant_id))]
+    pub async fn find_session(
+        &self,
+        tenant_id: &str,
+        session_id: &str,
+    ) -> Result<Option<Session>, AppError> {
         let start = Instant::now();
 
         let result = self
             .sessions()
-            .find_one(doc! { "session_id": session_id }, None)
+            .find_one(
+                doc! { "session_id": session_id, "tenant_id": tenant_id },
+                None,
+            )
             .await
             .map_err(|e| {
                 tracing::error!(error = %e, "Failed to find session");
@@ -334,13 +341,20 @@ impl GenaiDb {
         result.map(|_| ())
     }
 
-    #[tracing::instrument(skip(self), fields(session_id = %session_id))]
-    pub async fn delete_session(&self, session_id: &str) -> Result<bool, AppError> {
+    #[tracing::instrument(skip(self), fields(session_id = %session_id, tenant_id = %tenant_id))]
+    pub async fn delete_session(
+        &self,
+        tenant_id: &str,
+        session_id: &str,
+    ) -> Result<bool, AppError> {
         let start = Instant::now();
 
         let result = self
             .sessions()
-            .delete_one(doc! { "session_id": session_id }, None)
+            .delete_one(
+                doc! { "session_id": session_id, "tenant_id": tenant_id },
+                None,
+            )
             .await
             .map_err(|e| {
                 tracing::error!(error = %e, "Failed to delete session");
@@ -442,10 +456,10 @@ impl GenaiDb {
         result.map(|_| ())
     }
 
-    #[tracing::instrument(skip(self), fields(tenant_id = ?tenant_id, user_id = ?user_id))]
+    #[tracing::instrument(skip(self), fields(tenant_id = %tenant_id, user_id = ?user_id))]
     pub async fn get_usage(
         &self,
-        tenant_id: Option<&str>,
+        tenant_id: &str,
         user_id: Option<&str>,
         start_time: chrono::DateTime<chrono::Utc>,
         end_time: chrono::DateTime<chrono::Utc>,
@@ -453,15 +467,12 @@ impl GenaiDb {
         let start = Instant::now();
 
         let mut filter = doc! {
+            "tenant_id": tenant_id,
             "timestamp": {
                 "$gte": BsonDateTime::from_millis(start_time.timestamp_millis()),
                 "$lte": BsonDateTime::from_millis(end_time.timestamp_millis())
             }
         };
-
-        if let Some(tid) = tenant_id {
-            filter.insert("tenant_id", tid);
-        }
 
         if let Some(uid) = user_id {
             filter.insert("user_id", uid);

@@ -62,6 +62,7 @@ pub struct Notification {
     #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
     pub id: Option<ObjectId>,
     pub notification_id: String,
+    pub tenant_id: String,
     pub channel: Channel,
     pub status: NotificationStatus,
     pub recipient: String,
@@ -138,7 +139,9 @@ mod opt_chrono_datetime_as_bson_datetime {
 }
 
 impl Notification {
+    #[allow(clippy::too_many_arguments)]
     pub fn new_email(
+        tenant_id: String,
         recipient: String,
         subject: String,
         body_text: Option<String>,
@@ -150,6 +153,7 @@ impl Notification {
         Self {
             id: None,
             notification_id: uuid::Uuid::new_v4().to_string(),
+            tenant_id,
             channel: Channel::Email,
             status: NotificationStatus::Queued,
             recipient,
@@ -171,10 +175,16 @@ impl Notification {
         }
     }
 
-    pub fn new_sms(recipient: String, body: String, metadata: HashMap<String, String>) -> Self {
+    pub fn new_sms(
+        tenant_id: String,
+        recipient: String,
+        body: String,
+        metadata: HashMap<String, String>,
+    ) -> Self {
         Self {
             id: None,
             notification_id: uuid::Uuid::new_v4().to_string(),
+            tenant_id,
             channel: Channel::Sms,
             status: NotificationStatus::Queued,
             recipient,
@@ -197,6 +207,7 @@ impl Notification {
     }
 
     pub fn new_push(
+        tenant_id: String,
         device_token: String,
         platform: PushPlatform,
         title: String,
@@ -207,6 +218,7 @@ impl Notification {
         Self {
             id: None,
             notification_id: uuid::Uuid::new_v4().to_string(),
+            tenant_id,
             channel: Channel::Push,
             status: NotificationStatus::Queued,
             recipient: device_token,

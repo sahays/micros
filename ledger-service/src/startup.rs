@@ -3,7 +3,7 @@
 use crate::config::LedgerConfig;
 use crate::grpc::{
     proto::{ledger_service_server::LedgerServiceServer, FILE_DESCRIPTOR_SET},
-    LedgerServiceImpl,
+    CapabilityChecker, LedgerServiceImpl,
 };
 use crate::services::{get_metrics, Database};
 use axum::{
@@ -25,6 +25,7 @@ use tower_http::trace::TraceLayer;
 pub struct AppState {
     pub config: LedgerConfig,
     pub db: Arc<Database>,
+    pub capability_checker: Arc<CapabilityChecker>,
 }
 
 /// State for health check endpoints.
@@ -129,9 +130,25 @@ impl Application {
 
         let db = Arc::new(db);
 
+        // Create capability checker
+        let auth_endpoint = if config.auth.auth_service_endpoint.is_empty() {
+            None
+        } else {
+            Some(config.auth.auth_service_endpoint.as_str())
+        };
+        let capability_checker =
+            Arc::new(CapabilityChecker::new(auth_endpoint).await.map_err(|e| {
+                tracing::error!(error = %e, "Failed to create capability checker");
+                AppError::InternalError(anyhow::anyhow!(
+                    "Failed to create capability checker: {}",
+                    e
+                ))
+            })?);
+
         let state = AppState {
             config: config.clone(),
             db,
+            capability_checker,
         };
 
         // Bind HTTP listener
@@ -197,7 +214,7 @@ impl Application {
             .with_state(health_state);
 
         // Build gRPC server
-        let ledger_service = LedgerServiceImpl::new(self.state.db);
+        let ledger_service = LedgerServiceImpl::new(self.state.db, self.state.capability_checker);
 
         // gRPC health service
         let (mut health_reporter, grpc_health_service) = tonic_health::server::health_reporter();

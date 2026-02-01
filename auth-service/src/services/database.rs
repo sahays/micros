@@ -335,6 +335,24 @@ impl Database {
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))
     }
 
+    /// Find ancestors of an org node (using closure table), including itself.
+    pub async fn find_org_node_ancestor_ids(
+        &self,
+        org_node_id: Uuid,
+    ) -> Result<Vec<Uuid>, AppError> {
+        sqlx::query_scalar::<_, Uuid>(
+            r#"
+            SELECT p.ancestor_org_node_id
+            FROM org_node_paths p
+            WHERE p.descendant_org_node_id = $1
+            "#,
+        )
+        .bind(org_node_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| AppError::DatabaseError(anyhow::anyhow!(e)))
+    }
+
     /// Insert a new org node and update closure table.
     pub async fn insert_org_node(&self, node: &OrgNode) -> Result<(), AppError> {
         let mut tx = self

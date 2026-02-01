@@ -3,6 +3,7 @@
 pub mod capability_check;
 mod service;
 
+pub use capability_check::CapabilityChecker;
 pub use service::LedgerServiceImpl;
 
 /// Generated protobuf code.

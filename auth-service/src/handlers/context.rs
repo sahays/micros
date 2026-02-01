@@ -195,14 +195,15 @@ pub async fn check_capability_impl(
         .await
         .map_err(|e| AppError::InternalError(anyhow::anyhow!("Database error: {}", e)))?;
 
-    // Get descendants of the org node (including itself for inheritance)
-    let ancestors_and_self: HashSet<Uuid> = {
-        // For now, just check exact match and ancestors
-        // A full implementation would check the closure table for ancestors
-        let mut set = HashSet::new();
-        set.insert(org_node_id);
-        set
-    };
+    // Get ancestors of the org node (including itself) via closure table.
+    // A user assigned at a parent node inherits access to child nodes.
+    let ancestors_and_self: HashSet<Uuid> = state
+        .db
+        .find_org_node_ancestor_ids(org_node_id)
+        .await
+        .map_err(|e| AppError::InternalError(anyhow::anyhow!("Database error: {}", e)))?
+        .into_iter()
+        .collect();
 
     // Check if any assignment grants the capability
     for assignment in assignments {

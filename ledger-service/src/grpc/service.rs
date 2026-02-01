@@ -1,5 +1,6 @@
 //! LedgerService gRPC implementation.
 
+use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::proto::{
     ledger_service_server::LedgerService, Account as ProtoAccount, AccountType as ProtoAccountType,
     CreateAccountRequest, CreateAccountResponse, Direction as ProtoDirection, GetAccountRequest,
@@ -37,15 +38,26 @@ fn format_decimal(d: &Decimal) -> String {
     }
 }
 
+/// Parse tenant_id from AuthContext.
+#[allow(clippy::result_large_err)]
+fn parse_tenant_id(auth: &crate::grpc::capability_check::AuthContext) -> Result<Uuid, Status> {
+    Uuid::parse_str(&auth.tenant_id)
+        .map_err(|_| Status::internal(format!("Invalid tenant_id: {}", auth.tenant_id)))
+}
+
 /// LedgerService implementation.
 pub struct LedgerServiceImpl {
     db: Arc<Database>,
+    capability_checker: Arc<CapabilityChecker>,
 }
 
 impl LedgerServiceImpl {
     /// Create a new LedgerService instance.
-    pub fn new(db: Arc<Database>) -> Self {
-        Self { db }
+    pub fn new(db: Arc<Database>, capability_checker: Arc<CapabilityChecker>) -> Self {
+        Self {
+            db,
+            capability_checker,
+        }
     }
 
     /// Convert domain Account to proto Account.
@@ -159,15 +171,14 @@ impl LedgerService for LedgerServiceImpl {
             .with_label_values(&["CreateAccount"])
             .start_timer();
 
-        let req = request.into_inner();
+        // Capability check - derive tenant_id from auth context
+        let auth = self
+            .capability_checker
+            .require_capability(&request, capabilities::LEDGER_ACCOUNT_CREATE)
+            .await?;
+        let tenant_id = parse_tenant_id(&auth)?;
 
-        // Parse tenant_id
-        let tenant_id = Uuid::parse_str(&req.tenant_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["CreateAccount", "invalid_argument"])
-                .inc();
-            Status::invalid_argument("Invalid tenant_id format")
-        })?;
+        let req = request.into_inner();
 
         // Parse account type
         let account_type = AccountType::from_proto(req.account_type).ok_or_else(|| {
@@ -263,15 +274,14 @@ impl LedgerService for LedgerServiceImpl {
             .with_label_values(&["GetAccount"])
             .start_timer();
 
-        let req = request.into_inner();
+        // Capability check - derive tenant_id from auth context
+        let auth = self
+            .capability_checker
+            .require_capability(&request, capabilities::LEDGER_ACCOUNT_READ)
+            .await?;
+        let tenant_id = parse_tenant_id(&auth)?;
 
-        // Parse IDs
-        let tenant_id = Uuid::parse_str(&req.tenant_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GetAccount", "invalid_argument"])
-                .inc();
-            Status::invalid_argument("Invalid tenant_id format")
-        })?;
+        let req = request.into_inner();
 
         let account_id = Uuid::parse_str(&req.account_id).map_err(|_| {
             GRPC_REQUESTS_TOTAL
@@ -325,15 +335,14 @@ impl LedgerService for LedgerServiceImpl {
             .with_label_values(&["ListAccounts"])
             .start_timer();
 
-        let req = request.into_inner();
+        // Capability check - derive tenant_id from auth context
+        let auth = self
+            .capability_checker
+            .require_capability(&request, capabilities::LEDGER_ACCOUNT_READ)
+            .await?;
+        let tenant_id = parse_tenant_id(&auth)?;
 
-        // Parse tenant_id
-        let tenant_id = Uuid::parse_str(&req.tenant_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["ListAccounts", "invalid_argument"])
-                .inc();
-            Status::invalid_argument("Invalid tenant_id format")
-        })?;
+        let req = request.into_inner();
 
         // Parse optional account_type filter
         let account_type = if req.account_type == ProtoAccountType::Unspecified as i32 {
@@ -414,15 +423,14 @@ impl LedgerService for LedgerServiceImpl {
             .with_label_values(&["PostTransaction"])
             .start_timer();
 
-        let req = request.into_inner();
+        // Capability check - derive tenant_id from auth context
+        let auth = self
+            .capability_checker
+            .require_capability(&request, capabilities::LEDGER_TRANSACTION_CREATE)
+            .await?;
+        let tenant_id = parse_tenant_id(&auth)?;
 
-        // Parse tenant_id
-        let tenant_id = Uuid::parse_str(&req.tenant_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["PostTransaction", "invalid_argument"])
-                .inc();
-            Status::invalid_argument("Invalid tenant_id format")
-        })?;
+        let req = request.into_inner();
 
         // Validate entries exist
         if req.entries.is_empty() {
@@ -566,15 +574,14 @@ impl LedgerService for LedgerServiceImpl {
             .with_label_values(&["GetTransaction"])
             .start_timer();
 
-        let req = request.into_inner();
+        // Capability check - derive tenant_id from auth context
+        let auth = self
+            .capability_checker
+            .require_capability(&request, capabilities::LEDGER_TRANSACTION_READ)
+            .await?;
+        let tenant_id = parse_tenant_id(&auth)?;
 
-        // Parse IDs
-        let tenant_id = Uuid::parse_str(&req.tenant_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GetTransaction", "invalid_argument"])
-                .inc();
-            Status::invalid_argument("Invalid tenant_id format")
-        })?;
+        let req = request.into_inner();
 
         let journal_id = Uuid::parse_str(&req.journal_id).map_err(|_| {
             GRPC_REQUESTS_TOTAL
@@ -627,15 +634,14 @@ impl LedgerService for LedgerServiceImpl {
             .with_label_values(&["ListTransactions"])
             .start_timer();
 
-        let req = request.into_inner();
+        // Capability check - derive tenant_id from auth context
+        let auth = self
+            .capability_checker
+            .require_capability(&request, capabilities::LEDGER_TRANSACTION_READ)
+            .await?;
+        let tenant_id = parse_tenant_id(&auth)?;
 
-        // Parse tenant_id
-        let tenant_id = Uuid::parse_str(&req.tenant_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["ListTransactions", "invalid_argument"])
-                .inc();
-            Status::invalid_argument("Invalid tenant_id format")
-        })?;
+        let req = request.into_inner();
 
         // Parse optional account_id filter
         let account_id = if req.account_id.is_empty() {
@@ -742,15 +748,14 @@ impl LedgerService for LedgerServiceImpl {
             .with_label_values(&["GetBalance"])
             .start_timer();
 
-        let req = request.into_inner();
+        // Capability check - derive tenant_id from auth context
+        let auth = self
+            .capability_checker
+            .require_capability(&request, capabilities::LEDGER_BALANCE_READ)
+            .await?;
+        let tenant_id = parse_tenant_id(&auth)?;
 
-        // Parse IDs
-        let tenant_id = Uuid::parse_str(&req.tenant_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GetBalance", "invalid_argument"])
-                .inc();
-            Status::invalid_argument("Invalid tenant_id format")
-        })?;
+        let req = request.into_inner();
 
         let account_id = Uuid::parse_str(&req.account_id).map_err(|_| {
             GRPC_REQUESTS_TOTAL
@@ -822,15 +827,14 @@ impl LedgerService for LedgerServiceImpl {
             .with_label_values(&["GetBalances"])
             .start_timer();
 
-        let req = request.into_inner();
+        // Capability check - derive tenant_id from auth context
+        let auth = self
+            .capability_checker
+            .require_capability(&request, capabilities::LEDGER_BALANCE_READ)
+            .await?;
+        let tenant_id = parse_tenant_id(&auth)?;
 
-        // Parse tenant_id
-        let tenant_id = Uuid::parse_str(&req.tenant_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GetBalances", "invalid_argument"])
-                .inc();
-            Status::invalid_argument("Invalid tenant_id format")
-        })?;
+        let req = request.into_inner();
 
         // Parse account_ids
         let mut account_ids = Vec::with_capacity(req.account_ids.len());
@@ -905,15 +909,14 @@ impl LedgerService for LedgerServiceImpl {
             .with_label_values(&["GetStatement"])
             .start_timer();
 
-        let req = request.into_inner();
+        // Capability check - derive tenant_id from auth context
+        let auth = self
+            .capability_checker
+            .require_capability(&request, capabilities::LEDGER_STATEMENT_READ)
+            .await?;
+        let tenant_id = parse_tenant_id(&auth)?;
 
-        // Parse IDs
-        let tenant_id = Uuid::parse_str(&req.tenant_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GetStatement", "invalid_argument"])
-                .inc();
-            Status::invalid_argument("Invalid tenant_id format")
-        })?;
+        let req = request.into_inner();
 
         let account_id = Uuid::parse_str(&req.account_id).map_err(|_| {
             GRPC_REQUESTS_TOTAL

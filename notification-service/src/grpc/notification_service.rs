@@ -1,4 +1,4 @@
-use crate::grpc::capability_check::{capabilities, CapabilityMetadata};
+use crate::grpc::capability_check::capabilities;
 use crate::grpc::proto::{
     notification_service_server::NotificationService, BatchNotification, BatchNotificationResult,
     GetNotificationRequest, GetNotificationResponse, ListNotificationsRequest,
@@ -102,13 +102,13 @@ impl NotificationService for NotificationGrpcService {
         &self,
         request: Request<SendEmailRequest>,
     ) -> Result<Response<SendEmailResponse>, Status> {
-        // Capability check (if enabled)
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::NOTIFICATION_EMAIL_SEND)
-                .await?;
-        }
+        // Capability check - derive tenant_id from auth context
+        let auth = self
+            .state
+            .capability_checker
+            .require_capability(&request, capabilities::NOTIFICATION_EMAIL_SEND)
+            .await?;
+        let tenant_id = auth.tenant_id.clone();
 
         let req = request.into_inner();
 
@@ -127,6 +127,7 @@ impl NotificationService for NotificationGrpcService {
 
         // Create notification record
         let mut notification = Notification::new_email(
+            tenant_id.clone(),
             req.to.clone(),
             req.subject.clone(),
             req.body_text.clone(),
@@ -154,13 +155,6 @@ impl NotificationService for NotificationGrpcService {
             from_name: req.from_name,
             reply_to: req.reply_to,
         };
-
-        // Get tenant_id from metadata for metering
-        let tenant_id = req
-            .metadata
-            .get("tenant_id")
-            .cloned()
-            .unwrap_or_else(|| "unknown".to_string());
 
         match self.state.email_provider.send(&email_message).await {
             Ok(response) => {
@@ -247,13 +241,13 @@ impl NotificationService for NotificationGrpcService {
         &self,
         request: Request<SendSmsRequest>,
     ) -> Result<Response<SendSmsResponse>, Status> {
-        // Capability check (if enabled)
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::NOTIFICATION_SMS_SEND)
-                .await?;
-        }
+        // Capability check - derive tenant_id from auth context
+        let auth = self
+            .state
+            .capability_checker
+            .require_capability(&request, capabilities::NOTIFICATION_SMS_SEND)
+            .await?;
+        let tenant_id = auth.tenant_id.clone();
 
         let req = request.into_inner();
 
@@ -270,8 +264,12 @@ impl NotificationService for NotificationGrpcService {
         }
 
         // Create notification record
-        let mut notification =
-            Notification::new_sms(req.to.clone(), req.body.clone(), req.metadata.clone());
+        let mut notification = Notification::new_sms(
+            tenant_id.clone(),
+            req.to.clone(),
+            req.body.clone(),
+            req.metadata.clone(),
+        );
 
         let notification_id = notification.notification_id.clone();
 
@@ -281,13 +279,6 @@ impl NotificationService for NotificationGrpcService {
             .insert(&notification)
             .await
             .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
-
-        // Get tenant_id from metadata for metering
-        let tenant_id = req
-            .metadata
-            .get("tenant_id")
-            .cloned()
-            .unwrap_or_else(|| "unknown".to_string());
 
         // Send SMS
         let sms_message = SmsMessage {
@@ -380,13 +371,13 @@ impl NotificationService for NotificationGrpcService {
         &self,
         request: Request<SendPushRequest>,
     ) -> Result<Response<SendPushResponse>, Status> {
-        // Capability check (if enabled)
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::NOTIFICATION_PUSH_SEND)
-                .await?;
-        }
+        // Capability check - derive tenant_id from auth context
+        let auth = self
+            .state
+            .capability_checker
+            .require_capability(&request, capabilities::NOTIFICATION_PUSH_SEND)
+            .await?;
+        let tenant_id = auth.tenant_id.clone();
 
         let req = request.into_inner();
 
@@ -406,6 +397,7 @@ impl NotificationService for NotificationGrpcService {
 
         // Create notification record
         let mut notification = Notification::new_push(
+            tenant_id.clone(),
             req.device_token.clone(),
             platform.clone(),
             req.title.clone(),
@@ -426,13 +418,6 @@ impl NotificationService for NotificationGrpcService {
             .insert(&notification)
             .await
             .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
-
-        // Get tenant_id from metadata for metering
-        let tenant_id = req
-            .metadata
-            .get("tenant_id")
-            .cloned()
-            .unwrap_or_else(|| "unknown".to_string());
 
         // Send push notification
         let push_message = PushMessage {
@@ -532,13 +517,13 @@ impl NotificationService for NotificationGrpcService {
         &self,
         request: Request<SendBatchRequest>,
     ) -> Result<Response<SendBatchResponse>, Status> {
-        // Capability check (if enabled)
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::NOTIFICATION_BATCH_SEND)
-                .await?;
-        }
+        // Capability check - derive tenant_id from auth context
+        let auth = self
+            .state
+            .capability_checker
+            .require_capability(&request, capabilities::NOTIFICATION_BATCH_SEND)
+            .await?;
+        let tenant_id = auth.tenant_id.clone();
 
         let req = request.into_inner();
 
@@ -558,7 +543,9 @@ impl NotificationService for NotificationGrpcService {
         let mut results = Vec::with_capacity(req.notifications.len());
 
         for notification_request in req.notifications {
-            let result = self.process_batch_notification(&notification_request).await;
+            let result = self
+                .process_batch_notification(&tenant_id, &notification_request)
+                .await;
             results.push(result);
         }
 
@@ -570,13 +557,12 @@ impl NotificationService for NotificationGrpcService {
         &self,
         request: Request<GetNotificationRequest>,
     ) -> Result<Response<GetNotificationResponse>, Status> {
-        // Capability check (if enabled)
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::NOTIFICATION_READ)
-                .await?;
-        }
+        // Capability check - derive tenant_id from auth context
+        let auth = self
+            .state
+            .capability_checker
+            .require_capability(&request, capabilities::NOTIFICATION_READ)
+            .await?;
 
         let req = request.into_inner();
 
@@ -587,7 +573,7 @@ impl NotificationService for NotificationGrpcService {
         let notification = self
             .state
             .db
-            .find_by_id(&req.notification_id)
+            .find_by_id(&auth.tenant_id, &req.notification_id)
             .await
             .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
 
@@ -607,13 +593,12 @@ impl NotificationService for NotificationGrpcService {
         &self,
         request: Request<ListNotificationsRequest>,
     ) -> Result<Response<ListNotificationsResponse>, Status> {
-        // Capability check (if enabled)
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::NOTIFICATION_READ)
-                .await?;
-        }
+        // Capability check - derive tenant_id from auth context
+        let auth = self
+            .state
+            .capability_checker
+            .require_capability(&request, capabilities::NOTIFICATION_READ)
+            .await?;
 
         let req = request.into_inner();
 
@@ -634,7 +619,7 @@ impl NotificationService for NotificationGrpcService {
         let notifications = self
             .state
             .db
-            .list(channel, status, limit, offset)
+            .list(&auth.tenant_id, channel, status, limit, offset)
             .await
             .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
 
@@ -659,14 +644,17 @@ impl NotificationService for NotificationGrpcService {
 impl NotificationGrpcService {
     async fn process_batch_notification(
         &self,
+        tenant_id: &str,
         notification: &BatchNotification,
     ) -> BatchNotificationResult {
         let channel = NotificationChannel::try_from(notification.channel);
 
         match channel {
-            Ok(NotificationChannel::Email) => self.process_batch_email(notification).await,
-            Ok(NotificationChannel::Sms) => self.process_batch_sms(notification).await,
-            Ok(NotificationChannel::Push) => self.process_batch_push(notification).await,
+            Ok(NotificationChannel::Email) => {
+                self.process_batch_email(tenant_id, notification).await
+            }
+            Ok(NotificationChannel::Sms) => self.process_batch_sms(tenant_id, notification).await,
+            Ok(NotificationChannel::Push) => self.process_batch_push(tenant_id, notification).await,
             _ => BatchNotificationResult {
                 notification_id: String::new(),
                 status: ProtoNotificationStatus::Failed as i32,
@@ -675,7 +663,11 @@ impl NotificationGrpcService {
         }
     }
 
-    async fn process_batch_email(&self, batch: &BatchNotification) -> BatchNotificationResult {
+    async fn process_batch_email(
+        &self,
+        tenant_id: &str,
+        batch: &BatchNotification,
+    ) -> BatchNotificationResult {
         let email = match &batch.email {
             Some(e) => e,
             None => {
@@ -704,6 +696,7 @@ impl NotificationGrpcService {
         }
 
         let mut notification = Notification::new_email(
+            tenant_id.to_string(),
             email.to.clone(),
             email.subject.clone(),
             email.body_text.clone(),
@@ -792,7 +785,11 @@ impl NotificationGrpcService {
         }
     }
 
-    async fn process_batch_sms(&self, batch: &BatchNotification) -> BatchNotificationResult {
+    async fn process_batch_sms(
+        &self,
+        tenant_id: &str,
+        batch: &BatchNotification,
+    ) -> BatchNotificationResult {
         let sms = match &batch.sms {
             Some(s) => s,
             None => {
@@ -812,8 +809,12 @@ impl NotificationGrpcService {
             };
         }
 
-        let mut notification =
-            Notification::new_sms(sms.to.clone(), sms.body.clone(), sms.metadata.clone());
+        let mut notification = Notification::new_sms(
+            tenant_id.to_string(),
+            sms.to.clone(),
+            sms.body.clone(),
+            sms.metadata.clone(),
+        );
 
         let notification_id = notification.notification_id.clone();
 
@@ -890,7 +891,11 @@ impl NotificationGrpcService {
         }
     }
 
-    async fn process_batch_push(&self, batch: &BatchNotification) -> BatchNotificationResult {
+    async fn process_batch_push(
+        &self,
+        tenant_id: &str,
+        batch: &BatchNotification,
+    ) -> BatchNotificationResult {
         let push = match &batch.push {
             Some(p) => p,
             None => {
@@ -938,6 +943,7 @@ impl NotificationGrpcService {
         };
 
         let mut notification = Notification::new_push(
+            tenant_id.to_string(),
             push.device_token.clone(),
             platform.clone(),
             push.title.clone(),

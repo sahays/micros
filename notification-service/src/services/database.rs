@@ -122,13 +122,12 @@ impl NotificationDb {
                 AppError::DatabaseError(anyhow::anyhow!(e.to_string()))
             })?;
 
-        // Index on metadata.tenant_id for tenant-specific queries
+        // Index on tenant_id for tenant-scoped queries
         let tenant_id_index = IndexModel::builder()
-            .keys(doc! { "metadata.tenant_id": 1 })
+            .keys(doc! { "tenant_id": 1 })
             .options(
                 IndexOptions::builder()
-                    .name("metadata_tenant_id_idx".to_string())
-                    .sparse(true)
+                    .name("tenant_id_idx".to_string())
                     .build(),
             )
             .build();
@@ -174,10 +173,14 @@ impl NotificationDb {
 
     pub async fn find_by_id(
         &self,
+        tenant_id: &str,
         notification_id: &str,
     ) -> Result<Option<Notification>, AppError> {
         self.notifications()
-            .find_one(doc! { "notification_id": notification_id }, None)
+            .find_one(
+                doc! { "notification_id": notification_id, "tenant_id": tenant_id },
+                None,
+            )
             .await
             .map_err(|e| {
                 tracing::error!("Failed to find notification: {}", e);
@@ -248,12 +251,13 @@ impl NotificationDb {
 
     pub async fn list(
         &self,
+        tenant_id: &str,
         channel: Option<Channel>,
         status: Option<NotificationStatus>,
         limit: i64,
         offset: u64,
     ) -> Result<Vec<Notification>, AppError> {
-        let mut filter = doc! {};
+        let mut filter = doc! { "tenant_id": tenant_id };
 
         if let Some(ch) = channel {
             filter.insert("channel", ch.to_string());

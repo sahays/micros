@@ -1,6 +1,6 @@
 //! Common test utilities for ledger-service integration tests.
 
-use ledger_service::config::{DatabaseConfig, LedgerConfig};
+use ledger_service::config::{AuthConfig, DatabaseConfig, LedgerConfig};
 use ledger_service::grpc::proto::{
     ledger_service_client::LedgerServiceClient, AccountType as ProtoAccountType,
     CreateAccountRequest, CreateAccountResponse, Direction as ProtoDirection, GetBalanceRequest,
@@ -42,6 +42,9 @@ pub async fn spawn_app() -> (LedgerServiceClient<Channel>, Uuid) {
             url: database_url,
             max_connections: 2,
             min_connections: 1,
+        },
+        auth: AuthConfig {
+            auth_service_endpoint: String::new(),
         },
     };
 

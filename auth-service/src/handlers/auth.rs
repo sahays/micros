@@ -325,14 +325,26 @@ async fn generate_tokens(
     // Generate token IDs
     let refresh_token_id = Uuid::new_v4().to_string();
 
-    // Generate access token - using tenant_id as both app_id and org_id for now
-    // These will be set properly once org hierarchy is implemented
+    // Look up user's primary org assignment to populate org_id in JWT.
+    // Falls back to tenant_id if no org assignment exists.
+    let org_id = match state
+        .db
+        .find_active_assignments_for_user(user.user_id)
+        .await
+    {
+        Ok(assignments) => assignments
+            .first()
+            .map(|a| a.org_node_id.to_string())
+            .unwrap_or_else(|| tenant_id.to_string()),
+        Err(_) => tenant_id.to_string(),
+    };
+
     let access_token = state
         .jwt
         .generate_access_token(
             &user.user_id.to_string(),
             &tenant_id.to_string(),
-            &tenant_id.to_string(), // org_id - will be set properly later
+            &org_id,
             &user.email,
         )
         .map_err(|e| AppError::InternalError(anyhow::anyhow!("Token generation failed: {}", e)))?;
