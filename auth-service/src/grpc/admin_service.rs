@@ -10,11 +10,8 @@ use crate::grpc::proto::auth::{
 use crate::models::{
     Capability, OrgAssignment, OrgNode, RefreshSession, Role, Tenant, User, UserIdentity,
 };
+use crate::services::hash_password;
 use crate::AppState;
-use argon2::{
-    password_hash::{rand_core::OsRng, SaltString},
-    Argon2, PasswordHasher,
-};
 use sha2::{Digest, Sha256};
 use tonic::{Request, Response, Status};
 
@@ -28,15 +25,6 @@ impl AdminServiceImpl {
     pub fn new(state: AppState) -> Self {
         Self { state }
     }
-}
-
-/// Hash a password using argon2.
-fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
-    argon2
-        .hash_password(password.as_bytes(), &salt)
-        .map(|h| h.to_string())
 }
 
 /// Hash a token for storage.

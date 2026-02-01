@@ -371,17 +371,7 @@ fn hash_token(token: &str) -> String {
 
 /// Hash password using argon2.
 fn hash_password(password: &str) -> Result<String, AppError> {
-    use argon2::{
-        password_hash::{rand_core::OsRng, SaltString},
-        Argon2, PasswordHasher,
-    };
-
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
-
-    argon2
-        .hash_password(password.as_bytes(), &salt)
-        .map(|h| h.to_string())
+    crate::services::hash_password(password)
         .map_err(|e| AppError::InternalError(anyhow::anyhow!("Password hashing failed: {}", e)))
 }
 

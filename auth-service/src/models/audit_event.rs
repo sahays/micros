@@ -32,6 +32,8 @@ pub enum AuditEventType {
     ServiceRegistered,
     ServiceSecretRotated,
     ServiceDisabled,
+    InvitationCreated,
+    InvitationAccepted,
     AuthzEvaluated,
 }
 
@@ -61,6 +63,8 @@ impl AuditEventType {
             AuditEventType::ServiceRegistered => "service_registered",
             AuditEventType::ServiceSecretRotated => "service_secret_rotated",
             AuditEventType::ServiceDisabled => "service_disabled",
+            AuditEventType::InvitationCreated => "invitation_created",
+            AuditEventType::InvitationAccepted => "invitation_accepted",
             AuditEventType::AuthzEvaluated => "authz_evaluated",
         }
     }

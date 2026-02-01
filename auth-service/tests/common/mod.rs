@@ -13,7 +13,8 @@ use auth_service::{
     db,
     grpc::proto::auth::{
         admin_service_client::AdminServiceClient, auth_service_client::AuthServiceClient,
-        authz_service_client::AuthzServiceClient, org_service_client::OrgServiceClient,
+        authz_service_client::AuthzServiceClient,
+        invitation_service_client::InvitationServiceClient, org_service_client::OrgServiceClient,
         role_service_client::RoleServiceClient,
     },
     services, AppState,
@@ -193,6 +194,11 @@ impl TestApp {
     /// Create a RoleService client.
     pub async fn role_client(&self) -> RoleServiceClient<Channel> {
         create_role_client(self.grpc_port).await
+    }
+
+    /// Create an InvitationService client.
+    pub async fn invitation_client(&self) -> InvitationServiceClient<Channel> {
+        create_invitation_client(self.grpc_port).await
     }
 
     /// Clean up test data.
@@ -403,6 +409,12 @@ pub async fn create_role_client(port: u16) -> RoleServiceClient<Channel> {
     let addr = format!("http://127.0.0.1:{}", port);
     let channel = connect_with_retry(addr).await;
     RoleServiceClient::new(channel)
+}
+
+pub async fn create_invitation_client(port: u16) -> InvitationServiceClient<Channel> {
+    let addr = format!("http://127.0.0.1:{}", port);
+    let channel = connect_with_retry(addr).await;
+    InvitationServiceClient::new(channel)
 }
 
 /// Add authorization header to a request.

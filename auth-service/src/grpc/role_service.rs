@@ -56,6 +56,7 @@ fn capability_to_proto(cap: Capability) -> ProtoCapability {
 
 #[tonic::async_trait]
 impl RoleService for RoleServiceImpl {
+    #[tracing::instrument(skip(self, request))]
     async fn create_role(
         &self,
         request: Request<CreateRoleRequest>,
@@ -110,6 +111,7 @@ impl RoleService for RoleServiceImpl {
         }))
     }
 
+    #[tracing::instrument(skip(self, request))]
     async fn get_role(
         &self,
         request: Request<GetRoleRequest>,
@@ -143,6 +145,7 @@ impl RoleService for RoleServiceImpl {
         }))
     }
 
+    #[tracing::instrument(skip(self, request))]
     async fn list_tenant_roles(
         &self,
         request: Request<ListTenantRolesRequest>,
@@ -177,6 +180,7 @@ impl RoleService for RoleServiceImpl {
         }))
     }
 
+    #[tracing::instrument(skip(self, request))]
     async fn get_role_capabilities(
         &self,
         request: Request<GetRoleCapabilitiesRequest>,
@@ -207,6 +211,7 @@ impl RoleService for RoleServiceImpl {
         Ok(Response::new(GetRoleCapabilitiesResponse { capabilities }))
     }
 
+    #[tracing::instrument(skip(self, request))]
     async fn assign_capability(
         &self,
         request: Request<AssignCapabilityRequest>,
@@ -265,6 +270,7 @@ impl RoleService for RoleServiceImpl {
         }))
     }
 
+    #[tracing::instrument(skip(self, request))]
     async fn list_capabilities(
         &self,
         request: Request<ListCapabilitiesRequest>,
@@ -287,6 +293,7 @@ impl RoleService for RoleServiceImpl {
         }))
     }
 
+    #[tracing::instrument(skip(self, request))]
     async fn get_capability(
         &self,
         request: Request<GetCapabilityRequest>,
@@ -309,11 +316,12 @@ impl RoleService for RoleServiceImpl {
         }))
     }
 
+    #[tracing::instrument(skip(self, request))]
     async fn delete_role(
         &self,
         request: Request<DeleteRoleRequest>,
     ) -> Result<Response<DeleteRoleResponse>, Status> {
-        let auth = require_capability(&self.state, &request, "role:create").await?;
+        let auth = require_capability(&self.state, &request, "role:delete").await?;
 
         let req = request.into_inner();
 
@@ -354,6 +362,7 @@ impl RoleService for RoleServiceImpl {
         }))
     }
 
+    #[tracing::instrument(skip(self, request))]
     async fn revoke_capability(
         &self,
         request: Request<RevokeCapabilityRequest>,
@@ -410,6 +419,7 @@ impl RoleService for RoleServiceImpl {
         }))
     }
 
+    #[tracing::instrument(skip(self, request))]
     async fn ensure_capabilities(
         &self,
         request: Request<EnsureCapabilitiesRequest>,

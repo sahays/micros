@@ -8,13 +8,11 @@ use crate::grpc::proto::auth::{
     InvitationStatus, LoginResponse, UserInfo,
 };
 use crate::models::{
-    Invitation as ModelInvitation, OrgAssignment, RefreshSession, User, UserIdentity,
+    AuditEvent, AuditEventType, Invitation as ModelInvitation, OrgAssignment, RefreshSession, User,
+    UserIdentity,
 };
+use crate::services::hash_password;
 use crate::AppState;
-use argon2::{
-    password_hash::{rand_core::OsRng, SaltString},
-    Argon2, PasswordHasher,
-};
 use chrono::{Duration, Utc};
 use prost_types::Timestamp;
 use service_core::grpc::IntoStatus;
@@ -49,23 +47,15 @@ fn hash_token(token: &str) -> String {
     hex::encode(hasher.finalize())
 }
 
-/// Hash a password using argon2.
-fn hash_password(password: &str) -> Result<String, argon2::password_hash::Error> {
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
-    argon2
-        .hash_password(password.as_bytes(), &salt)
-        .map(|h| h.to_string())
-}
-
 #[tonic::async_trait]
 impl InvitationService for InvitationServiceImpl {
+    #[tracing::instrument(skip(self, request))]
     async fn create_invitation(
         &self,
         request: Request<CreateInvitationRequest>,
     ) -> Result<Response<CreateInvitationResponse>, Status> {
         // Require user:invite capability
-        let _auth = require_capability(&self.state, &request, "user:invite").await?;
+        let auth = require_capability(&self.state, &request, "user:invite").await?;
 
         let req = request.into_inner();
 
@@ -144,6 +134,33 @@ impl InvitationService for InvitationServiceImpl {
             .await
             .map_err(|e| e.into_status())?;
 
+        tracing::info!(
+            invitation_id = %invitation.invitation_id,
+            tenant_id = %tenant_id,
+            verification_type = %invitation.verification_type,
+            "Invitation created"
+        );
+
+        // Audit log
+        let audit = AuditEvent::user_action(
+            auth.tenant_id,
+            auth.user_id,
+            AuditEventType::InvitationCreated,
+            Some("invitation".to_string()),
+            Some(invitation.invitation_id),
+            Some(serde_json::json!({
+                "email": &req.email,
+                "org_node_id": org_node_id.to_string(),
+                "role_id": role_id.to_string(),
+                "verification_type": &invitation.verification_type,
+            })),
+            None,
+            None,
+        );
+        if let Err(e) = self.state.db.insert_audit_event(&audit).await {
+            tracing::error!(error = %e, "Failed to insert audit event");
+        }
+
         let metadata: std::collections::HashMap<String, String> = invitation
             .metadata_json
             .as_ref()
@@ -169,6 +186,7 @@ impl InvitationService for InvitationServiceImpl {
         }))
     }
 
+    #[tracing::instrument(skip(self, request))]
     async fn get_invitation(
         &self,
         request: Request<GetInvitationRequest>,
@@ -217,6 +235,7 @@ impl InvitationService for InvitationServiceImpl {
         }))
     }
 
+    #[tracing::instrument(skip(self, request))]
     async fn accept_invitation(
         &self,
         request: Request<AcceptInvitationRequest>,
@@ -235,11 +254,19 @@ impl InvitationService for InvitationServiceImpl {
 
         // Check if already accepted
         if invitation.accepted_utc.is_some() {
+            tracing::warn!(
+                invitation_id = %invitation.invitation_id,
+                "Attempt to accept already-accepted invitation"
+            );
             return Err(Status::failed_precondition("Invitation already accepted"));
         }
 
         // Check if expired
         if invitation.expiry_utc < Utc::now() {
+            tracing::warn!(
+                invitation_id = %invitation.invitation_id,
+                "Attempt to accept expired invitation"
+            );
             return Err(Status::failed_precondition("Invitation has expired"));
         }
 
@@ -296,6 +323,30 @@ impl InvitationService for InvitationServiceImpl {
             .await
             .map_err(|e| e.into_status())?;
 
+        tracing::info!(
+            invitation_id = %invitation.invitation_id,
+            user_id = %user_id,
+            "Invitation accepted"
+        );
+
+        // Audit log
+        let audit = AuditEvent::user_action(
+            invitation.tenant_id,
+            user_id,
+            AuditEventType::InvitationAccepted,
+            Some("invitation".to_string()),
+            Some(invitation.invitation_id),
+            Some(serde_json::json!({
+                "org_node_id": invitation.org_node_id.to_string(),
+                "role_id": invitation.role_id.to_string(),
+            })),
+            None,
+            None,
+        );
+        if let Err(e) = self.state.db.insert_audit_event(&audit).await {
+            tracing::error!(error = %e, "Failed to insert audit event");
+        }
+
         // Generate tokens
         let (access_token, refresh_token, refresh_token_id) = self
             .state
@@ -340,6 +391,7 @@ impl InvitationService for InvitationServiceImpl {
         }))
     }
 
+    #[tracing::instrument(skip(self, request))]
     async fn accept_invitation_by_phone(
         &self,
         request: Request<AcceptInvitationByPhoneRequest>,
@@ -357,11 +409,28 @@ impl InvitationService for InvitationServiceImpl {
             .ok_or_else(|| Status::not_found("Invitation not found"))?;
 
         if invitation.accepted_utc.is_some() {
+            tracing::warn!(
+                invitation_id = %invitation.invitation_id,
+                "Attempt to accept already-accepted invitation via phone"
+            );
             return Err(Status::failed_precondition("Invitation already accepted"));
         }
 
         if invitation.expiry_utc < Utc::now() {
+            tracing::warn!(
+                invitation_id = %invitation.invitation_id,
+                "Attempt to accept expired invitation via phone"
+            );
             return Err(Status::failed_precondition("Invitation has expired"));
+        }
+
+        // Validate password if provided (Gap 7: reject weak passwords instead of silently skipping)
+        if let Some(ref password) = req.password {
+            if !password.is_empty() && password.len() < 8 {
+                return Err(Status::invalid_argument(
+                    "Password must be at least 8 characters",
+                ));
+            }
         }
 
         // Use phone as email fallback for user creation (phone-based users
@@ -391,7 +460,7 @@ impl InvitationService for InvitationServiceImpl {
             .await
             .map_err(|e| e.into_status())?;
 
-        // Create password identity only if password was provided
+        // Create password identity only if password was provided and valid
         if let Some(ref password) = req.password {
             if password.len() >= 8 {
                 let password_hash = hash_password(password)
@@ -425,6 +494,31 @@ impl InvitationService for InvitationServiceImpl {
             .accept_invitation(invitation.invitation_id)
             .await
             .map_err(|e| e.into_status())?;
+
+        tracing::info!(
+            invitation_id = %invitation.invitation_id,
+            user_id = %user_id,
+            "Invitation accepted via phone"
+        );
+
+        // Audit log
+        let audit = AuditEvent::user_action(
+            invitation.tenant_id,
+            user_id,
+            AuditEventType::InvitationAccepted,
+            Some("invitation".to_string()),
+            Some(invitation.invitation_id),
+            Some(serde_json::json!({
+                "org_node_id": invitation.org_node_id.to_string(),
+                "role_id": invitation.role_id.to_string(),
+                "method": "phone",
+            })),
+            None,
+            None,
+        );
+        if let Err(e) = self.state.db.insert_audit_event(&audit).await {
+            tracing::error!(error = %e, "Failed to insert audit event");
+        }
 
         // Generate tokens
         let user_email = user.email.clone();
