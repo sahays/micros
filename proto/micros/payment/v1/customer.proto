@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package micros.payment.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// RazorpayCustomer represents a customer in Razorpay.
+message RazorpayCustomer {
+  // Unique identifier.
+  string id = 1;
+
+  // Application ID (tenant).
+  string app_id = 2;
+
+  // Organization ID within the application.
+  string org_id = 3;
+
+  // User ID in our system.
+  string user_id = 4;
+
+  // Razorpay customer ID.
+  string razorpay_customer_id = 5;
+
+  // Customer name.
+  string name = 6;
+
+  // Customer email.
+  string email = 7;
+
+  // Customer phone (optional).
+  optional string phone = 8;
+
+  // When the customer was created.
+  google.protobuf.Timestamp created_at = 9;
+
+  // When the customer was last updated.
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+// CreateCustomerRequest to create a new customer in Razorpay.
+message CreateCustomerRequest {
+  // Customer name.
+  string name = 1;
+
+  // Customer email.
+  string email = 2;
+
+  // Customer phone (optional).
+  optional string phone = 3;
+}
+
+// CreateCustomerResponse after creating a customer.
+message CreateCustomerResponse {
+  // The created customer.
+  RazorpayCustomer customer = 1;
+}
+
+// GetCustomerRequest to retrieve a customer by ID.
+message GetCustomerRequest {
+  // Customer ID.
+  string customer_id = 1;
+}
+
+// GetCustomerResponse with the customer details.
+message GetCustomerResponse {
+  // The customer.
+  RazorpayCustomer customer = 1;
+}
+
+// UpdateCustomerRequest to update a customer.
+message UpdateCustomerRequest {
+  // Customer ID.
+  string customer_id = 1;
+
+  // Updated name (optional).
+  optional string name = 2;
+
+  // Updated email (optional).
+  optional string email = 3;
+
+  // Updated phone (optional).
+  optional string phone = 4;
+}
+
+// UpdateCustomerResponse after updating a customer.
+message UpdateCustomerResponse {
+  // The updated customer.
+  RazorpayCustomer customer = 1;
+}
+
+// ListCustomersRequest to list customers.
+message ListCustomersRequest {
+  // Maximum number of results (default: 50, max: 100).
+  int32 limit = 1;
+
+  // Offset for pagination.
+  int32 offset = 2;
+}
+
+// ListCustomersResponse with paginated customers.
+message ListCustomersResponse {
+  // List of customers.
+  repeated RazorpayCustomer customers = 1;
+
+  // Total count.
+  int64 total_count = 2;
+}

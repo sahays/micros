@@ -1,0 +1,119 @@
+syntax = "proto3";
+
+package micros.payment.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// RefundStatus represents the lifecycle state of a refund.
+enum RefundStatus {
+  REFUND_STATUS_UNSPECIFIED = 0;
+  REFUND_STATUS_CREATED = 1;
+  REFUND_STATUS_PROCESSED = 2;
+  REFUND_STATUS_FAILED = 3;
+}
+
+// RefundSpeed defines the processing speed of a refund.
+enum RefundSpeed {
+  REFUND_SPEED_UNSPECIFIED = 0;
+  REFUND_SPEED_NORMAL = 1;
+  REFUND_SPEED_OPTIMUM = 2;
+}
+
+// Refund represents a payment refund.
+message Refund {
+  // Unique identifier.
+  string id = 1;
+
+  // Application ID (tenant).
+  string app_id = 2;
+
+  // Organization ID within the application.
+  string org_id = 3;
+
+  // Razorpay refund ID.
+  string razorpay_refund_id = 4;
+
+  // Payment transaction ID being refunded.
+  string payment_id = 5;
+
+  // Refund amount in smallest currency unit.
+  uint64 amount = 6;
+
+  // Currency code.
+  string currency = 7;
+
+  // Current status.
+  RefundStatus status = 8;
+
+  // Refund speed.
+  RefundSpeed speed = 9;
+
+  // Reason for refund (optional).
+  optional string reason = 10;
+
+  // When the refund was created.
+  google.protobuf.Timestamp created_at = 11;
+
+  // When the refund was last updated.
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+// InitiateRefundRequest to initiate a refund.
+message InitiateRefundRequest {
+  // Payment transaction ID to refund.
+  string payment_id = 1;
+
+  // Refund amount in smallest currency unit (0 = full refund).
+  uint64 amount = 2;
+
+  // Refund speed.
+  RefundSpeed speed = 3;
+
+  // Reason for refund (optional).
+  optional string reason = 4;
+
+  // Whether to reverse all transfers associated with this payment.
+  bool reverse_all_transfers = 5;
+}
+
+// InitiateRefundResponse after initiating a refund.
+message InitiateRefundResponse {
+  // The created refund.
+  Refund refund = 1;
+}
+
+// GetRefundRequest to retrieve a refund by ID.
+message GetRefundRequest {
+  // Refund ID.
+  string refund_id = 1;
+}
+
+// GetRefundResponse with the refund details.
+message GetRefundResponse {
+  // The refund.
+  Refund refund = 1;
+}
+
+// ListRefundsRequest to list refunds.
+message ListRefundsRequest {
+  // Filter by payment ID (optional).
+  optional string payment_id = 1;
+
+  // Filter by status (optional).
+  optional RefundStatus status = 2;
+
+  // Maximum number of results (default: 50, max: 100).
+  int32 limit = 3;
+
+  // Offset for pagination.
+  int32 offset = 4;
+}
+
+// ListRefundsResponse with paginated refunds.
+message ListRefundsResponse {
+  // List of refunds.
+  repeated Refund refunds = 1;
+
+  // Total count matching the filter.
+  int64 total_count = 2;
+}

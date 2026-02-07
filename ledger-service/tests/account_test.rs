@@ -4,7 +4,7 @@
 
 mod common;
 
-use common::{create_test_account, spawn_app};
+use common::{create_test_account, spawn_app, with_tenant};
 use ledger_service::grpc::proto::{
     AccountType as ProtoAccountType, GetAccountRequest, ListAccountsRequest,
 };
@@ -141,7 +141,7 @@ async fn reject_duplicate_account_code_same_tenant() {
         metadata: String::new(),
     };
 
-    let result = client.create_account(request).await;
+    let result = client.create_account(with_tenant(request, tenant_id)).await;
     assert!(result.is_err(), "Should reject duplicate account code");
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::AlreadyExists);
@@ -196,7 +196,7 @@ async fn reject_invalid_currency_code() {
         metadata: String::new(),
     };
 
-    let result = client.create_account(request).await;
+    let result = client.create_account(with_tenant(request, tenant_id)).await;
     assert!(result.is_err(), "Should reject invalid currency");
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
@@ -225,7 +225,11 @@ async fn get_account_by_id() {
         account_id: created_account.account_id.clone(),
     };
 
-    let response = client.get_account(request).await.unwrap().into_inner();
+    let response = client
+        .get_account(with_tenant(request, tenant_id))
+        .await
+        .unwrap()
+        .into_inner();
     let account = response.account.expect("Should return account");
 
     assert_eq!(account.account_id, created_account.account_id);
@@ -257,7 +261,7 @@ async fn get_account_wrong_tenant_returns_not_found() {
         account_id: created_account.account_id,
     };
 
-    let result = client.get_account(request).await;
+    let result = client.get_account(with_tenant(request, wrong_tenant)).await;
     assert!(result.is_err(), "Should return error for wrong tenant");
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::NotFound);
@@ -290,7 +294,11 @@ async fn list_accounts_with_pagination() {
         currency: String::new(),
     };
 
-    let response = client.list_accounts(request).await.unwrap().into_inner();
+    let response = client
+        .list_accounts(with_tenant(request, tenant_id))
+        .await
+        .unwrap()
+        .into_inner();
     assert_eq!(response.accounts.len(), 2);
     assert!(
         !response.next_page_token.is_empty(),
@@ -306,7 +314,11 @@ async fn list_accounts_with_pagination() {
         currency: String::new(),
     };
 
-    let response = client.list_accounts(request).await.unwrap().into_inner();
+    let response = client
+        .list_accounts(with_tenant(request, tenant_id))
+        .await
+        .unwrap()
+        .into_inner();
     assert_eq!(response.accounts.len(), 2);
     assert!(!response.next_page_token.is_empty());
 
@@ -319,7 +331,11 @@ async fn list_accounts_with_pagination() {
         currency: String::new(),
     };
 
-    let response = client.list_accounts(request).await.unwrap().into_inner();
+    let response = client
+        .list_accounts(with_tenant(request, tenant_id))
+        .await
+        .unwrap()
+        .into_inner();
     assert_eq!(response.accounts.len(), 1); // Only 1 left
     assert!(response.next_page_token.is_empty(), "Should be last page");
 }
@@ -367,7 +383,11 @@ async fn list_accounts_filter_by_type() {
         currency: String::new(),
     };
 
-    let response = client.list_accounts(request).await.unwrap().into_inner();
+    let response = client
+        .list_accounts(with_tenant(request, tenant_id))
+        .await
+        .unwrap()
+        .into_inner();
     assert_eq!(response.accounts.len(), 2, "Should only return assets");
     for account in response.accounts {
         assert_eq!(account.account_type, ProtoAccountType::Asset as i32);
@@ -417,7 +437,11 @@ async fn list_accounts_filter_by_currency() {
         currency: "USD".to_string(),
     };
 
-    let response = client.list_accounts(request).await.unwrap().into_inner();
+    let response = client
+        .list_accounts(with_tenant(request, tenant_id))
+        .await
+        .unwrap()
+        .into_inner();
     assert_eq!(
         response.accounts.len(),
         2,
@@ -474,7 +498,11 @@ async fn list_accounts_tenant_isolation() {
         currency: String::new(),
     };
 
-    let response = client.list_accounts(request).await.unwrap().into_inner();
+    let response = client
+        .list_accounts(with_tenant(request, tenant1))
+        .await
+        .unwrap()
+        .into_inner();
     assert_eq!(
         response.accounts.len(),
         2,

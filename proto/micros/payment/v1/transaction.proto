@@ -12,6 +12,7 @@ enum TransactionStatus {
   TRANSACTION_STATUS_COMPLETED = 3;
   TRANSACTION_STATUS_FAILED = 4;
   TRANSACTION_STATUS_REFUNDED = 5;
+  TRANSACTION_STATUS_PARTIALLY_REFUNDED = 6;
 }
 
 // Transaction represents a payment transaction.
@@ -28,8 +29,8 @@ message Transaction {
   // User who initiated this transaction (optional).
   optional string user_id = 4;
 
-  // Transaction amount (in base currency unit, e.g., rupees).
-  double amount = 5;
+  // Transaction amount in smallest currency unit (e.g., paise for INR).
+  uint64 amount_paise = 5;
 
   // Currency code (e.g., "INR", "USD").
   string currency = 6;
@@ -45,12 +46,21 @@ message Transaction {
 
   // When the transaction was last updated.
   google.protobuf.Timestamp updated_at = 10;
+
+  // Linked account ID (for Route transfers).
+  optional string linked_account_id = 11;
+
+  // Subscription ID (for subscription payments).
+  optional string subscription_id = 12;
+
+  // Payment link ID (for payment link payments).
+  optional string payment_link_id = 13;
 }
 
 // CreateTransactionRequest to create a new transaction.
 message CreateTransactionRequest {
-  // Amount in base currency unit.
-  double amount = 1;
+  // Amount in smallest currency unit (e.g., paise for INR).
+  uint64 amount_paise = 1;
 
   // Currency code (e.g., "INR").
   string currency = 2;

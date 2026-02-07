@@ -30,7 +30,7 @@ pub async fn create_transaction(
         app_id: tenant.app_id.clone(),
         org_id: tenant.org_id.clone(),
         user_id: tenant.user_id.clone(),
-        amount: payload.amount,
+        amount_paise: payload.amount_paise,
         currency: payload.currency,
         status: TransactionStatus::Created,
         provider_order_id: None,
@@ -42,7 +42,7 @@ pub async fn create_transaction(
         transaction_id = %transaction.id,
         app_id = %tenant.app_id,
         org_id = %tenant.org_id,
-        amount = payload.amount,
+        amount_paise = payload.amount_paise,
         "Creating transaction"
     );
 

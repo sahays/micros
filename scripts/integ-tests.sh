@@ -21,6 +21,14 @@
 #   - MongoDB: localhost:27017 (for Mongo services)
 #   - All services running via ./scripts/dev-up.sh (for workflow-tests)
 #
+# Database isolation:
+#   Each PostgreSQL service gets its own disposable database:
+#     auth-service         → micros_test_<ts>_auth
+#     ledger-service       → micros_test_<ts>_ledger
+#     invoicing-service    → micros_test_<ts>_invoicing
+#     billing-service      → micros_test_<ts>_billing
+#     reconciliation-service → micros_test_<ts>_reconciliation
+#
 # Examples:
 #   ./scripts/integ-tests.sh                           # Run all tests
 #   ./scripts/integ-tests.sh -p auth-service           # Run auth-service tests
@@ -34,7 +42,7 @@ PG_HOST="${DB_HOST:-localhost}"
 PG_PORT="${DB_PORT:-5432}"
 PG_USER="${DB_USER:-postgres}"
 PG_PASSWORD="${DB_PASSWORD:-pass@word1}"
-PG_DB_NAME="${DB_NAME:-micros_test_$(date +%s)}"
+PG_DB_PREFIX="${DB_NAME:-micros_test_$(date +%s)}"
 
 # MongoDB Configuration
 MONGO_HOST="${MONGO_HOST:-localhost}"
@@ -44,12 +52,10 @@ MONGO_URI="${MONGODB_URI:-mongodb://${MONGO_HOST}:${MONGO_PORT}}"
 # URL-encode the password (@ becomes %40)
 PG_PASSWORD_ENCODED="${PG_PASSWORD//@/%40}"
 
-# Export for tests
-export TEST_DATABASE_URL="postgres://${PG_USER}:${PG_PASSWORD_ENCODED}@${PG_HOST}:${PG_PORT}/${PG_DB_NAME}"
 export MONGODB_URI="${MONGO_URI}"
 
-# Track database states
-PG_DB_CREATED=false
+# Track created databases for cleanup
+PG_CREATED_DBS=()
 PG_AVAILABLE=false
 MONGO_AVAILABLE=false
 
@@ -115,14 +121,41 @@ log_step() {
     echo -e "${BLUE}[STEP]${NC} $1"
 }
 
+# Derive a short DB suffix from a service name: "auth-service" → "auth"
+service_db_suffix() {
+    echo "$1" | sed 's/-service$//'
+}
+
+# Build the database name for a service
+service_db_name() {
+    echo "${PG_DB_PREFIX}_$(service_db_suffix "$1")"
+}
+
+# Build the database URL for a service
+service_db_url() {
+    local db_name
+    db_name=$(service_db_name "$1")
+    echo "postgres://${PG_USER}:${PG_PASSWORD_ENCODED}@${PG_HOST}:${PG_PORT}/${db_name}"
+}
+
+# Derive the env var name for a service: "auth-service" → "AUTH_TEST_DATABASE_URL"
+service_env_var() {
+    local suffix
+    suffix=$(service_db_suffix "$1" | tr '[:lower:]-' '[:upper:]_')
+    echo "${suffix}_TEST_DATABASE_URL"
+}
+
 # Cleanup function
 cleanup() {
     local exit_code=$?
 
-    if [ "$PG_DB_CREATED" = true ]; then
-        log_info "Dropping PostgreSQL test database: ${PG_DB_NAME}"
-        PGPASSWORD="${PG_PASSWORD}" psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d postgres \
-            -c "DROP DATABASE IF EXISTS ${PG_DB_NAME};" 2>/dev/null || true
+    if [ ${#PG_CREATED_DBS[@]} -gt 0 ]; then
+        log_info "Dropping PostgreSQL test databases..."
+        for db_name in "${PG_CREATED_DBS[@]}"; do
+            log_info "  Dropping ${db_name}"
+            PGPASSWORD="${PG_PASSWORD}" psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d postgres \
+                -c "DROP DATABASE IF EXISTS ${db_name};" 2>/dev/null || true
+        done
     fi
 
     if [ $exit_code -ne 0 ]; then
@@ -245,59 +278,63 @@ run_workflow_tests() {
     fi
 }
 
-# Create PostgreSQL test database
-create_pg_database() {
-    log_step "Creating PostgreSQL test database: ${PG_DB_NAME}"
+# Create a per-service PostgreSQL test database
+create_pg_database_for_service() {
+    local service=$1
+    local db_name
+    db_name=$(service_db_name "$service")
+
+    log_info "  Creating database ${db_name} for ${service}"
 
     PGPASSWORD="${PG_PASSWORD}" psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d postgres \
-        -c "DROP DATABASE IF EXISTS ${PG_DB_NAME};" 2>/dev/null || true
+        -c "DROP DATABASE IF EXISTS ${db_name};" 2>/dev/null || true
 
     PGPASSWORD="${PG_PASSWORD}" psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d postgres \
-        -c "CREATE DATABASE ${PG_DB_NAME};"
+        -c "CREATE DATABASE ${db_name};"
 
-    PG_DB_CREATED=true
-    log_info "PostgreSQL test database created"
+    PG_CREATED_DBS+=("$db_name")
 }
 
-# Run migrations for PostgreSQL services
-run_pg_migrations() {
-    log_step "Running PostgreSQL migrations..."
+# Run migrations for a single service into its own database
+run_pg_migrations_for_service() {
+    local service=$1
+    local db_name
+    db_name=$(service_db_name "$service")
+    local db_url
+    db_url=$(service_db_url "$service")
 
-    for service in "${PG_SERVICES[@]}"; do
-        if [ -d "${service}/migrations" ]; then
-            log_info "Running migrations for ${service}..."
+    if [ ! -d "${service}/migrations" ]; then
+        return 0
+    fi
 
-            if command -v sqlx &> /dev/null; then
-                (
-                    cd "${service}"
-                    DATABASE_URL="${TEST_DATABASE_URL}" sqlx migrate run 2>&1 || {
-                        log_warn "sqlx migrate failed for ${service}, trying direct SQL"
-                        cd ..
-                        run_migrations_sql "$service"
-                    }
-                )
-            else
-                run_migrations_sql "$service"
-            fi
+    log_info "  Running migrations for ${service} → ${db_name}"
 
-            log_info "${service} migrations completed"
-        fi
-    done
-
-    log_info "All PostgreSQL migrations completed"
+    if command -v sqlx &> /dev/null; then
+        (
+            cd "${service}"
+            DATABASE_URL="${db_url}" sqlx migrate run 2>&1 || {
+                log_warn "sqlx migrate failed for ${service}, trying direct SQL"
+                cd ..
+                run_migrations_sql "$service" "$db_name"
+            }
+        )
+    else
+        run_migrations_sql "$service" "$db_name"
+    fi
 }
 
 # Run migrations using direct SQL (fallback)
 run_migrations_sql() {
     local service=$1
+    local db_name=$2
     local migrations_dir="${service}/migrations"
 
     for migration in $(ls "${migrations_dir}"/*.sql 2>/dev/null | sort); do
         if [ -f "$migration" ]; then
-            log_info "  Applying: $(basename "$migration")"
-            PGPASSWORD="${PG_PASSWORD}" psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d "${PG_DB_NAME}" \
+            log_info "    Applying: $(basename "$migration")"
+            PGPASSWORD="${PG_PASSWORD}" psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d "${db_name}" \
                 -f "$migration" >/dev/null 2>&1 || {
-                log_warn "  Migration may have already been applied: $(basename "$migration")"
+                log_warn "    Migration may have already been applied: $(basename "$migration")"
             }
         fi
     done
@@ -341,6 +378,28 @@ get_services_to_test() {
     echo "${pg_to_test[*]}|${mongo_to_test[*]}|${workflow_to_test[*]}"
 }
 
+# Create databases, run migrations, and export env vars for the requested PG services
+setup_pg_databases() {
+    local services=("$@")
+
+    log_step "Setting up per-service PostgreSQL databases..."
+
+    for service in "${services[@]}"; do
+        create_pg_database_for_service "$service"
+        run_pg_migrations_for_service "$service"
+
+        # Export service-specific env var: AUTH_TEST_DATABASE_URL, LEDGER_TEST_DATABASE_URL, etc.
+        local env_var
+        env_var=$(service_env_var "$service")
+        local db_url
+        db_url=$(service_db_url "$service")
+        export "${env_var}=${db_url}"
+        log_info "  ${env_var} → $(service_db_name "$service")"
+    done
+
+    log_info "All PostgreSQL databases ready"
+}
+
 # Run tests for PostgreSQL services
 run_pg_tests() {
     local services=("$@")
@@ -354,7 +413,7 @@ run_pg_tests() {
     for service in "${services[@]}"; do
         log_info "Testing ${service}..."
 
-        # --test-threads=1 prevents race conditions when tests share a database.
+        # --test-threads=1 prevents race conditions within a service's tests.
         local extra_args=("--test-threads=1")
 
         if [ ${#CARGO_ARGS[@]} -gt 0 ]; then
@@ -426,9 +485,7 @@ main() {
         log_info "PostgreSQL services to test: ${pg_services_to_test[*]}"
 
         if check_postgres; then
-            create_pg_database
-            run_pg_migrations
-            log_info "TEST_DATABASE_URL: postgres://${PG_USER}:****@${PG_HOST}:${PG_PORT}/${PG_DB_NAME}"
+            setup_pg_databases "${pg_services_to_test[@]}"
             run_pg_tests "${pg_services_to_test[@]}" || has_failures=true
         else
             log_error "PostgreSQL required for: ${pg_services_to_test[*]}"

@@ -1,0 +1,283 @@
+syntax = "proto3";
+
+package micros.payment.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// SubscriptionStatus represents the lifecycle state of a subscription.
+enum SubscriptionStatus {
+  SUBSCRIPTION_STATUS_UNSPECIFIED = 0;
+  SUBSCRIPTION_STATUS_CREATED = 1;
+  SUBSCRIPTION_STATUS_AUTHENTICATED = 2;
+  SUBSCRIPTION_STATUS_ACTIVE = 3;
+  SUBSCRIPTION_STATUS_PENDING = 4;
+  SUBSCRIPTION_STATUS_HALTED = 5;
+  SUBSCRIPTION_STATUS_PAUSED = 6;
+  SUBSCRIPTION_STATUS_CANCELLED = 7;
+  SUBSCRIPTION_STATUS_COMPLETED = 8;
+  SUBSCRIPTION_STATUS_EXPIRED = 9;
+}
+
+// PlanPeriod defines the billing period for a plan.
+enum PlanPeriod {
+  PLAN_PERIOD_UNSPECIFIED = 0;
+  PLAN_PERIOD_DAILY = 1;
+  PLAN_PERIOD_WEEKLY = 2;
+  PLAN_PERIOD_MONTHLY = 3;
+  PLAN_PERIOD_YEARLY = 4;
+}
+
+// RazorpayPlan represents a subscription plan.
+message RazorpayPlan {
+  // Unique identifier.
+  string id = 1;
+
+  // Application ID (tenant).
+  string app_id = 2;
+
+  // Organization ID within the application.
+  string org_id = 3;
+
+  // Razorpay plan ID.
+  string razorpay_plan_id = 4;
+
+  // Plan name.
+  string name = 5;
+
+  // Plan description.
+  string description = 6;
+
+  // Amount per billing period in smallest currency unit.
+  uint64 amount = 7;
+
+  // Currency code.
+  string currency = 8;
+
+  // Billing period.
+  PlanPeriod period = 9;
+
+  // Billing interval (e.g., 1 = every period, 2 = every other period).
+  int32 interval = 10;
+
+  // When the plan was created.
+  google.protobuf.Timestamp created_at = 11;
+}
+
+// RazorpaySubscription represents a subscription.
+message RazorpaySubscription {
+  // Unique identifier.
+  string id = 1;
+
+  // Application ID (tenant).
+  string app_id = 2;
+
+  // Organization ID within the application.
+  string org_id = 3;
+
+  // Razorpay subscription ID.
+  string razorpay_subscription_id = 4;
+
+  // Plan ID.
+  string plan_id = 5;
+
+  // Customer ID (optional).
+  optional string customer_id = 6;
+
+  // Current status.
+  SubscriptionStatus status = 7;
+
+  // Total billing cycles (0 = infinite).
+  int32 total_count = 8;
+
+  // Completed billing cycles.
+  int32 paid_count = 9;
+
+  // Remaining billing cycles.
+  int32 remaining_count = 10;
+
+  // Short URL for subscription payment page.
+  optional string short_url = 11;
+
+  // Charge count for tracking.
+  int32 charge_count = 12;
+
+  // When the subscription was created.
+  google.protobuf.Timestamp created_at = 13;
+
+  // When the subscription was last updated.
+  google.protobuf.Timestamp updated_at = 14;
+}
+
+// CreateRazorpayPlanRequest to create a subscription plan.
+message CreateRazorpayPlanRequest {
+  // Plan name.
+  string name = 1;
+
+  // Plan description.
+  string description = 2;
+
+  // Amount per billing period in smallest currency unit.
+  uint64 amount = 3;
+
+  // Currency code.
+  string currency = 4;
+
+  // Billing period.
+  PlanPeriod period = 5;
+
+  // Billing interval.
+  int32 interval = 6;
+}
+
+// CreateRazorpayPlanResponse after creating a plan.
+message CreateRazorpayPlanResponse {
+  // The created plan.
+  RazorpayPlan plan = 1;
+}
+
+// GetRazorpayPlanRequest to retrieve a plan by ID.
+message GetRazorpayPlanRequest {
+  // Plan ID.
+  string plan_id = 1;
+}
+
+// GetRazorpayPlanResponse with the plan details.
+message GetRazorpayPlanResponse {
+  // The plan.
+  RazorpayPlan plan = 1;
+}
+
+// ListRazorpayPlansRequest to list plans.
+message ListRazorpayPlansRequest {
+  // Maximum number of results (default: 50, max: 100).
+  int32 limit = 1;
+
+  // Offset for pagination.
+  int32 offset = 2;
+}
+
+// ListRazorpayPlansResponse with paginated plans.
+message ListRazorpayPlansResponse {
+  // List of plans.
+  repeated RazorpayPlan plans = 1;
+
+  // Total count.
+  int64 total_count = 2;
+}
+
+// CreateRazorpaySubscriptionRequest to create a subscription.
+message CreateRazorpaySubscriptionRequest {
+  // Plan ID.
+  string plan_id = 1;
+
+  // Customer ID (optional).
+  optional string customer_id = 2;
+
+  // Total billing cycles (0 = infinite).
+  int32 total_count = 3;
+
+  // Optional notes as JSON string.
+  optional string notes_json = 4;
+}
+
+// CreateRazorpaySubscriptionResponse after creating a subscription.
+message CreateRazorpaySubscriptionResponse {
+  // The created subscription.
+  RazorpaySubscription subscription = 1;
+}
+
+// GetRazorpaySubscriptionRequest to retrieve a subscription by ID.
+message GetRazorpaySubscriptionRequest {
+  // Subscription ID.
+  string subscription_id = 1;
+}
+
+// GetRazorpaySubscriptionResponse with the subscription details.
+message GetRazorpaySubscriptionResponse {
+  // The subscription.
+  RazorpaySubscription subscription = 1;
+}
+
+// ListRazorpaySubscriptionsRequest to list subscriptions.
+message ListRazorpaySubscriptionsRequest {
+  // Filter by customer ID (optional).
+  optional string customer_id = 1;
+
+  // Filter by plan ID (optional).
+  optional string plan_id = 2;
+
+  // Filter by status (optional).
+  optional SubscriptionStatus status = 3;
+
+  // Maximum number of results (default: 50, max: 100).
+  int32 limit = 4;
+
+  // Offset for pagination.
+  int32 offset = 5;
+}
+
+// ListRazorpaySubscriptionsResponse with paginated subscriptions.
+message ListRazorpaySubscriptionsResponse {
+  // List of subscriptions.
+  repeated RazorpaySubscription subscriptions = 1;
+
+  // Total count matching the filter.
+  int64 total_count = 2;
+}
+
+// PauseRazorpaySubscriptionRequest to pause a subscription.
+message PauseRazorpaySubscriptionRequest {
+  // Subscription ID.
+  string subscription_id = 1;
+}
+
+// PauseRazorpaySubscriptionResponse after pausing.
+message PauseRazorpaySubscriptionResponse {
+  // The updated subscription.
+  RazorpaySubscription subscription = 1;
+}
+
+// ResumeRazorpaySubscriptionRequest to resume a paused subscription.
+message ResumeRazorpaySubscriptionRequest {
+  // Subscription ID.
+  string subscription_id = 1;
+}
+
+// ResumeRazorpaySubscriptionResponse after resuming.
+message ResumeRazorpaySubscriptionResponse {
+  // The updated subscription.
+  RazorpaySubscription subscription = 1;
+}
+
+// CancelRazorpaySubscriptionRequest to cancel a subscription.
+message CancelRazorpaySubscriptionRequest {
+  // Subscription ID.
+  string subscription_id = 1;
+
+  // Whether to cancel at end of current billing cycle.
+  bool cancel_at_cycle_end = 2;
+}
+
+// CancelRazorpaySubscriptionResponse after cancelling.
+message CancelRazorpaySubscriptionResponse {
+  // The updated subscription.
+  RazorpaySubscription subscription = 1;
+}
+
+// UpdateRazorpaySubscriptionRequest to update a subscription.
+message UpdateRazorpaySubscriptionRequest {
+  // Subscription ID.
+  string subscription_id = 1;
+
+  // New plan ID (optional).
+  optional string plan_id = 2;
+
+  // New total count (optional).
+  optional int32 total_count = 3;
+}
+
+// UpdateRazorpaySubscriptionResponse after updating.
+message UpdateRazorpaySubscriptionResponse {
+  // The updated subscription.
+  RazorpaySubscription subscription = 1;
+}

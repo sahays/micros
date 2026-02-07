@@ -1,0 +1,141 @@
+syntax = "proto3";
+
+package micros.payment.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// PaymentLinkStatus represents the lifecycle state of a payment link.
+enum PaymentLinkStatus {
+  PAYMENT_LINK_STATUS_UNSPECIFIED = 0;
+  PAYMENT_LINK_STATUS_CREATED = 1;
+  PAYMENT_LINK_STATUS_PARTIALLY_PAID = 2;
+  PAYMENT_LINK_STATUS_PAID = 3;
+  PAYMENT_LINK_STATUS_CANCELLED = 4;
+  PAYMENT_LINK_STATUS_EXPIRED = 5;
+}
+
+// PaymentLink represents a Razorpay payment link.
+message PaymentLink {
+  // Unique identifier.
+  string id = 1;
+
+  // Application ID (tenant).
+  string app_id = 2;
+
+  // Organization ID within the application.
+  string org_id = 3;
+
+  // Razorpay payment link ID.
+  string razorpay_payment_link_id = 4;
+
+  // Amount in smallest currency unit.
+  uint64 amount = 5;
+
+  // Currency code.
+  string currency = 6;
+
+  // Description.
+  string description = 7;
+
+  // Customer name (optional).
+  optional string customer_name = 8;
+
+  // Customer email (optional).
+  optional string customer_email = 9;
+
+  // Customer phone (optional).
+  optional string customer_phone = 10;
+
+  // Current status.
+  PaymentLinkStatus status = 11;
+
+  // Short URL for the payment link.
+  string short_url = 12;
+
+  // Amount paid so far.
+  uint64 amount_paid = 13;
+
+  // Expiry timestamp (optional).
+  optional google.protobuf.Timestamp expire_by = 14;
+
+  // When the link was created.
+  google.protobuf.Timestamp created_at = 15;
+
+  // When the link was last updated.
+  google.protobuf.Timestamp updated_at = 16;
+}
+
+// CreatePaymentLinkRequest to create a payment link.
+message CreatePaymentLinkRequest {
+  // Amount in smallest currency unit.
+  uint64 amount = 1;
+
+  // Currency code.
+  string currency = 2;
+
+  // Description.
+  string description = 3;
+
+  // Customer name (optional).
+  optional string customer_name = 4;
+
+  // Customer email (optional).
+  optional string customer_email = 5;
+
+  // Customer phone (optional).
+  optional string customer_phone = 6;
+
+  // Expiry in seconds from now (optional).
+  optional int64 expire_by_seconds = 7;
+}
+
+// CreatePaymentLinkResponse after creating a payment link.
+message CreatePaymentLinkResponse {
+  // The created payment link.
+  PaymentLink payment_link = 1;
+}
+
+// GetPaymentLinkRequest to retrieve a payment link by ID.
+message GetPaymentLinkRequest {
+  // Payment link ID.
+  string payment_link_id = 1;
+}
+
+// GetPaymentLinkResponse with the payment link details.
+message GetPaymentLinkResponse {
+  // The payment link.
+  PaymentLink payment_link = 1;
+}
+
+// CancelPaymentLinkRequest to cancel a payment link.
+message CancelPaymentLinkRequest {
+  // Payment link ID.
+  string payment_link_id = 1;
+}
+
+// CancelPaymentLinkResponse after cancelling.
+message CancelPaymentLinkResponse {
+  // The updated payment link.
+  PaymentLink payment_link = 1;
+}
+
+// ListPaymentLinksRequest to list payment links.
+message ListPaymentLinksRequest {
+  // Filter by status (optional).
+  optional PaymentLinkStatus status = 1;
+
+  // Maximum number of results (default: 50, max: 100).
+  int32 limit = 2;
+
+  // Offset for pagination.
+  int32 offset = 3;
+}
+
+// ListPaymentLinksResponse with paginated payment links.
+message ListPaymentLinksResponse {
+  // List of payment links.
+  repeated PaymentLink payment_links = 1;
+
+  // Total count matching the filter.
+  int64 total_count = 2;
+}

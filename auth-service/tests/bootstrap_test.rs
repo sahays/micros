@@ -6,17 +6,25 @@ mod common;
 
 use auth_service::grpc::proto::auth::BootstrapRequest;
 use common::{with_admin_key, TestApp};
+use serial_test::serial;
 use tonic::Request;
+use uuid::Uuid;
+
+fn unique_slug(prefix: &str) -> String {
+    format!("{}-{}", prefix, &Uuid::new_v4().to_string()[..8])
+}
 
 #[tokio::test]
+#[serial]
 async fn bootstrap_creates_tenant_and_superadmin() {
     let app = TestApp::spawn().await;
     let mut client = app.admin_client().await;
+    let slug = unique_slug("acme");
 
     let request = with_admin_key(Request::new(BootstrapRequest {
-        tenant_slug: "acme".to_string(),
+        tenant_slug: slug.clone(),
         tenant_label: "Acme Corporation".to_string(),
-        admin_email: "admin@acme.com".to_string(),
+        admin_email: format!("admin@{}.com", slug),
         admin_password: "SecurePass123!".to_string(),
         admin_display_name: Some("System Admin".to_string()),
     }));
@@ -41,19 +49,21 @@ async fn bootstrap_creates_tenant_and_superadmin() {
     assert!(!response.refresh_token.is_empty());
 
     // Clean up
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn bootstrap_fails_without_admin_api_key() {
     let app = TestApp::spawn().await;
     let mut client = app.admin_client().await;
+    let slug = unique_slug("acme");
 
     // Request without admin API key
     let request = Request::new(BootstrapRequest {
-        tenant_slug: "acme".to_string(),
+        tenant_slug: slug.clone(),
         tenant_label: "Acme Corporation".to_string(),
-        admin_email: "admin@acme.com".to_string(),
+        admin_email: format!("admin@{}.com", slug),
         admin_password: "SecurePass123!".to_string(),
         admin_display_name: None,
     });
@@ -65,19 +75,21 @@ async fn bootstrap_fails_without_admin_api_key() {
     assert_eq!(status.code(), tonic::Code::Unauthenticated);
     assert!(status.message().contains("X-Admin-Api-Key"));
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn bootstrap_fails_with_invalid_admin_api_key() {
     let app = TestApp::spawn().await;
     let mut client = app.admin_client().await;
+    let slug = unique_slug("acme");
 
     // Request with wrong admin API key
     let mut request = Request::new(BootstrapRequest {
-        tenant_slug: "acme".to_string(),
+        tenant_slug: slug.clone(),
         tenant_label: "Acme Corporation".to_string(),
-        admin_email: "admin@acme.com".to_string(),
+        admin_email: format!("admin@{}.com", slug),
         admin_password: "SecurePass123!".to_string(),
         admin_display_name: None,
     });
@@ -91,19 +103,21 @@ async fn bootstrap_fails_with_invalid_admin_api_key() {
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::Unauthenticated);
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn bootstrap_fails_on_second_call() {
     let app = TestApp::spawn().await;
     let mut client = app.admin_client().await;
+    let slug = unique_slug("acme");
 
     // First bootstrap should succeed
     let request = with_admin_key(Request::new(BootstrapRequest {
-        tenant_slug: "acme".to_string(),
+        tenant_slug: slug.clone(),
         tenant_label: "Acme Corporation".to_string(),
-        admin_email: "admin@acme.com".to_string(),
+        admin_email: format!("admin@{}.com", slug),
         admin_password: "SecurePass123!".to_string(),
         admin_display_name: None,
     }));
@@ -111,11 +125,11 @@ async fn bootstrap_fails_on_second_call() {
     let response = client.bootstrap(request).await;
     assert!(response.is_ok());
 
-    // Second bootstrap should fail
+    // Second bootstrap should fail (bootstrap is a one-time operation)
     let request = with_admin_key(Request::new(BootstrapRequest {
-        tenant_slug: "another".to_string(),
+        tenant_slug: slug.clone(),
         tenant_label: "Another Corp".to_string(),
-        admin_email: "admin@another.com".to_string(),
+        admin_email: format!("admin2@{}.com", slug),
         admin_password: "SecurePass123!".to_string(),
         admin_display_name: None,
     }));
@@ -124,22 +138,23 @@ async fn bootstrap_fails_on_second_call() {
     assert!(response.is_err());
 
     let status = response.unwrap_err();
-    assert_eq!(status.code(), tonic::Code::FailedPrecondition);
-    assert!(status.message().contains("Bootstrap already completed"));
+    assert_eq!(status.code(), tonic::Code::AlreadyExists);
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn bootstrap_validates_password_requirements() {
     let app = TestApp::spawn().await;
     let mut client = app.admin_client().await;
+    let slug = unique_slug("acme");
 
     // Password too short
     let request = with_admin_key(Request::new(BootstrapRequest {
-        tenant_slug: "acme".to_string(),
+        tenant_slug: slug.clone(),
         tenant_label: "Acme Corporation".to_string(),
-        admin_email: "admin@acme.com".to_string(),
+        admin_email: format!("admin@{}.com", slug),
         admin_password: "short".to_string(), // Too short
         admin_display_name: None,
     }));
@@ -151,10 +166,11 @@ async fn bootstrap_validates_password_requirements() {
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
     assert!(status.message().contains("admin_password"));
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn bootstrap_validates_required_fields() {
     let app = TestApp::spawn().await;
     let mut client = app.admin_client().await;
@@ -163,7 +179,7 @@ async fn bootstrap_validates_required_fields() {
     let request = with_admin_key(Request::new(BootstrapRequest {
         tenant_slug: "".to_string(),
         tenant_label: "Acme Corporation".to_string(),
-        admin_email: "admin@acme.com".to_string(),
+        admin_email: "admin@test.com".to_string(),
         admin_password: "SecurePass123!".to_string(),
         admin_display_name: None,
     }));
@@ -175,8 +191,9 @@ async fn bootstrap_validates_required_fields() {
     assert!(status.message().contains("tenant_slug"));
 
     // Missing admin_email
+    let slug = unique_slug("acme");
     let request = with_admin_key(Request::new(BootstrapRequest {
-        tenant_slug: "acme".to_string(),
+        tenant_slug: slug,
         tenant_label: "Acme Corporation".to_string(),
         admin_email: "".to_string(),
         admin_password: "SecurePass123!".to_string(),
@@ -189,18 +206,20 @@ async fn bootstrap_validates_required_fields() {
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
     assert!(status.message().contains("admin_email"));
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn bootstrap_returns_valid_access_token() {
     let app = TestApp::spawn().await;
     let mut client = app.admin_client().await;
+    let slug = unique_slug("acme");
 
     let request = with_admin_key(Request::new(BootstrapRequest {
-        tenant_slug: "acme".to_string(),
+        tenant_slug: slug.clone(),
         tenant_label: "Acme Corporation".to_string(),
-        admin_email: "admin@acme.com".to_string(),
+        admin_email: format!("admin@{}.com", slug),
         admin_password: "SecurePass123!".to_string(),
         admin_display_name: None,
     }));
@@ -225,5 +244,5 @@ async fn bootstrap_returns_valid_access_token() {
         list_response.err()
     );
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }

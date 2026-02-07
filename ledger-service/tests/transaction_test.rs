@@ -4,7 +4,7 @@
 
 mod common;
 
-use common::{create_test_account, get_balance, post_test_transaction, spawn_app};
+use common::{create_test_account, get_balance, post_test_transaction, spawn_app, with_tenant};
 use ledger_service::grpc::proto::{
     AccountType as ProtoAccountType, Direction as ProtoDirection, GetTransactionRequest,
     ListTransactionsRequest, PostTransactionEntry, PostTransactionRequest,
@@ -100,7 +100,9 @@ async fn reject_unbalanced_transaction() {
         metadata: String::new(),
     };
 
-    let result = client.post_transaction(request).await;
+    let result = client
+        .post_transaction(with_tenant(request, tenant_id))
+        .await;
     assert!(result.is_err(), "Should reject unbalanced transaction");
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
@@ -134,7 +136,9 @@ async fn reject_single_entry_transaction() {
         metadata: String::new(),
     };
 
-    let result = client.post_transaction(request).await;
+    let result = client
+        .post_transaction(with_tenant(request, tenant_id))
+        .await;
     assert!(result.is_err(), "Should reject single entry");
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
@@ -183,7 +187,9 @@ async fn reject_zero_amount_transaction() {
         metadata: String::new(),
     };
 
-    let result = client.post_transaction(request).await;
+    let result = client
+        .post_transaction(with_tenant(request, tenant_id))
+        .await;
     assert!(result.is_err(), "Should reject zero amount");
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
@@ -232,7 +238,9 @@ async fn reject_negative_amount_transaction() {
         metadata: String::new(),
     };
 
-    let result = client.post_transaction(request).await;
+    let result = client
+        .post_transaction(with_tenant(request, tenant_id))
+        .await;
     assert!(result.is_err(), "Should reject negative amount");
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
@@ -287,7 +295,7 @@ async fn reject_cross_tenant_account_reference() {
         metadata: String::new(),
     };
 
-    let result = client.post_transaction(request).await;
+    let result = client.post_transaction(with_tenant(request, tenant1)).await;
     assert!(result.is_err(), "Should reject cross-tenant reference");
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
@@ -330,7 +338,9 @@ async fn reject_non_existent_account() {
         metadata: String::new(),
     };
 
-    let result = client.post_transaction(request).await;
+    let result = client
+        .post_transaction(with_tenant(request, tenant_id))
+        .await;
     assert!(result.is_err(), "Should reject non-existent account");
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
@@ -379,7 +389,9 @@ async fn reject_mismatched_currencies() {
         metadata: String::new(),
     };
 
-    let result = client.post_transaction(request).await;
+    let result = client
+        .post_transaction(with_tenant(request, tenant_id))
+        .await;
     assert!(result.is_err(), "Should reject currency mismatch");
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
@@ -499,7 +511,9 @@ async fn reject_negative_balance_asset_account() {
         metadata: String::new(),
     };
 
-    let result = client.post_transaction(request).await;
+    let result = client
+        .post_transaction(with_tenant(request, tenant_id))
+        .await;
     assert!(result.is_err(), "Should reject negative balance");
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
@@ -554,7 +568,9 @@ async fn allow_negative_balance_when_enabled() {
         metadata: String::new(),
     };
 
-    let result = client.post_transaction(request).await;
+    let result = client
+        .post_transaction(with_tenant(request, tenant_id))
+        .await;
     assert!(result.is_ok(), "Should allow negative balance when enabled");
 }
 
@@ -603,7 +619,11 @@ async fn get_transaction_by_journal_id() {
         journal_id: journal_id.clone(),
     };
 
-    let response = client.get_transaction(request).await.unwrap().into_inner();
+    let response = client
+        .get_transaction(with_tenant(request, tenant_id))
+        .await
+        .unwrap()
+        .into_inner();
     let transaction = response.transaction.expect("Should return transaction");
 
     assert_eq!(transaction.journal_id, journal_id);
@@ -650,12 +670,15 @@ async fn get_transaction_wrong_tenant_not_found() {
     let journal_id = posted.transaction.unwrap().journal_id;
 
     // Try with wrong tenant
+    let wrong_tenant = Uuid::new_v4();
     let request = GetTransactionRequest {
-        tenant_id: Uuid::new_v4().to_string(),
+        tenant_id: wrong_tenant.to_string(),
         journal_id,
     };
 
-    let result = client.get_transaction(request).await;
+    let result = client
+        .get_transaction(with_tenant(request, wrong_tenant))
+        .await;
     assert!(result.is_err(), "Should return not found for wrong tenant");
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::NotFound);
@@ -741,7 +764,7 @@ async fn list_transactions_with_filters() {
     };
 
     let response = client
-        .list_transactions(request)
+        .list_transactions(with_tenant(request, tenant_id))
         .await
         .unwrap()
         .into_inner();
@@ -758,7 +781,7 @@ async fn list_transactions_with_filters() {
     };
 
     let response = client
-        .list_transactions(request)
+        .list_transactions(with_tenant(request, tenant_id))
         .await
         .unwrap()
         .into_inner();
@@ -779,7 +802,7 @@ async fn list_transactions_with_filters() {
     };
 
     let response = client
-        .list_transactions(request)
+        .list_transactions(with_tenant(request, tenant_id))
         .await
         .unwrap()
         .into_inner();

@@ -2,8 +2,6 @@
 //!
 //! Tests capability-based access control for document service gRPC endpoints.
 
-use tonic::Request;
-
 // ============================================================================
 // Capability Checker Unit Tests
 // ============================================================================

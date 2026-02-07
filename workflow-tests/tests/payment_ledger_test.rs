@@ -14,7 +14,7 @@ use workflow_tests::proto::payment::{
 use workflow_tests::ServiceEndpoints;
 
 /// Helper to create a payment transaction.
-async fn create_test_transaction(tenant_id: &str, user_id: &str, amount: f64) -> String {
+async fn create_test_transaction(tenant_id: &str, user_id: &str, amount: u64) -> String {
     let endpoints = ServiceEndpoints::from_env();
     let mut payment_client =
         workflow_tests::PaymentServiceClient::connect(endpoints.payment.clone())
@@ -22,7 +22,7 @@ async fn create_test_transaction(tenant_id: &str, user_id: &str, amount: f64) ->
             .expect("Failed to connect to payment service");
 
     let mut request = Request::new(CreateTransactionRequest {
-        amount,
+        amount_paise: amount,
         currency: "INR".to_string(),
     });
 
@@ -55,7 +55,7 @@ async fn create_payment_transaction() {
     let tenant_id = Uuid::new_v4().to_string();
     let user_id = Uuid::new_v4().to_string();
 
-    let transaction_id = create_test_transaction(&tenant_id, &user_id, 1000.00).await;
+    let transaction_id = create_test_transaction(&tenant_id, &user_id, 100000).await;
     assert!(!transaction_id.is_empty());
 
     // Verify transaction can be retrieved
@@ -89,7 +89,7 @@ async fn create_payment_transaction() {
 
     let transaction = response.into_inner().transaction.unwrap();
     assert_eq!(transaction.id, transaction_id);
-    assert_eq!(transaction.amount, 1000.00);
+    assert_eq!(transaction.amount_paise, 100000);
 }
 
 /// Test: Payment status can be updated.
@@ -100,7 +100,7 @@ async fn update_payment_status() {
     let tenant_id = Uuid::new_v4().to_string();
     let user_id = Uuid::new_v4().to_string();
 
-    let transaction_id = create_test_transaction(&tenant_id, &user_id, 500.00).await;
+    let transaction_id = create_test_transaction(&tenant_id, &user_id, 50000).await;
 
     let endpoints = ServiceEndpoints::from_env();
     let mut payment_client =
@@ -168,7 +168,7 @@ async fn list_payment_transactions() {
     let user_id = Uuid::new_v4().to_string();
 
     // Create multiple transactions
-    for amount in [100.00, 200.00, 300.00] {
+    for amount in [10000, 20000, 30000] {
         create_test_transaction(&tenant_id, &user_id, amount).await;
     }
 
@@ -217,7 +217,7 @@ async fn payment_tenant_isolation() {
     let user_b_id = Uuid::new_v4().to_string();
 
     // Create transaction in Tenant A
-    let transaction_id = create_test_transaction(&tenant_a_id, &user_a_id, 999.00).await;
+    let transaction_id = create_test_transaction(&tenant_a_id, &user_a_id, 99900).await;
 
     // Try to access from Tenant B
     let endpoints = ServiceEndpoints::from_env();

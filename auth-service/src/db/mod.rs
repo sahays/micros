@@ -42,9 +42,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_pool() {
-        let url = std::env::var("TEST_DATABASE_URL").unwrap_or_else(|_| {
-            "postgres://postgres:pass%40word1@localhost:5432/auth_test".to_string()
-        });
+        let url = match std::env::var("AUTH_TEST_DATABASE_URL") {
+            Ok(url) => url,
+            Err(_) => {
+                eprintln!("AUTH_TEST_DATABASE_URL not set, skipping test");
+                return;
+            }
+        };
         let config = DatabaseConfig {
             url,
             max_connections: 5,

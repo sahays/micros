@@ -10,16 +10,23 @@ use auth_service::grpc::proto::auth::{
     LoginRequest, RegisterRequest,
 };
 use common::{with_admin_key, with_auth, TestApp};
+use serial_test::serial;
 use tonic::transport::Channel;
 use tonic::Request;
+use uuid::Uuid;
 
-/// Bootstrap and return (tenant_id, root_org_node_id, superadmin_access_token).
-async fn setup_with_superadmin(app: &TestApp) -> (String, String, String) {
+fn unique_slug(prefix: &str) -> String {
+    format!("{}-{}", prefix, &Uuid::new_v4().to_string()[..8])
+}
+
+/// Bootstrap and return (tenant_id, root_org_node_id, superadmin_access_token, tenant_slug).
+async fn setup_with_superadmin(app: &TestApp) -> (String, String, String, String) {
+    let slug = unique_slug("captest");
     let mut client = app.admin_client().await;
     let request = with_admin_key(Request::new(BootstrapRequest {
-        tenant_slug: "captest".to_string(),
+        tenant_slug: slug.clone(),
         tenant_label: "Capability Test Tenant".to_string(),
-        admin_email: "admin@captest.com".to_string(),
+        admin_email: format!("admin@{}.com", slug),
         admin_password: "AdminPass123!".to_string(),
         admin_display_name: None,
     }));
@@ -28,6 +35,7 @@ async fn setup_with_superadmin(app: &TestApp) -> (String, String, String) {
         response.tenant_id,
         response.root_org_node_id,
         response.access_token,
+        slug,
     )
 }
 
@@ -59,9 +67,10 @@ async fn create_assignment_client(port: u16) -> AssignmentServiceClient<Channel>
 // ============================================================================
 
 #[tokio::test]
+#[serial]
 async fn protected_endpoint_rejects_unauthenticated_request() {
     let app = TestApp::spawn().await;
-    let (tenant_id, _, _) = setup_with_superadmin(&app).await;
+    let (tenant_id, _, _, _slug) = setup_with_superadmin(&app).await;
     let mut client = app.org_client().await;
 
     // Try to list org nodes without authentication
@@ -76,7 +85,7 @@ async fn protected_endpoint_rejects_unauthenticated_request() {
     assert_eq!(status.code(), tonic::Code::Unauthenticated);
     assert!(status.message().contains("authorization"));
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 // ============================================================================
@@ -84,9 +93,10 @@ async fn protected_endpoint_rejects_unauthenticated_request() {
 // ============================================================================
 
 #[tokio::test]
+#[serial]
 async fn superadmin_can_access_all_protected_endpoints() {
     let app = TestApp::spawn().await;
-    let (tenant_id, root_org_id, superadmin_token) = setup_with_superadmin(&app).await;
+    let (tenant_id, root_org_id, superadmin_token, _slug) = setup_with_superadmin(&app).await;
 
     // Test OrgService - list org nodes
     let mut org_client = app.org_client().await;
@@ -150,7 +160,7 @@ async fn superadmin_can_access_all_protected_endpoints() {
         response.err()
     );
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 // ============================================================================
@@ -158,12 +168,13 @@ async fn superadmin_can_access_all_protected_endpoints() {
 // ============================================================================
 
 #[tokio::test]
+#[serial]
 async fn regular_user_cannot_create_org_node() {
     let app = TestApp::spawn().await;
-    let (tenant_id, root_org_id, _) = setup_with_superadmin(&app).await;
+    let (tenant_id, root_org_id, _, slug) = setup_with_superadmin(&app).await;
 
     // Create a regular user (no capabilities assigned)
-    let user_token = create_regular_user(&app, "captest", "user@captest.com").await;
+    let user_token = create_regular_user(&app, &slug, &format!("user@{}.com", slug)).await;
 
     let mut client = app.org_client().await;
     let request = with_auth(
@@ -183,15 +194,16 @@ async fn regular_user_cannot_create_org_node() {
     assert_eq!(status.code(), tonic::Code::PermissionDenied);
     assert!(status.message().contains("capability"));
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn regular_user_cannot_list_org_nodes() {
     let app = TestApp::spawn().await;
-    let (tenant_id, _, _) = setup_with_superadmin(&app).await;
+    let (tenant_id, _, _, slug) = setup_with_superadmin(&app).await;
 
-    let user_token = create_regular_user(&app, "captest", "reader@captest.com").await;
+    let user_token = create_regular_user(&app, &slug, &format!("reader@{}.com", slug)).await;
 
     let mut client = app.org_client().await;
     let request = with_auth(
@@ -207,15 +219,16 @@ async fn regular_user_cannot_list_org_nodes() {
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::PermissionDenied);
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn regular_user_cannot_create_role() {
     let app = TestApp::spawn().await;
-    let (tenant_id, _, _) = setup_with_superadmin(&app).await;
+    let (tenant_id, _, _, slug) = setup_with_superadmin(&app).await;
 
-    let user_token = create_regular_user(&app, "captest", "roleuser@captest.com").await;
+    let user_token = create_regular_user(&app, &slug, &format!("roleuser@{}.com", slug)).await;
 
     let mut client = app.role_client().await;
     let request = with_auth(
@@ -232,7 +245,7 @@ async fn regular_user_cannot_create_role() {
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::PermissionDenied);
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 // ============================================================================
@@ -240,16 +253,17 @@ async fn regular_user_cannot_create_role() {
 // ============================================================================
 
 #[tokio::test]
+#[serial]
 async fn user_with_specific_capability_can_access_endpoint() {
     let app = TestApp::spawn().await;
-    let (tenant_id, root_org_id, superadmin_token) = setup_with_superadmin(&app).await;
+    let (tenant_id, root_org_id, superadmin_token, slug) = setup_with_superadmin(&app).await;
 
     // Create a regular user
     let mut auth_client = app.auth_client().await;
     let register_response = auth_client
         .register(Request::new(RegisterRequest {
-            tenant_slug: "captest".to_string(),
-            email: "specific@captest.com".to_string(),
+            tenant_slug: slug.clone(),
+            email: format!("specific@{}.com", slug),
             password: "Password123!".to_string(),
             display_name: None,
         }))
@@ -304,8 +318,8 @@ async fn user_with_specific_capability_can_access_endpoint() {
     // Now login as the user to get a fresh token with the assignment
     let login_response = auth_client
         .login(Request::new(LoginRequest {
-            tenant_slug: "captest".to_string(),
-            email: "specific@captest.com".to_string(),
+            tenant_slug: slug.clone(),
+            email: format!("specific@{}.com", slug),
             password: "Password123!".to_string(),
         }))
         .await
@@ -344,7 +358,7 @@ async fn user_with_specific_capability_can_access_endpoint() {
     assert!(response.is_err());
     assert_eq!(response.unwrap_err().code(), tonic::Code::PermissionDenied);
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 // ============================================================================
@@ -352,15 +366,16 @@ async fn user_with_specific_capability_can_access_endpoint() {
 // ============================================================================
 
 #[tokio::test]
+#[serial]
 async fn auth_endpoints_are_public() {
     let app = TestApp::spawn().await;
-    let _ = setup_with_superadmin(&app).await;
+    let (_, _, _, slug) = setup_with_superadmin(&app).await;
     let mut client = app.auth_client().await;
 
     // Register should work without auth
     let request = Request::new(RegisterRequest {
-        tenant_slug: "captest".to_string(),
-        email: "public@captest.com".to_string(),
+        tenant_slug: slug.clone(),
+        email: format!("public@{}.com", slug),
         password: "Password123!".to_string(),
         display_name: None,
     });
@@ -373,8 +388,8 @@ async fn auth_endpoints_are_public() {
 
     // Login should work without auth
     let request = Request::new(LoginRequest {
-        tenant_slug: "captest".to_string(),
-        email: "public@captest.com".to_string(),
+        tenant_slug: slug.clone(),
+        email: format!("public@{}.com", slug),
         password: "Password123!".to_string(),
     });
     let response = client.login(request).await;
@@ -384,5 +399,5 @@ async fn auth_endpoints_are_public() {
         response.err()
     );
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }

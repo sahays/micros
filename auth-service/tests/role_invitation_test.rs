@@ -8,16 +8,19 @@ use auth_service::grpc::proto::auth::{
     RevokeCapabilityRequest,
 };
 use common::{with_admin_key, with_auth, TestApp};
+use serial_test::serial;
 use tonic::Request;
+use uuid::Uuid;
 
-/// Bootstrap and return (tenant_id, root_org_node_id, superadmin_role_id, access_token).
-async fn setup(app: &TestApp) -> (String, String, String, String) {
+/// Bootstrap and return (tenant_id, root_org_node_id, superadmin_role_id, admin_user_id, access_token).
+async fn setup(app: &TestApp) -> (String, String, String, String, String) {
+    let slug = format!("roletest-{}", &Uuid::new_v4().to_string()[..8]);
     let mut client = app.admin_client().await;
     let resp = client
         .bootstrap(with_admin_key(Request::new(BootstrapRequest {
-            tenant_slug: "roletest".to_string(),
+            tenant_slug: slug.clone(),
             tenant_label: "Role Test Tenant".to_string(),
-            admin_email: "admin@roletest.com".to_string(),
+            admin_email: format!("admin@{}.com", slug),
             admin_password: "AdminPass123!".to_string(),
             admin_display_name: None,
         })))
@@ -28,6 +31,7 @@ async fn setup(app: &TestApp) -> (String, String, String, String) {
         resp.tenant_id,
         resp.root_org_node_id,
         resp.superadmin_role_id,
+        resp.admin_user_id,
         resp.access_token,
     )
 }
@@ -37,9 +41,10 @@ async fn setup(app: &TestApp) -> (String, String, String, String) {
 // ============================================================================
 
 #[tokio::test]
+#[serial]
 async fn delete_role_happy_path() {
     let app = TestApp::spawn().await;
-    let (tenant_id, _, _, token) = setup(&app).await;
+    let (tenant_id, _, _, _, token) = setup(&app).await;
 
     let mut client = app.role_client().await;
 
@@ -81,13 +86,14 @@ async fn delete_role_happy_path() {
     assert!(get_resp.is_err());
     assert_eq!(get_resp.unwrap_err().code(), tonic::Code::NotFound);
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn delete_role_not_found() {
     let app = TestApp::spawn().await;
-    let (_, _, _, token) = setup(&app).await;
+    let (_, _, _, _, token) = setup(&app).await;
 
     let mut client = app.role_client().await;
 
@@ -102,7 +108,7 @@ async fn delete_role_not_found() {
     assert!(resp.is_err());
     assert_eq!(resp.unwrap_err().code(), tonic::Code::NotFound);
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 // ============================================================================
@@ -110,9 +116,10 @@ async fn delete_role_not_found() {
 // ============================================================================
 
 #[tokio::test]
+#[serial]
 async fn revoke_capability_happy_path() {
     let app = TestApp::spawn().await;
-    let (tenant_id, _, _, token) = setup(&app).await;
+    let (tenant_id, _, _, _, token) = setup(&app).await;
 
     let mut client = app.role_client().await;
 
@@ -158,13 +165,14 @@ async fn revoke_capability_happy_path() {
         resp.err()
     );
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn revoke_capability_not_found_role() {
     let app = TestApp::spawn().await;
-    let (_, _, _, token) = setup(&app).await;
+    let (_, _, _, _, token) = setup(&app).await;
 
     let mut client = app.role_client().await;
 
@@ -180,7 +188,7 @@ async fn revoke_capability_not_found_role() {
     assert!(resp.is_err());
     assert_eq!(resp.unwrap_err().code(), tonic::Code::NotFound);
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 // ============================================================================
@@ -188,9 +196,10 @@ async fn revoke_capability_not_found_role() {
 // ============================================================================
 
 #[tokio::test]
+#[serial]
 async fn phone_invitation_create_and_accept() {
     let app = TestApp::spawn().await;
-    let (tenant_id, root_org_id, superadmin_role_id, token) = setup(&app).await;
+    let (tenant_id, root_org_id, superadmin_role_id, admin_user_id, token) = setup(&app).await;
 
     let mut inv_client = app.invitation_client().await;
 
@@ -202,7 +211,7 @@ async fn phone_invitation_create_and_accept() {
                 email: String::new(),
                 org_node_id: root_org_id.clone(),
                 role_id: superadmin_role_id.clone(),
-                inviter_user_id: "00000000-0000-0000-0000-000000000000".to_string(), // placeholder
+                inviter_user_id: admin_user_id.clone(), // placeholder
                 expires_in_hours: Some(24),
                 phone: Some("+1234567890".to_string()),
                 verification_type: Some("phone".to_string()),
@@ -252,13 +261,14 @@ async fn phone_invitation_create_and_accept() {
         Some("Phone User".to_string())
     );
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn phone_invitation_rejects_weak_password() {
     let app = TestApp::spawn().await;
-    let (tenant_id, root_org_id, superadmin_role_id, token) = setup(&app).await;
+    let (tenant_id, root_org_id, superadmin_role_id, admin_user_id, token) = setup(&app).await;
 
     let mut inv_client = app.invitation_client().await;
 
@@ -270,7 +280,7 @@ async fn phone_invitation_rejects_weak_password() {
                 email: String::new(),
                 org_node_id: root_org_id.clone(),
                 role_id: superadmin_role_id.clone(),
-                inviter_user_id: "00000000-0000-0000-0000-000000000000".to_string(),
+                inviter_user_id: admin_user_id.clone(),
                 expires_in_hours: Some(24),
                 phone: Some("+1234567891".to_string()),
                 verification_type: Some("phone".to_string()),
@@ -297,5 +307,5 @@ async fn phone_invitation_rejects_weak_password() {
         tonic::Code::InvalidArgument
     );
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }

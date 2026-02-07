@@ -247,6 +247,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
+ "serial_test",
  "service-core",
  "sha2",
  "sqlx",

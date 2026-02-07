@@ -21,9 +21,7 @@ pub async fn setup() -> WorkflowTestContext {
         .expect("Failed to create workflow test context")
 }
 
-/// Helper to check if workflow tests should be skipped.
-///
-/// Returns true if SKIP_WORKFLOW_TESTS env var is set.
+#[allow(dead_code)]
 pub fn should_skip() -> bool {
     std::env::var("SKIP_WORKFLOW_TESTS").is_ok()
 }

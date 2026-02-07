@@ -20,9 +20,8 @@ static DB_COUNTER: AtomicU32 = AtomicU32::new(0);
 
 /// Get the database URL for testing from environment or use default.
 pub fn get_test_database_url() -> String {
-    std::env::var("TEST_DATABASE_URL").unwrap_or_else(|_| {
-        "postgres://postgres:pass%40word1@localhost:5432/micros_test".to_string()
-    })
+    std::env::var("INVOICING_TEST_DATABASE_URL")
+        .expect("INVOICING_TEST_DATABASE_URL must be set - use scripts/integ-tests.sh to run tests")
 }
 
 /// Generate a unique schema name for test isolation.

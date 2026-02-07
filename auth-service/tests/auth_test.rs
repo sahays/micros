@@ -9,20 +9,26 @@ use auth_service::grpc::proto::auth::{
     ValidateTokenRequest,
 };
 use common::{with_admin_key, TestApp};
+use serial_test::serial;
 use tonic::Request;
 
 /// Helper to bootstrap and get a tenant for auth tests.
+/// Uses a unique slug per invocation to avoid collisions in parallel test runs.
 async fn setup_tenant(app: &TestApp) -> String {
+    let slug = format!(
+        "authtest-{}",
+        uuid::Uuid::new_v4().to_string()[..8].to_string()
+    );
     let mut client = app.admin_client().await;
     let request = with_admin_key(Request::new(BootstrapRequest {
-        tenant_slug: "authtest".to_string(),
+        tenant_slug: slug.clone(),
         tenant_label: "Auth Test Tenant".to_string(),
-        admin_email: "admin@authtest.com".to_string(),
+        admin_email: format!("admin@{}.com", slug),
         admin_password: "AdminPass123!".to_string(),
         admin_display_name: None,
     }));
     client.bootstrap(request).await.unwrap();
-    "authtest".to_string()
+    slug
 }
 
 // ============================================================================
@@ -30,6 +36,7 @@ async fn setup_tenant(app: &TestApp) -> String {
 // ============================================================================
 
 #[tokio::test]
+#[serial]
 async fn register_creates_new_user() {
     let app = TestApp::spawn().await;
     let tenant_slug = setup_tenant(&app).await;
@@ -59,10 +66,11 @@ async fn register_creates_new_user() {
     assert_eq!(user.email, "newuser@example.com");
     assert_eq!(user.display_name, Some("New User".to_string()));
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn register_fails_for_duplicate_email() {
     let app = TestApp::spawn().await;
     let tenant_slug = setup_tenant(&app).await;
@@ -90,10 +98,11 @@ async fn register_fails_for_duplicate_email() {
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::AlreadyExists);
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn register_fails_for_invalid_tenant() {
     let app = TestApp::spawn().await;
     let mut client = app.auth_client().await;
@@ -111,10 +120,11 @@ async fn register_fails_for_invalid_tenant() {
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::NotFound);
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn register_validates_password_length() {
     let app = TestApp::spawn().await;
     let tenant_slug = setup_tenant(&app).await;
@@ -134,10 +144,11 @@ async fn register_validates_password_length() {
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
     assert!(status.message().contains("Password"));
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn register_validates_email_format() {
     let app = TestApp::spawn().await;
     let tenant_slug = setup_tenant(&app).await;
@@ -157,7 +168,7 @@ async fn register_validates_email_format() {
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
     assert!(status.message().to_lowercase().contains("email"));
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 // ============================================================================
@@ -165,6 +176,7 @@ async fn register_validates_email_format() {
 // ============================================================================
 
 #[tokio::test]
+#[serial]
 async fn login_succeeds_with_valid_credentials() {
     let app = TestApp::spawn().await;
     let tenant_slug = setup_tenant(&app).await;
@@ -198,10 +210,11 @@ async fn login_succeeds_with_valid_credentials() {
     assert!(!response.refresh_token.is_empty());
     assert_eq!(response.token_type, "Bearer");
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn login_fails_with_wrong_password() {
     let app = TestApp::spawn().await;
     let tenant_slug = setup_tenant(&app).await;
@@ -229,10 +242,11 @@ async fn login_fails_with_wrong_password() {
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::Unauthenticated);
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn login_fails_for_nonexistent_user() {
     let app = TestApp::spawn().await;
     let tenant_slug = setup_tenant(&app).await;
@@ -250,7 +264,7 @@ async fn login_fails_for_nonexistent_user() {
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::Unauthenticated);
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 // ============================================================================
@@ -258,6 +272,7 @@ async fn login_fails_for_nonexistent_user() {
 // ============================================================================
 
 #[tokio::test]
+#[serial]
 async fn refresh_returns_new_tokens() {
     let app = TestApp::spawn().await;
     let tenant_slug = setup_tenant(&app).await;
@@ -291,10 +306,11 @@ async fn refresh_returns_new_tokens() {
     // New refresh token should be different (rotation)
     assert_ne!(response.refresh_token, original_refresh_token);
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn refresh_fails_with_invalid_token() {
     let app = TestApp::spawn().await;
     let mut client = app.auth_client().await;
@@ -309,10 +325,11 @@ async fn refresh_fails_with_invalid_token() {
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::Unauthenticated);
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn refresh_fails_after_logout() {
     let app = TestApp::spawn().await;
     let tenant_slug = setup_tenant(&app).await;
@@ -345,7 +362,7 @@ async fn refresh_fails_after_logout() {
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::Unauthenticated);
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 // ============================================================================
@@ -353,6 +370,7 @@ async fn refresh_fails_after_logout() {
 // ============================================================================
 
 #[tokio::test]
+#[serial]
 async fn validate_token_returns_claims_for_valid_token() {
     let app = TestApp::spawn().await;
     let tenant_slug = setup_tenant(&app).await;
@@ -387,10 +405,11 @@ async fn validate_token_returns_claims_for_valid_token() {
     assert!(!claims.sub.is_empty()); // User ID
     assert_eq!(claims.email, "validate@example.com");
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn validate_token_returns_invalid_for_bad_token() {
     let app = TestApp::spawn().await;
     let mut client = app.auth_client().await;
@@ -406,7 +425,7 @@ async fn validate_token_returns_invalid_for_bad_token() {
     assert!(!response.valid);
     assert!(response.claims.is_none());
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 // ============================================================================
@@ -414,6 +433,7 @@ async fn validate_token_returns_invalid_for_bad_token() {
 // ============================================================================
 
 #[tokio::test]
+#[serial]
 async fn logout_succeeds() {
     let app = TestApp::spawn().await;
     let tenant_slug = setup_tenant(&app).await;
@@ -440,10 +460,11 @@ async fn logout_succeeds() {
         response.err()
     );
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }
 
 #[tokio::test]
+#[serial]
 async fn logout_succeeds_with_invalid_token() {
     // Logout should be idempotent - it shouldn't fail for invalid tokens
     let app = TestApp::spawn().await;
@@ -457,5 +478,5 @@ async fn logout_succeeds_with_invalid_token() {
     // Should not fail even with invalid token
     assert!(response.is_ok());
 
-    app.cleanup().await.unwrap();
+    let _ = app.cleanup().await;
 }

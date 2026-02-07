@@ -16,7 +16,7 @@ impl UpiService {
 
     pub fn generate_upi_link(
         &self,
-        amount: f64,
+        amount_paise: u64,
         description: Option<String>,
         tr_id: Option<String>,
         vpa: Option<String>,
@@ -26,13 +26,16 @@ impl UpiService {
         let vpa = vpa.unwrap_or_else(|| self.config.vpa.clone());
         let merchant_name = merchant_name.unwrap_or_else(|| self.config.merchant_name.clone());
 
+        // Convert paise to rupees for UPI link (UPI requires rupees)
+        let amount_rupees = amount_paise as f64 / 100.0;
+
         // Basic UPI intent format: upi://pay?pa=...&pn=...&am=...&cu=INR&tn=...
         // tr is transaction reference ID
         let mut link = format!(
             "upi://pay?pa={}&pn={}&am={:.2}&cu=INR&tn={}",
             vpa,
             urlencoding::encode(&merchant_name),
-            amount,
+            amount_rupees,
             urlencoding::encode(&description)
         );
 

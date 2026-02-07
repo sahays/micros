@@ -1,16 +1,21 @@
 use payment_service::config::{
-    AuthConfig, Config, DatabaseConfig, RazorpayConfig, RedisConfig, ServerConfig,
-    ServiceSignatureConfig, UpiConfig,
+    AuthConfig, Config, DatabaseConfig, FeatureFlagsConfig, RazorpayConfig, RedisConfig,
+    ServerConfig, ServiceSignatureConfig, UpiConfig,
 };
 use payment_service::startup::Application;
 use secrecy::Secret;
 use service_core::grpc::{PaymentClient, PaymentClientConfig};
 use std::time::Duration;
+use wiremock::MockServer;
 
+#[allow(dead_code)]
 pub const TEST_APP_ID: &str = "test-app";
+#[allow(dead_code)]
 pub const TEST_ORG_ID: &str = "test-org";
+#[allow(dead_code)]
 pub const TEST_USER_ID: &str = "test-user";
 
+#[allow(dead_code)]
 pub struct TestApp {
     pub http_address: String,
     pub grpc_address: String,
@@ -18,11 +23,13 @@ pub struct TestApp {
     pub grpc_port: u16,
     pub db: mongodb::Database,
     pub db_name: String,
+    pub razorpay_mock: MockServer,
 }
 
 impl TestApp {
     pub async fn spawn() -> Self {
         let db_name = format!("payment_test_{}", uuid::Uuid::new_v4());
+        let razorpay_mock = MockServer::start().await;
 
         let config = Config {
             server: ServerConfig {
@@ -56,10 +63,14 @@ impl TestApp {
                 key_id: "test_key_id".to_string(),
                 key_secret: Secret::new("test_key_secret".to_string()),
                 webhook_secret: Secret::new("test_webhook_secret".to_string()),
-                api_base_url: "https://api.razorpay.com/v1".to_string(),
+                api_base_url: format!("{}/v1", razorpay_mock.uri()),
             },
             auth: AuthConfig {
                 auth_service_endpoint: None, // Tests use BFF trust model
+            },
+            feature_flags: FeatureFlagsConfig {
+                razorpay_route_enabled: true,
+                razorpay_subscriptions_enabled: true,
             },
             service_name: "payment-service-test".to_string(),
         };
@@ -98,10 +109,11 @@ impl TestApp {
             grpc_port,
             db,
             db_name,
+            razorpay_mock,
         }
     }
 
-    /// Create a gRPC client connected to this test app.
+    #[allow(dead_code)]
     pub async fn grpc_client(&self) -> PaymentClient {
         PaymentClient::new(PaymentClientConfig {
             endpoint: self.grpc_address.clone(),
@@ -112,7 +124,7 @@ impl TestApp {
         .expect("Failed to connect to gRPC server")
     }
 
-    /// Cleanup test database after test completes.
+    #[allow(dead_code)]
     pub async fn cleanup(&self) {
         self.db
             .drop(None)

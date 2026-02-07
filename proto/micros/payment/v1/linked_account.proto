@@ -1,0 +1,190 @@
+syntax = "proto3";
+
+package micros.payment.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// LinkedAccountStatus represents the lifecycle state of a linked account.
+enum LinkedAccountStatus {
+  LINKED_ACCOUNT_STATUS_UNSPECIFIED = 0;
+  LINKED_ACCOUNT_STATUS_CREATED = 1;
+  LINKED_ACCOUNT_STATUS_UNDER_REVIEW = 2;
+  LINKED_ACCOUNT_STATUS_NEEDS_CLARIFICATION = 3;
+  LINKED_ACCOUNT_STATUS_ACTIVATED = 4;
+  LINKED_ACCOUNT_STATUS_SUSPENDED = 5;
+}
+
+// CommissionType defines how commission is calculated.
+enum CommissionType {
+  COMMISSION_TYPE_UNSPECIFIED = 0;
+  COMMISSION_TYPE_FLAT = 1;
+  COMMISSION_TYPE_PERCENTAGE = 2;
+}
+
+// CommissionConfig defines commission settings for a linked account.
+message CommissionConfig {
+  // Commission type (flat or percentage).
+  CommissionType commission_type = 1;
+
+  // Commission value (amount in paise for flat, basis points for percentage).
+  uint64 value = 2;
+}
+
+// BankAccount details for a linked account.
+message BankAccount {
+  // Account holder name.
+  string account_holder_name = 1;
+
+  // Bank account number.
+  string account_number = 2;
+
+  // IFSC code.
+  string ifsc_code = 3;
+
+  // Account type (e.g., "savings", "current").
+  string account_type = 4;
+}
+
+// LegalInfo for linked account KYC.
+message LegalInfo {
+  // Legal business name.
+  string legal_business_name = 1;
+
+  // Business type (e.g., "individual", "partnership", "company").
+  string business_type = 2;
+
+  // PAN number.
+  optional string pan = 3;
+
+  // GST number.
+  optional string gst = 4;
+}
+
+// LinkedAccount represents a Razorpay Route linked account.
+message LinkedAccount {
+  // Unique identifier.
+  string id = 1;
+
+  // Application ID (tenant).
+  string app_id = 2;
+
+  // Organization ID within the application.
+  string org_id = 3;
+
+  // Razorpay account ID.
+  string razorpay_account_id = 4;
+
+  // Display name.
+  string name = 5;
+
+  // Email address.
+  string email = 6;
+
+  // Current status.
+  LinkedAccountStatus status = 7;
+
+  // Commission configuration.
+  optional CommissionConfig commission = 8;
+
+  // Bank account details.
+  optional BankAccount bank_account = 9;
+
+  // Legal information.
+  optional LegalInfo legal_info = 10;
+
+  // When the account was created.
+  google.protobuf.Timestamp created_at = 11;
+
+  // When the account was last updated.
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+// CreateLinkedAccountRequest to create a new linked account.
+message CreateLinkedAccountRequest {
+  // Display name for the linked account.
+  string name = 1;
+
+  // Email address.
+  string email = 2;
+
+  // Bank account details.
+  BankAccount bank_account = 3;
+
+  // Legal information.
+  LegalInfo legal_info = 4;
+
+  // Optional commission configuration.
+  optional CommissionConfig commission = 5;
+}
+
+// CreateLinkedAccountResponse after creating a linked account.
+message CreateLinkedAccountResponse {
+  // The created linked account.
+  LinkedAccount linked_account = 1;
+}
+
+// GetLinkedAccountRequest to retrieve a linked account by ID.
+message GetLinkedAccountRequest {
+  // Linked account ID.
+  string linked_account_id = 1;
+}
+
+// GetLinkedAccountResponse with the linked account details.
+message GetLinkedAccountResponse {
+  // The linked account.
+  LinkedAccount linked_account = 1;
+}
+
+// UpdateLinkedAccountRequest to update a linked account.
+message UpdateLinkedAccountRequest {
+  // Linked account ID.
+  string linked_account_id = 1;
+
+  // Updated name (optional).
+  optional string name = 2;
+
+  // Updated email (optional).
+  optional string email = 3;
+}
+
+// UpdateLinkedAccountResponse after updating.
+message UpdateLinkedAccountResponse {
+  // The updated linked account.
+  LinkedAccount linked_account = 1;
+}
+
+// ListLinkedAccountsRequest to list linked accounts.
+message ListLinkedAccountsRequest {
+  // Filter by status (optional).
+  optional LinkedAccountStatus status = 1;
+
+  // Maximum number of results (default: 50, max: 100).
+  int32 limit = 2;
+
+  // Offset for pagination.
+  int32 offset = 3;
+}
+
+// ListLinkedAccountsResponse with paginated linked accounts.
+message ListLinkedAccountsResponse {
+  // List of linked accounts.
+  repeated LinkedAccount linked_accounts = 1;
+
+  // Total count matching the filter.
+  int64 total_count = 2;
+}
+
+// UpdateCommissionConfigRequest to update commission settings.
+message UpdateCommissionConfigRequest {
+  // Linked account ID.
+  string linked_account_id = 1;
+
+  // New commission configuration.
+  CommissionConfig commission = 2;
+}
+
+// UpdateCommissionConfigResponse after updating commission.
+message UpdateCommissionConfigResponse {
+  // The updated linked account.
+  LinkedAccount linked_account = 1;
+}

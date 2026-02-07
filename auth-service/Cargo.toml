@@ -69,6 +69,8 @@ tonic-build = "0.12"
 [dev-dependencies]
 tempfile = "3.24.0"
 tokio-test = "0.4"
+serial_test = "3.0"
+uuid = { version = "1", features = ["v4"] }
 
 [lib]
 name = "auth_service"

@@ -17,7 +17,7 @@ service InvitationService {
   rpc AcceptInvitation(AcceptInvitationRequest) returns (AcceptInvitationResponse);
 
   // Accept an invitation by phone (OTP pre-verified, no password required).
-  rpc AcceptInvitationByPhone(AcceptInvitationByPhoneRequest) returns (AcceptInvitationResponse);
+  rpc AcceptInvitationByPhone(AcceptInvitationByPhoneRequest) returns (AcceptInvitationByPhoneResponse);
 }
 
 // CreateInvitationRequest for creating an invitation.
@@ -85,6 +85,15 @@ message AcceptInvitationByPhoneRequest {
 
 // AcceptInvitationResponse after accepting invitation.
 message AcceptInvitationResponse {
+  // Auth tokens for the new user.
+  LoginResponse auth = 1;
+
+  // Message.
+  string message = 2;
+}
+
+// AcceptInvitationByPhoneResponse after accepting invitation by phone.
+message AcceptInvitationByPhoneResponse {
   // Auth tokens for the new user.
   LoginResponse auth = 1;
 

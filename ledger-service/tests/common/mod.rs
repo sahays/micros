@@ -10,6 +10,7 @@ use ledger_service::startup::Application;
 use service_core::config::Config as CommonConfig;
 use std::sync::Once;
 use tonic::transport::Channel;
+use tonic::Request;
 use uuid::Uuid;
 
 static INIT: Once = Once::new();
@@ -29,8 +30,8 @@ pub fn init_tracing() {
 pub async fn spawn_app() -> (LedgerServiceClient<Channel>, Uuid) {
     init_tracing();
 
-    let database_url = std::env::var("TEST_DATABASE_URL")
-        .expect("TEST_DATABASE_URL must be set - use scripts/integ-tests.sh to run tests");
+    let database_url = std::env::var("LEDGER_TEST_DATABASE_URL")
+        .expect("LEDGER_TEST_DATABASE_URL must be set - use scripts/integ-tests.sh to run tests");
 
     let config = LedgerConfig {
         common: CommonConfig { port: 0 },
@@ -80,6 +81,18 @@ pub async fn spawn_app() -> (LedgerServiceClient<Channel>, Uuid) {
     (grpc_client, tenant_id)
 }
 
+/// Wrap a gRPC request with BFF trust headers (x-tenant-id, x-user-id).
+pub fn with_tenant<T>(inner: T, tenant_id: Uuid) -> Request<T> {
+    let mut request = Request::new(inner);
+    request
+        .metadata_mut()
+        .insert("x-tenant-id", tenant_id.to_string().parse().unwrap());
+    request
+        .metadata_mut()
+        .insert("x-user-id", Uuid::new_v4().to_string().parse().unwrap());
+    request
+}
+
 /// Helper to create an account for testing.
 pub async fn create_test_account(
     client: &mut LedgerServiceClient<Channel>,
@@ -89,7 +102,7 @@ pub async fn create_test_account(
     currency: &str,
     allow_negative: bool,
 ) -> CreateAccountResponse {
-    let request = CreateAccountRequest {
+    let inner = CreateAccountRequest {
         tenant_id: tenant_id.to_string(),
         account_type: account_type as i32,
         account_code: account_code.to_string(),
@@ -99,13 +112,13 @@ pub async fn create_test_account(
     };
 
     client
-        .create_account(request)
+        .create_account(with_tenant(inner, tenant_id))
         .await
         .expect("Failed to create account")
         .into_inner()
 }
 
-/// Helper to post a simple two-entry transaction.
+#[allow(dead_code)]
 pub async fn post_test_transaction(
     client: &mut LedgerServiceClient<Channel>,
     tenant_id: Uuid,
@@ -115,7 +128,7 @@ pub async fn post_test_transaction(
     effective_date: Option<&str>,
     idempotency_key: Option<&str>,
 ) -> PostTransactionResponse {
-    let request = PostTransactionRequest {
+    let inner = PostTransactionRequest {
         tenant_id: tenant_id.to_string(),
         entries: vec![
             PostTransactionEntry {
@@ -135,27 +148,27 @@ pub async fn post_test_transaction(
     };
 
     client
-        .post_transaction(request)
+        .post_transaction(with_tenant(inner, tenant_id))
         .await
         .expect("Failed to post transaction")
         .into_inner()
 }
 
-/// Helper to get balance for an account.
+#[allow(dead_code)]
 pub async fn get_balance(
     client: &mut LedgerServiceClient<Channel>,
     tenant_id: Uuid,
     account_id: &str,
     as_of_date: Option<&str>,
 ) -> GetBalanceResponse {
-    let request = GetBalanceRequest {
+    let inner = GetBalanceRequest {
         tenant_id: tenant_id.to_string(),
         account_id: account_id.to_string(),
         as_of_date: as_of_date.unwrap_or("").to_string(),
     };
 
     client
-        .get_balance(request)
+        .get_balance(with_tenant(inner, tenant_id))
         .await
         .expect("Failed to get balance")
         .into_inner()

@@ -1,16 +1,18 @@
 use document_service::config::DocumentConfig;
 use document_service::services::MongoDb;
 use document_service::startup::Application;
-use service_core::config::Config as CoreConfig;
 use service_core::grpc::{DocumentClient, DocumentClientConfig};
 use std::time::Duration;
 use uuid::Uuid;
 
-// Test constants for tenant context
+#[allow(dead_code)]
 pub const TEST_APP_ID: &str = "test-app-id";
+#[allow(dead_code)]
 pub const TEST_ORG_ID: &str = "test-org-id";
+#[allow(dead_code)]
 pub const TEST_USER_ID: &str = "test_user_123";
 
+#[allow(dead_code)]
 pub struct TestApp {
     pub http_address: String,
     pub grpc_address: String,
@@ -71,7 +73,7 @@ impl TestApp {
         }
     }
 
-    /// Create a gRPC client connected to this test app.
+    #[allow(dead_code)]
     pub async fn grpc_client(&self) -> DocumentClient {
         DocumentClient::new(DocumentClientConfig {
             endpoint: self.grpc_address.clone(),
@@ -82,7 +84,7 @@ impl TestApp {
         .expect("Failed to connect to gRPC server")
     }
 
-    /// Cleanup test resources (database and storage).
+    #[allow(dead_code)]
     pub async fn cleanup(&self) {
         let _ = self.db.client().database(&self.db_name).drop(None).await;
         let _ = tokio::fs::remove_dir_all(&self.storage_path).await;

@@ -121,7 +121,7 @@ pub async fn create_order(
         app_id: tenant.app_id.clone(),
         org_id: tenant.org_id.clone(),
         user_id: tenant.user_id.clone(),
-        amount: payload.amount as f64 / 100.0, // Convert from paise to rupees
+        amount_paise: payload.amount,
         currency: payload.currency.clone(),
         status: TransactionStatus::Created,
         provider_order_id: Some(razorpay_order.id.clone()),
@@ -434,7 +434,7 @@ pub async fn get_transaction(
 #[derive(Debug, Serialize)]
 pub struct TransactionResponse {
     pub id: Uuid,
-    pub amount: f64,
+    pub amount_paise: u64,
     pub currency: String,
     pub status: TransactionStatus,
     pub provider_order_id: Option<String>,
@@ -446,7 +446,7 @@ impl From<Transaction> for TransactionResponse {
     fn from(t: Transaction) -> Self {
         Self {
             id: t.id,
-            amount: t.amount,
+            amount_paise: t.amount_paise,
             currency: t.currency,
             status: t.status,
             provider_order_id: t.provider_order_id,

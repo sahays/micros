@@ -98,6 +98,107 @@ pub struct WebhookEvent {
 pub struct WebhookPayload {
     pub payment: Option<WebhookPaymentEntity>,
     pub order: Option<WebhookOrderEntity>,
+    #[serde(default)]
+    pub transfer: Option<WebhookTransferEntity>,
+    #[serde(default)]
+    pub settlement: Option<WebhookSettlementEntity>,
+    #[serde(default)]
+    pub subscription: Option<WebhookSubscriptionEntity>,
+    #[serde(default)]
+    pub payment_link: Option<WebhookPaymentLinkEntity>,
+    #[serde(default)]
+    pub refund: Option<WebhookRefundEntity>,
+    #[serde(default)]
+    pub account: Option<WebhookAccountEntity>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WebhookTransferEntity {
+    pub entity: TransferEntity,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct TransferEntity {
+    pub id: String,
+    pub entity: String,
+    pub amount: u64,
+    pub currency: String,
+    pub status: String,
+    pub source: Option<String>,
+    pub recipient: Option<String>,
+    pub amount_reversed: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WebhookSettlementEntity {
+    pub entity: SettlementEntity,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SettlementEntity {
+    pub id: String,
+    pub entity: String,
+    pub amount: u64,
+    pub status: String,
+    pub utr: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WebhookSubscriptionEntity {
+    pub entity: SubscriptionEntity,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubscriptionEntity {
+    pub id: String,
+    pub entity: String,
+    pub plan_id: Option<String>,
+    pub status: String,
+    pub total_count: Option<u32>,
+    pub paid_count: Option<u32>,
+    pub remaining_count: Option<u32>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WebhookPaymentLinkEntity {
+    pub entity: PaymentLinkEntity,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PaymentLinkEntity {
+    pub id: String,
+    pub amount: u64,
+    pub status: String,
+    pub amount_paid: Option<u64>,
+    pub short_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WebhookRefundEntity {
+    pub entity: RefundEntity,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RefundEntity {
+    pub id: String,
+    pub entity: String,
+    pub amount: u64,
+    pub currency: String,
+    pub payment_id: Option<String>,
+    pub status: String,
+    pub speed_requested: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct WebhookAccountEntity {
+    pub entity: AccountEntity,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AccountEntity {
+    pub id: String,
+    pub status: Option<String>,
+    pub email: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -139,6 +240,110 @@ impl RazorpayClient {
     /// Check if Razorpay is configured (credentials are set).
     pub fn is_configured(&self) -> bool {
         !self.config.key_id.is_empty() && !self.config.key_secret.expose_secret().is_empty()
+    }
+
+    /// Get the v1 API base URL.
+    pub fn api_base_url(&self) -> &str {
+        &self.config.api_base_url
+    }
+
+    /// Get the v2 API base URL (for Route APIs).
+    pub fn api_base_url_v2(&self) -> String {
+        self.config.api_base_url.replace("/v1", "/v2")
+    }
+
+    /// Shared authenticated GET request.
+    pub(crate) async fn authed_get<T: serde::de::DeserializeOwned>(&self, url: &str) -> Result<T> {
+        if !self.is_configured() {
+            return Err(anyhow!("Razorpay credentials not configured"));
+        }
+
+        let response = self
+            .client
+            .get(url)
+            .basic_auth(
+                &self.config.key_id,
+                Some(self.config.key_secret.expose_secret()),
+            )
+            .send()
+            .await?;
+
+        let status = response.status();
+        let body = response.text().await?;
+
+        tracing::debug!(status = %status, url = %url, "Razorpay GET response");
+
+        if status.is_success() {
+            Ok(serde_json::from_str(&body)?)
+        } else {
+            Err(anyhow!("Razorpay API error ({}): {}", status, body))
+        }
+    }
+
+    /// Shared authenticated POST request.
+    pub(crate) async fn authed_post<B: serde::Serialize, T: serde::de::DeserializeOwned>(
+        &self,
+        url: &str,
+        body: &B,
+    ) -> Result<T> {
+        if !self.is_configured() {
+            return Err(anyhow!("Razorpay credentials not configured"));
+        }
+
+        let response = self
+            .client
+            .post(url)
+            .basic_auth(
+                &self.config.key_id,
+                Some(self.config.key_secret.expose_secret()),
+            )
+            .json(body)
+            .send()
+            .await?;
+
+        let status = response.status();
+        let body_text = response.text().await?;
+
+        tracing::debug!(status = %status, url = %url, "Razorpay POST response");
+
+        if status.is_success() {
+            Ok(serde_json::from_str(&body_text)?)
+        } else {
+            Err(anyhow!("Razorpay API error ({}): {}", status, body_text))
+        }
+    }
+
+    /// Shared authenticated PATCH request.
+    pub(crate) async fn authed_patch<B: serde::Serialize, T: serde::de::DeserializeOwned>(
+        &self,
+        url: &str,
+        body: &B,
+    ) -> Result<T> {
+        if !self.is_configured() {
+            return Err(anyhow!("Razorpay credentials not configured"));
+        }
+
+        let response = self
+            .client
+            .patch(url)
+            .basic_auth(
+                &self.config.key_id,
+                Some(self.config.key_secret.expose_secret()),
+            )
+            .json(body)
+            .send()
+            .await?;
+
+        let status = response.status();
+        let body_text = response.text().await?;
+
+        tracing::debug!(status = %status, url = %url, "Razorpay PATCH response");
+
+        if status.is_success() {
+            Ok(serde_json::from_str(&body_text)?)
+        } else {
+            Err(anyhow!("Razorpay API error ({}): {}", status, body_text))
+        }
     }
 
     /// Create a new order in Razorpay.

@@ -4,7 +4,7 @@
 
 mod common;
 
-use common::{create_test_account, post_test_transaction, spawn_app};
+use common::{create_test_account, post_test_transaction, spawn_app, with_tenant};
 use ledger_service::grpc::proto::{
     AccountType as ProtoAccountType, Direction as ProtoDirection, GetStatementRequest,
     PostTransactionEntry, PostTransactionRequest,
@@ -77,7 +77,11 @@ async fn get_statement_with_entries() {
         end_date: "2026-01-31".to_string(),
     };
 
-    let response = client.get_statement(request).await.unwrap().into_inner();
+    let response = client
+        .get_statement(with_tenant(request, tenant_id))
+        .await
+        .unwrap()
+        .into_inner();
 
     assert_eq!(response.account_id, cash_id);
     assert_eq!(response.currency, "USD");
@@ -160,7 +164,11 @@ async fn get_statement_with_opening_balance() {
         end_date: "2026-01-31".to_string(),
     };
 
-    let response = client.get_statement(request).await.unwrap().into_inner();
+    let response = client
+        .get_statement(with_tenant(request, tenant_id))
+        .await
+        .unwrap()
+        .into_inner();
 
     assert_eq!(
         response.opening_balance, "500",
@@ -238,7 +246,10 @@ async fn get_statement_with_running_balance() {
         idempotency_key: String::new(),
         metadata: String::new(),
     };
-    client.post_transaction(request).await.unwrap();
+    client
+        .post_transaction(with_tenant(request, tenant_id))
+        .await
+        .unwrap();
 
     // Debit cash again
     post_test_transaction(
@@ -260,7 +271,11 @@ async fn get_statement_with_running_balance() {
         end_date: "2026-01-31".to_string(),
     };
 
-    let response = client.get_statement(request).await.unwrap().into_inner();
+    let response = client
+        .get_statement(with_tenant(request, tenant_id))
+        .await
+        .unwrap()
+        .into_inner();
 
     assert_eq!(response.opening_balance, "0");
     assert_eq!(response.lines.len(), 3);
@@ -320,7 +335,11 @@ async fn get_statement_empty_period() {
         end_date: "2026-02-28".to_string(),
     };
 
-    let response = client.get_statement(request).await.unwrap().into_inner();
+    let response = client
+        .get_statement(with_tenant(request, tenant_id))
+        .await
+        .unwrap()
+        .into_inner();
 
     assert_eq!(response.opening_balance, "100"); // From January transaction
     assert_eq!(response.closing_balance, "100");
@@ -339,7 +358,7 @@ async fn get_statement_account_not_found() {
         end_date: "2026-01-31".to_string(),
     };
 
-    let result = client.get_statement(request).await;
+    let result = client.get_statement(with_tenant(request, tenant_id)).await;
     assert!(result.is_err());
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::NotFound);
@@ -368,7 +387,7 @@ async fn get_statement_invalid_date_range() {
         end_date: "2026-01-01".to_string(), // Before start!
     };
 
-    let result = client.get_statement(request).await;
+    let result = client.get_statement(with_tenant(request, tenant_id)).await;
     assert!(result.is_err());
     let status = result.unwrap_err();
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
@@ -425,7 +444,7 @@ async fn get_statement_tenant_isolation() {
         end_date: "2026-01-31".to_string(),
     };
 
-    let result = client.get_statement(request).await;
+    let result = client.get_statement(with_tenant(request, tenant2)).await;
     assert!(
         result.is_err(),
         "Should not find account from different tenant"

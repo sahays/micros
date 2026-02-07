@@ -13,7 +13,14 @@ pub struct Config {
     pub upi: UpiConfig,
     pub razorpay: RazorpayConfig,
     pub auth: AuthConfig,
+    pub feature_flags: FeatureFlagsConfig,
     pub service_name: String,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct FeatureFlagsConfig {
+    pub razorpay_route_enabled: bool,
+    pub razorpay_subscriptions_enabled: bool,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -101,6 +108,16 @@ impl Config {
         let razorpay_api_base_url = env::var("RAZORPAY_API_BASE_URL")
             .unwrap_or_else(|_| "https://api.razorpay.com/v1".to_string());
 
+        // Feature flags
+        let razorpay_route_enabled = env::var("RAZORPAY_ROUTE_ENABLED")
+            .unwrap_or_else(|_| "false".to_string())
+            .parse()
+            .unwrap_or(false);
+        let razorpay_subscriptions_enabled = env::var("RAZORPAY_SUBSCRIPTIONS_ENABLED")
+            .unwrap_or_else(|_| "false".to_string())
+            .parse()
+            .unwrap_or(false);
+
         Ok(Self {
             server: ServerConfig {
                 host,
@@ -133,6 +150,10 @@ impl Config {
                 // When set, capability enforcement is enabled via auth-service.
                 // Leave empty/unset for BFF trust model (default).
                 auth_service_endpoint: env::var("AUTH_SERVICE_ENDPOINT").ok(),
+            },
+            feature_flags: FeatureFlagsConfig {
+                razorpay_route_enabled,
+                razorpay_subscriptions_enabled,
             },
             service_name: "payment-service".to_string(),
         })

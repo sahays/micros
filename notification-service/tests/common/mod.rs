@@ -6,6 +6,7 @@ use service_core::config::Config as CoreConfig;
 use service_core::grpc::{NotificationClient, NotificationClientConfig};
 use std::time::Duration;
 
+#[allow(dead_code)]
 pub struct TestApp {
     pub http_address: String,
     pub grpc_address: String,

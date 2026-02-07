@@ -26,8 +26,9 @@ pub fn init_tracing() {
 
 /// Test configuration with empty auth endpoint (disables capability checking).
 fn test_config() -> ReconciliationConfig {
-    let database_url = std::env::var("TEST_DATABASE_URL")
-        .expect("TEST_DATABASE_URL must be set - use scripts/integ-tests.sh to run tests");
+    let database_url = std::env::var("RECONCILIATION_TEST_DATABASE_URL").expect(
+        "RECONCILIATION_TEST_DATABASE_URL must be set - use scripts/integ-tests.sh to run tests",
+    );
 
     ReconciliationConfig {
         common: CommonConfig { port: 0 },

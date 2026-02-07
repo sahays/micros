@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 pub struct QrGenerateRequest {
-    pub amount: f64,
+    pub amount_paise: u64,
     pub description: Option<String>,
     pub transaction_id: Option<String>,
     pub vpa: Option<String>,
@@ -19,7 +19,7 @@ pub struct QrGenerateResponse {
 /// Request to create a new transaction.
 #[derive(Deserialize)]
 pub struct CreateTransactionRequest {
-    pub amount: f64,
+    pub amount_paise: u64,
     pub currency: String,
 }
 
@@ -30,7 +30,7 @@ pub struct TransactionResponse {
     pub app_id: String,
     pub org_id: String,
     pub user_id: Option<String>,
-    pub amount: f64,
+    pub amount_paise: u64,
     pub currency: String,
     pub status: TransactionStatus,
     pub provider_order_id: Option<String>,
@@ -45,7 +45,7 @@ impl From<Transaction> for TransactionResponse {
             app_id: t.app_id,
             org_id: t.org_id,
             user_id: t.user_id,
-            amount: t.amount,
+            amount_paise: t.amount_paise,
             currency: t.currency,
             status: t.status,
             provider_order_id: t.provider_order_id,

@@ -9,12 +9,12 @@ async fn create_transaction_via_grpc() {
     let mut client = app.grpc_client().await;
 
     let transaction = client
-        .create_transaction(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), 100.0, "INR")
+        .create_transaction(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), 10000, "INR")
         .await
         .expect("Failed to create transaction");
 
     assert!(!transaction.id.is_empty());
-    assert_eq!(transaction.amount, 100.0);
+    assert_eq!(transaction.amount_paise, 10000);
     assert_eq!(transaction.currency, "INR");
     assert_eq!(transaction.status, TransactionStatus::Created as i32);
 
@@ -28,7 +28,7 @@ async fn get_transaction_via_grpc() {
 
     // Create a transaction first
     let created = client
-        .create_transaction(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), 250.50, "INR")
+        .create_transaction(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), 25050, "INR")
         .await
         .expect("Failed to create transaction");
 
@@ -39,7 +39,7 @@ async fn get_transaction_via_grpc() {
         .expect("Failed to get transaction");
 
     assert_eq!(fetched.id, created.id);
-    assert_eq!(fetched.amount, 250.50);
+    assert_eq!(fetched.amount_paise, 25050);
     assert_eq!(fetched.currency, "INR");
 
     app.cleanup().await;
@@ -52,7 +52,7 @@ async fn update_transaction_status_via_grpc() {
 
     // Create a transaction
     let created = client
-        .create_transaction(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), 500.0, "INR")
+        .create_transaction(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), 50000, "INR")
         .await
         .expect("Failed to create transaction");
 
@@ -91,7 +91,7 @@ async fn list_transactions_via_grpc() {
                 TEST_APP_ID,
                 TEST_ORG_ID,
                 Some(TEST_USER_ID),
-                (i + 1) as f64 * 100.0,
+                (i + 1) as u64 * 10000,
                 "INR",
             )
             .await
@@ -117,12 +117,12 @@ async fn list_transactions_with_status_filter() {
 
     // Create transactions with different statuses
     let tx1 = client
-        .create_transaction(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), 100.0, "INR")
+        .create_transaction(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), 10000, "INR")
         .await
         .expect("Failed to create transaction");
 
     let tx2 = client
-        .create_transaction(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), 200.0, "INR")
+        .create_transaction(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), 20000, "INR")
         .await
         .expect("Failed to create transaction");
 
@@ -204,7 +204,7 @@ async fn generate_upi_qr_via_grpc() {
             TEST_APP_ID,
             TEST_ORG_ID,
             Some(TEST_USER_ID),
-            100.0,
+            10000,
             Some("Test payment".to_string()),
             None,
             None,

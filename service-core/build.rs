@@ -55,6 +55,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &[
                 "../proto/micros/payment/v1/payment.proto",
                 "../proto/micros/payment/v1/transaction.proto",
+                "../proto/micros/payment/v1/linked_account.proto",
+                "../proto/micros/payment/v1/customer.proto",
+                "../proto/micros/payment/v1/transfer.proto",
+                "../proto/micros/payment/v1/settlement.proto",
+                "../proto/micros/payment/v1/subscription.proto",
+                "../proto/micros/payment/v1/payment_link.proto",
+                "../proto/micros/payment/v1/refund.proto",
             ],
             &[&proto_root],
         )?;

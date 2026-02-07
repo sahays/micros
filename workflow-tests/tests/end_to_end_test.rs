@@ -194,7 +194,7 @@ async fn payment_completion_flow() {
 
     // 1. Create payment transaction
     let mut create_request = Request::new(CreateTransactionRequest {
-        amount: 1500.00,
+        amount_paise: 150000,
         currency: "INR".to_string(),
     });
 

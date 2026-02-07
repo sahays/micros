@@ -3,9 +3,9 @@
 use crate::grpc::capability_check::require_capability;
 use crate::grpc::proto::auth::{
     invitation_service_server::InvitationService, AcceptInvitationByPhoneRequest,
-    AcceptInvitationRequest, AcceptInvitationResponse, CreateInvitationRequest,
-    CreateInvitationResponse, GetInvitationRequest, GetInvitationResponse, Invitation,
-    InvitationStatus, LoginResponse, UserInfo,
+    AcceptInvitationByPhoneResponse, AcceptInvitationRequest, AcceptInvitationResponse,
+    CreateInvitationRequest, CreateInvitationResponse, GetInvitationRequest, GetInvitationResponse,
+    Invitation, InvitationStatus, LoginResponse, UserInfo,
 };
 use crate::models::{
     AuditEvent, AuditEventType, Invitation as ModelInvitation, OrgAssignment, RefreshSession, User,
@@ -395,7 +395,7 @@ impl InvitationService for InvitationServiceImpl {
     async fn accept_invitation_by_phone(
         &self,
         request: Request<AcceptInvitationByPhoneRequest>,
-    ) -> Result<Response<AcceptInvitationResponse>, Status> {
+    ) -> Result<Response<AcceptInvitationByPhoneResponse>, Status> {
         let req = request.into_inner();
 
         let token_hash = hash_token(&req.token);
@@ -548,7 +548,7 @@ impl InvitationService for InvitationServiceImpl {
 
         let expires_in = self.state.config.jwt.access_token_expiry_minutes * 60;
 
-        Ok(Response::new(AcceptInvitationResponse {
+        Ok(Response::new(AcceptInvitationByPhoneResponse {
             auth: Some(LoginResponse {
                 access_token,
                 refresh_token,

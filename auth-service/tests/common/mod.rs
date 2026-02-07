@@ -86,7 +86,7 @@ impl TestApp {
             .await
             .expect("Failed to create test pool");
 
-        // Clean up any existing test data
+        // Clean up stale data from previous test runs
         cleanup_test_data(&pool)
             .await
             .expect("Failed to cleanup test data");
@@ -218,10 +218,10 @@ pub fn create_test_keys() -> anyhow::Result<(NamedTempFile, NamedTempFile)> {
     Ok((private_file, public_file))
 }
 
-/// Get the database URL for testing from environment or use default.
+/// Get the database URL for testing from environment.
 pub fn get_test_database_url() -> String {
-    std::env::var("TEST_DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://postgres:pass%40word1@localhost:5432/auth_test".to_string())
+    std::env::var("AUTH_TEST_DATABASE_URL")
+        .expect("AUTH_TEST_DATABASE_URL must be set - use scripts/integ-tests.sh to run tests")
 }
 
 /// Create a test database pool.
@@ -281,7 +281,7 @@ pub fn create_test_config(private_key_path: &str, public_key_path: &str) -> Auth
             allowed_origins: vec!["http://localhost:3000".to_string()],
             require_signatures: false,
             admin_api_key: TEST_ADMIN_API_KEY.to_string(),
-            trust_internal_services: true,
+            trust_internal_services: false,
             signature_config: service_core::middleware::signature::SignatureConfig {
                 require_signatures: false,
                 excluded_paths: vec!["/health".to_string()],

@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+package micros.payment.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// SettlementStatus represents the lifecycle state of a settlement.
+enum SettlementStatus {
+  SETTLEMENT_STATUS_UNSPECIFIED = 0;
+  SETTLEMENT_STATUS_CREATED = 1;
+  SETTLEMENT_STATUS_PROCESSED = 2;
+  SETTLEMENT_STATUS_FAILED = 3;
+}
+
+// SettlementType defines the type of settlement.
+enum SettlementType {
+  SETTLEMENT_TYPE_UNSPECIFIED = 0;
+  SETTLEMENT_TYPE_NORMAL = 1;
+  SETTLEMENT_TYPE_ON_DEMAND = 2;
+}
+
+// Settlement represents a Razorpay settlement record.
+message Settlement {
+  // Unique identifier.
+  string id = 1;
+
+  // Application ID (tenant).
+  string app_id = 2;
+
+  // Organization ID within the application.
+  string org_id = 3;
+
+  // Razorpay settlement ID.
+  string razorpay_settlement_id = 4;
+
+  // Linked account ID (optional, for Route settlements).
+  optional string linked_account_id = 5;
+
+  // Settlement amount in smallest currency unit.
+  uint64 amount = 6;
+
+  // Currency code.
+  string currency = 7;
+
+  // Current status.
+  SettlementStatus status = 8;
+
+  // Settlement type.
+  SettlementType settlement_type = 9;
+
+  // UTR (Unique Transaction Reference) number.
+  optional string utr = 10;
+
+  // When the settlement was created.
+  google.protobuf.Timestamp created_at = 11;
+
+  // When the settlement was last updated.
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+// RequestOnDemandSettlementRequest to request an on-demand settlement.
+message RequestOnDemandSettlementRequest {
+  // Linked account ID (optional, for Route settlements).
+  optional string linked_account_id = 1;
+
+  // Amount in smallest currency unit (0 = settle all available).
+  uint64 amount = 2;
+
+  // Currency code.
+  string currency = 3;
+}
+
+// RequestOnDemandSettlementResponse after requesting settlement.
+message RequestOnDemandSettlementResponse {
+  // The created settlement.
+  Settlement settlement = 1;
+}
+
+// GetSettlementRequest to retrieve a settlement by ID.
+message GetSettlementRequest {
+  // Settlement ID.
+  string settlement_id = 1;
+}
+
+// GetSettlementResponse with the settlement details.
+message GetSettlementResponse {
+  // The settlement.
+  Settlement settlement = 1;
+}
+
+// ListSettlementsRequest to list settlements.
+message ListSettlementsRequest {
+  // Filter by linked account ID (optional).
+  optional string linked_account_id = 1;
+
+  // Filter by status (optional).
+  optional SettlementStatus status = 2;
+
+  // Filter by settlement type (optional).
+  optional SettlementType settlement_type = 3;
+
+  // Maximum number of results (default: 50, max: 100).
+  int32 limit = 4;
+
+  // Offset for pagination.
+  int32 offset = 5;
+}
+
+// ListSettlementsResponse with paginated settlements.
+message ListSettlementsResponse {
+  // List of settlements.
+  repeated Settlement settlements = 1;
+
+  // Total count matching the filter.
+  int64 total_count = 2;
+}

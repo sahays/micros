@@ -3,6 +3,13 @@ syntax = "proto3";
 package micros.payment.v1;
 
 import "micros/payment/v1/transaction.proto";
+import "micros/payment/v1/linked_account.proto";
+import "micros/payment/v1/customer.proto";
+import "micros/payment/v1/transfer.proto";
+import "micros/payment/v1/settlement.proto";
+import "micros/payment/v1/subscription.proto";
+import "micros/payment/v1/payment_link.proto";
+import "micros/payment/v1/refund.proto";
 
 // PaymentService provides payment operations.
 //
@@ -42,6 +49,131 @@ service PaymentService {
 
   // Handle a Razorpay webhook event proxied from BFF.
   rpc HandleRazorpayWebhook(HandleRazorpayWebhookRequest) returns (HandleRazorpayWebhookResponse);
+
+  // Linked account management (Razorpay Route)
+
+  // Create a linked account for marketplace/route payments.
+  rpc CreateLinkedAccount(CreateLinkedAccountRequest) returns (CreateLinkedAccountResponse);
+
+  // Get a linked account by ID.
+  rpc GetLinkedAccount(GetLinkedAccountRequest) returns (GetLinkedAccountResponse);
+
+  // Update a linked account.
+  rpc UpdateLinkedAccount(UpdateLinkedAccountRequest) returns (UpdateLinkedAccountResponse);
+
+  // List linked accounts with optional filters.
+  rpc ListLinkedAccounts(ListLinkedAccountsRequest) returns (ListLinkedAccountsResponse);
+
+  // Update commission configuration for a linked account.
+  rpc UpdateCommissionConfig(UpdateCommissionConfigRequest) returns (UpdateCommissionConfigResponse);
+
+  // Customer management
+
+  // Create a customer in Razorpay.
+  rpc CreateCustomer(CreateCustomerRequest) returns (CreateCustomerResponse);
+
+  // Get a customer by ID.
+  rpc GetCustomer(GetCustomerRequest) returns (GetCustomerResponse);
+
+  // Update a customer.
+  rpc UpdateCustomer(UpdateCustomerRequest) returns (UpdateCustomerResponse);
+
+  // List customers.
+  rpc ListCustomers(ListCustomersRequest) returns (ListCustomersResponse);
+
+  // Transfer management (Razorpay Route)
+
+  // Create a transfer from a payment to a linked account.
+  rpc CreateTransferFromPayment(CreateTransferFromPaymentRequest) returns (CreateTransferFromPaymentResponse);
+
+  // Create a transfer with an order.
+  rpc CreateTransferFromOrder(CreateTransferFromOrderRequest) returns (CreateTransferFromOrderResponse);
+
+  // Create a direct transfer to a linked account.
+  rpc CreateDirectTransfer(CreateDirectTransferRequest) returns (CreateDirectTransferResponse);
+
+  // Reverse a transfer.
+  rpc ReverseTransfer(ReverseTransferRequest) returns (ReverseTransferResponse);
+
+  // Get a transfer by ID.
+  rpc GetTransfer(GetTransferRequest) returns (GetTransferResponse);
+
+  // List transfers with optional filters.
+  rpc ListTransfers(ListTransfersRequest) returns (ListTransfersResponse);
+
+  // Hold settlement for a transfer.
+  rpc HoldTransferSettlement(HoldTransferSettlementRequest) returns (HoldTransferSettlementResponse);
+
+  // Release settlement for a transfer.
+  rpc ReleaseTransferSettlement(ReleaseTransferSettlementRequest) returns (ReleaseTransferSettlementResponse);
+
+  // Settlement management
+
+  // Request an on-demand settlement.
+  rpc RequestOnDemandSettlement(RequestOnDemandSettlementRequest) returns (RequestOnDemandSettlementResponse);
+
+  // Get a settlement by ID.
+  rpc GetSettlement(GetSettlementRequest) returns (GetSettlementResponse);
+
+  // List settlements with optional filters.
+  rpc ListSettlements(ListSettlementsRequest) returns (ListSettlementsResponse);
+
+  // Subscription management
+
+  // Create a subscription plan.
+  rpc CreateRazorpayPlan(CreateRazorpayPlanRequest) returns (CreateRazorpayPlanResponse);
+
+  // Get a subscription plan by ID.
+  rpc GetRazorpayPlan(GetRazorpayPlanRequest) returns (GetRazorpayPlanResponse);
+
+  // List subscription plans.
+  rpc ListRazorpayPlans(ListRazorpayPlansRequest) returns (ListRazorpayPlansResponse);
+
+  // Create a subscription.
+  rpc CreateRazorpaySubscription(CreateRazorpaySubscriptionRequest) returns (CreateRazorpaySubscriptionResponse);
+
+  // Get a subscription by ID.
+  rpc GetRazorpaySubscription(GetRazorpaySubscriptionRequest) returns (GetRazorpaySubscriptionResponse);
+
+  // List subscriptions with optional filters.
+  rpc ListRazorpaySubscriptions(ListRazorpaySubscriptionsRequest) returns (ListRazorpaySubscriptionsResponse);
+
+  // Pause a subscription.
+  rpc PauseRazorpaySubscription(PauseRazorpaySubscriptionRequest) returns (PauseRazorpaySubscriptionResponse);
+
+  // Resume a paused subscription.
+  rpc ResumeRazorpaySubscription(ResumeRazorpaySubscriptionRequest) returns (ResumeRazorpaySubscriptionResponse);
+
+  // Cancel a subscription.
+  rpc CancelRazorpaySubscription(CancelRazorpaySubscriptionRequest) returns (CancelRazorpaySubscriptionResponse);
+
+  // Update a subscription.
+  rpc UpdateRazorpaySubscription(UpdateRazorpaySubscriptionRequest) returns (UpdateRazorpaySubscriptionResponse);
+
+  // Payment link management
+
+  // Create a payment link.
+  rpc CreatePaymentLink(CreatePaymentLinkRequest) returns (CreatePaymentLinkResponse);
+
+  // Get a payment link by ID.
+  rpc GetPaymentLink(GetPaymentLinkRequest) returns (GetPaymentLinkResponse);
+
+  // Cancel a payment link.
+  rpc CancelPaymentLink(CancelPaymentLinkRequest) returns (CancelPaymentLinkResponse);
+
+  // List payment links with optional filters.
+  rpc ListPaymentLinks(ListPaymentLinksRequest) returns (ListPaymentLinksResponse);
+
+  // Refund management
+
+  // Initiate a refund for a payment.
+  rpc InitiateRefund(InitiateRefundRequest) returns (InitiateRefundResponse);
+
+  // Get a refund by ID.
+  rpc GetRefund(GetRefundRequest) returns (GetRefundResponse);
+
+  // List refunds with optional filters.
+  rpc ListRefunds(ListRefundsRequest) returns (ListRefundsResponse);
 }
 
 // CreateRazorpayOrderRequest to create a Razorpay order.
@@ -109,8 +241,8 @@ message VerifyRazorpayPaymentResponse {
 
 // GenerateUpiQrRequest to generate a UPI QR code.
 message GenerateUpiQrRequest {
-  // Amount in base currency unit.
-  double amount = 1;
+  // Amount in smallest currency unit (e.g., paise for INR).
+  uint64 amount_paise = 1;
 
   // Optional description for the payment.
   optional string description = 2;

@@ -4,7 +4,7 @@
 
 mod common;
 
-use common::{create_test_account, get_balance, post_test_transaction, spawn_app};
+use common::{create_test_account, get_balance, post_test_transaction, spawn_app, with_tenant};
 use ledger_service::grpc::proto::{
     AccountType as ProtoAccountType, Direction as ProtoDirection, GetBalancesRequest,
     PostTransactionEntry, PostTransactionRequest,
@@ -218,7 +218,10 @@ async fn get_balance_expense_account() {
         idempotency_key: String::new(),
         metadata: String::new(),
     };
-    client.post_transaction(request).await.unwrap();
+    client
+        .post_transaction(with_tenant(request, tenant_id))
+        .await
+        .unwrap();
 
     let balance = get_balance(&mut client, tenant_id, &expense_id, None).await;
     assert_eq!(
@@ -330,7 +333,7 @@ async fn get_balance_not_found() {
         as_of_date: String::new(),
     };
 
-    let result = client.get_balance(request).await;
+    let result = client.get_balance(with_tenant(request, tenant_id)).await;
     assert!(
         result.is_err(),
         "Should return error for non-existent account"
@@ -406,7 +409,10 @@ async fn get_balances_multiple_accounts() {
         idempotency_key: String::new(),
         metadata: String::new(),
     };
-    client.post_transaction(request).await.unwrap();
+    client
+        .post_transaction(with_tenant(request, tenant_id))
+        .await
+        .unwrap();
 
     // Get balances for all three accounts
     let request = GetBalancesRequest {
@@ -415,7 +421,11 @@ async fn get_balances_multiple_accounts() {
         as_of_date: String::new(),
     };
 
-    let response = client.get_balances(request).await.unwrap().into_inner();
+    let response = client
+        .get_balances(with_tenant(request, tenant_id))
+        .await
+        .unwrap()
+        .into_inner();
     assert_eq!(response.balances.len(), 3);
 
     // Find each balance in the response
@@ -463,7 +473,11 @@ async fn get_balances_skips_non_existent() {
         as_of_date: String::new(),
     };
 
-    let response = client.get_balances(request).await.unwrap().into_inner();
+    let response = client
+        .get_balances(with_tenant(request, tenant_id))
+        .await
+        .unwrap()
+        .into_inner();
     assert_eq!(
         response.balances.len(),
         1,
@@ -573,7 +587,10 @@ async fn balance_reflects_account_type() {
         idempotency_key: String::new(),
         metadata: String::new(),
     };
-    client.post_transaction(request).await.unwrap();
+    client
+        .post_transaction(with_tenant(request, tenant_id))
+        .await
+        .unwrap();
 
     // Post transaction: Debit asset, credit liability (loan)
     post_test_transaction(

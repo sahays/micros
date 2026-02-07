@@ -12,7 +12,7 @@ use billing_service::grpc::proto::*;
 use common::{with_tenant, TestApp, TEST_TENANT_ID};
 use tonic::Request;
 
-/// Helper to add BFF trust headers (x-tenant-id, x-user-id).
+#[allow(dead_code)]
 fn with_bff_headers<T>(mut request: Request<T>, tenant_id: &str, user_id: &str) -> Request<T> {
     request
         .metadata_mut()

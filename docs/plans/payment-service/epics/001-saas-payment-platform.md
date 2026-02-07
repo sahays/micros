@@ -54,6 +54,10 @@ Evolve the payment-service into a SaaS payment platform using Razorpay Route. En
 
 - [ ] [010-observability](../stories/010-observability.md) - Metrics, logging, tracing for all new domains
 
+### Phase 7: API Consistency
+
+- [ ] [011-standardize-amount-units](../stories/011-standardize-amount-units.md) - Standardize all amount fields to uint64 paise, eliminate float arithmetic
+
 ## gRPC Service: PaymentService
 
 | Method | Story | Status |
@@ -160,5 +164,6 @@ Per-tenant payment platform metrics:
 - [ ] Multi-tenant isolation for all new entities
 - [ ] Prometheus metrics for all new domains
 - [ ] OpenTelemetry tracing for all new operations
+- [ ] All amount fields standardized to uint64 paise across the API
 - [ ] All integration tests passing
 - [ ] All user journey integration tests passing

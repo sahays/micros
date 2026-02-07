@@ -2,8 +2,6 @@
 //!
 //! Tests capability-based access control for invoicing service gRPC endpoints.
 
-use tonic::Request;
-
 // ============================================================================
 // Capability Checker Unit Tests
 // ============================================================================

@@ -18,7 +18,7 @@ pub async fn generate_qr(
         app_id = %tenant.app_id,
         org_id = %tenant.org_id,
         user_id = ?tenant.user_id,
-        amount = payload.amount,
+        amount_paise = payload.amount_paise,
         "Generating UPI QR code"
     );
 
@@ -26,7 +26,7 @@ pub async fn generate_qr(
 
     let tr_id = payload.transaction_id.map(|id| id.to_string());
     let upi_link = service.generate_upi_link(
-        payload.amount,
+        payload.amount_paise,
         payload.description,
         tr_id,
         payload.vpa,

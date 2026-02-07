@@ -144,8 +144,12 @@ if [ -n "$STAGED_PROTO_FILES" ]; then
     echo ""
 fi
 
-# Integration tests - run for ALL services
-if [ "$SKIP_INTEG_TESTS" = "1" ]; then
+# Integration tests - only run when .rs or .proto files are staged
+STAGED_CODE_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(rs|proto)$' || true)
+
+if [ -z "$STAGED_CODE_FILES" ]; then
+    log_info "No .rs or .proto files staged — skipping integration tests"
+elif [ "$SKIP_INTEG_TESTS" = "1" ]; then
     log_warn "Skipping integration tests (SKIP_INTEG_TESTS=1)"
     log_warn "Note: Use sparingly - commits should be fully tested"
 else
