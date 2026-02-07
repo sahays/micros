@@ -105,8 +105,31 @@ Billing service does not post directly to ledger. It creates invoices through in
 8. Trials convert to paid automatically unless cancelled
 9. Usage records are immutable once invoiced
 
+## Payment Service Integration
+
+Billing-service orchestrates payment-service for Razorpay subscription management:
+
+**Billing-service responsibilities:**
+- Defines billing plans with proration, usage components, and pricing tiers
+- Manages usage aggregation and billing cycles
+- Orchestrates billing runs and invoice generation
+- Decides when to create, pause, resume, or cancel Razorpay subscriptions
+
+**Payment-service responsibilities:**
+- Creates and manages Razorpay plans, subscriptions, and customers
+- Executes charges, processes webhooks, manages Razorpay lifecycle
+- Returns subscription status and charge events to billing-service
+
+**Integration flow:**
+1. Billing plan created → payment-service creates corresponding Razorpay plan
+2. Customer subscribes → payment-service creates Razorpay subscription, returns authorization URL
+3. Customer authorizes → Razorpay begins recurring charges
+4. On each charge (subscription.charged webhook) → billing-service advances cycle, creates invoice
+5. On charge failure (subscription.halted webhook) → billing-service marks subscription failed, sends notification
+
 ## Dependencies
 
+- **payment-service**: Razorpay subscription and plan management
 - **invoicing-service**: Create invoices for billing cycles
 - **ledger-service**: Indirect, via invoicing-service
 - **notification-service**: Send billing reminders, payment failures (optional)

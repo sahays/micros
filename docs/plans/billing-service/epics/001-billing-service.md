@@ -50,6 +50,11 @@ Recurring billing and subscription management service for multi-tenant operation
 
 - [ ] [010-observability](../stories/010-observability.md) - Metrics, tracing, structured logging
 
+### Phase 6: Payment Integration
+
+- [ ] [011-payment-service-client](../stories/011-payment-service-client.md) - PaymentServiceClient gRPC connection
+- [ ] [012-razorpay-subscription-orchestration](../stories/012-razorpay-subscription-orchestration.md) - Orchestrate Razorpay subscriptions via payment-service
+
 ## gRPC Service: BillingService
 
 | Method | Story | Status |
@@ -112,6 +117,7 @@ Per-tenant billing metrics:
 
 ## Dependencies
 
+- **payment-service**: Razorpay subscription and plan management (Phase 6)
 - **invoicing-service**: Create invoices for billing cycles
 - **ledger-service**: Indirect, via invoicing-service
 - **notification-service**: Billing reminders, payment failures (optional)
