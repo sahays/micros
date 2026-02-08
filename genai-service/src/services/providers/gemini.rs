@@ -46,11 +46,21 @@ impl GeminiTextProvider {
     }
 
     /// Build the API URL for the given model and method.
-    fn api_url(&self, method: &str) -> String {
+    fn api_url(&self, model: &str, method: &str) -> String {
         format!(
             "{}/models/{}:{}?key={}",
-            GEMINI_API_BASE, self.config.model, method, self.config.api_key
+            GEMINI_API_BASE, model, method, self.config.api_key
         )
+    }
+
+    /// Resolve the effective model: use the override from params if present,
+    /// otherwise fall back to the provider's configured default.
+    fn resolve_model(&self, params: &GenerationParams) -> String {
+        params
+            .model
+            .as_deref()
+            .unwrap_or(&self.config.model)
+            .to_string()
     }
 
     /// Convert documents to Gemini content parts.
@@ -129,7 +139,7 @@ impl TextProvider for GeminiTextProvider {
         skip(self, prompt, documents, params),
         fields(
             provider = PROVIDER_NAME,
-            model = %self.config.model,
+            model,
             prompt_len = prompt.len(),
             doc_count = documents.len()
         )
@@ -141,6 +151,8 @@ impl TextProvider for GeminiTextProvider {
         params: &GenerationParams,
     ) -> Result<ProviderResponse, ProviderError> {
         let start = Instant::now();
+        let model = self.resolve_model(params);
+        tracing::Span::current().record("model", &model);
 
         // Build content parts
         let mut parts: Vec<ContentPart> = self.documents_to_parts(documents);
@@ -157,7 +169,7 @@ impl TextProvider for GeminiTextProvider {
             safety_settings: None,
         };
 
-        let url = self.api_url("generateContent");
+        let url = self.api_url(&model, "generateContent");
 
         tracing::debug!("Sending request to Gemini API");
 
@@ -237,7 +249,7 @@ impl TextProvider for GeminiTextProvider {
         let input_tokens = usage.prompt_token_count.unwrap_or(0);
         let output_tokens = usage.candidates_token_count.unwrap_or(0);
 
-        record_provider_latency(PROVIDER_NAME, &self.config.model, duration.as_secs_f64());
+        record_provider_latency(PROVIDER_NAME, &model, duration.as_secs_f64());
 
         tracing::info!(
             duration_ms = duration.as_millis(),
@@ -261,7 +273,7 @@ impl TextProvider for GeminiTextProvider {
         skip(self, prompt, documents, params),
         fields(
             provider = PROVIDER_NAME,
-            model = %self.config.model,
+            model,
             prompt_len = prompt.len(),
             doc_count = documents.len()
         )
@@ -273,6 +285,8 @@ impl TextProvider for GeminiTextProvider {
         params: &GenerationParams,
     ) -> Result<ProviderStream, ProviderError> {
         let start = Instant::now();
+        let model = self.resolve_model(params);
+        tracing::Span::current().record("model", &model);
 
         // Build content parts
         let mut parts: Vec<ContentPart> = self.documents_to_parts(documents);
@@ -289,7 +303,7 @@ impl TextProvider for GeminiTextProvider {
             safety_settings: None,
         };
 
-        let url = self.api_url("streamGenerateContent");
+        let url = self.api_url(&model, "streamGenerateContent");
         let url = format!("{}&alt=sse", url);
 
         tracing::debug!("Starting streaming request to Gemini API");
@@ -336,9 +350,6 @@ impl TextProvider for GeminiTextProvider {
 
         // Create channel for streaming
         let (tx, rx) = mpsc::channel(32);
-
-        // Clone values for the spawned task
-        let model = self.config.model.clone();
 
         // Spawn task to process SSE stream
         tokio::spawn(async move {

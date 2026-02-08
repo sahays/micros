@@ -77,6 +77,7 @@ async fn genai_processes_text_prompt() {
             user_id: user_id.clone(),
             tags: Default::default(),
         }),
+        model: None,
     });
 
     request

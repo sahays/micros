@@ -85,13 +85,20 @@ message ProcessRequest {
 
   // Request metadata (tenant, user)
   RequestMetadata metadata = 7;
+
+  // Optional model override (e.g., "gemini-2.5-pro")
+  // When set, overrides the auto-selected model based on output_format.
+  // Must be one of the configured models (text_model, audio_model, video_model).
+  optional string model = 8;
 }
 
-// Note: Model is auto-selected based on output_format:
-// - TEXT/STRUCTURED_JSON → GENAI_TEXT_MODEL (e.g., gemini-2.0-flash)
-// - AUDIO → GENAI_AUDIO_MODEL (e.g., gemini-2.0-flash with audio)
-// - VIDEO → GENAI_VIDEO_MODEL (e.g., veo-2)
-// Models configured via environment variables.
+// Note: Model selection behavior:
+// - When `model` is set: uses the specified model (validated against configured models)
+// - When `model` is omitted: auto-selected based on output_format:
+//   - TEXT/STRUCTURED_JSON → GENAI_TEXT_MODEL (e.g., gemini-2.0-flash)
+//   - AUDIO → GENAI_AUDIO_MODEL (e.g., gemini-2.0-flash with audio)
+//   - VIDEO → GENAI_VIDEO_MODEL (e.g., veo-2)
+// Models configured via environment variables. Use ListModels to discover valid models.
 
 message DocumentContext {
   // Document ID from document-service
@@ -432,6 +439,7 @@ genai-service/
 - [x] Story 8: Session Management (MongoDB)
 - [x] Story 9: Usage Tracking & Token Reporting
 - [x] Story 10: Docker & Observability
+- [x] Story 11: Per-Request Model Selection
 
 ---
 

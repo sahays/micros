@@ -102,6 +102,24 @@ impl GenaiConfig {
             OutputFormat::Video => &self.models.video_model,
         }
     }
+
+    /// Check whether a model string matches one of the configured models.
+    pub fn is_valid_model(&self, model: &str) -> bool {
+        model == self.models.text_model
+            || model == self.models.audio_model
+            || model == self.models.video_model
+    }
+
+    /// Return the list of configured model names (deduplicated).
+    pub fn valid_models(&self) -> Vec<&str> {
+        let mut models = vec![
+            self.models.text_model.as_str(),
+            self.models.audio_model.as_str(),
+            self.models.video_model.as_str(),
+        ];
+        models.dedup();
+        models
+    }
 }
 
 /// Output format enum matching proto definition.

@@ -114,6 +114,7 @@ impl GenaiClient {
                 user_id: user_id.to_string(),
                 tags: std::collections::HashMap::new(),
             }),
+            model: None,
         };
 
         retry_grpc_call(&self.retry_config, "process_structured", || {
@@ -148,6 +149,7 @@ impl GenaiClient {
                 user_id: user_id.to_string(),
                 tags: std::collections::HashMap::new(),
             }),
+            model: None,
         };
 
         retry_grpc_call(&self.retry_config, "process_text", || {

@@ -141,30 +141,10 @@ fn proto_to_document_context(doc: &crate::grpc::proto::DocumentContext) -> Docum
 }
 
 /// Build generation params from request.
-fn build_generation_params(req: &ProcessRequest, output_format: OutputFormat) -> GenerationParams {
-    let params = req.params.as_ref();
-
-    GenerationParams {
-        temperature: params.and_then(|p| p.temperature),
-        top_p: params.and_then(|p| p.top_p),
-        max_tokens: None, // Auto-determined based on content size
-        stop_sequences: params.map(|p| p.stop_sequences.clone()).unwrap_or_default(),
-        output_schema: if output_format == OutputFormat::StructuredJson {
-            req.output_schema.clone()
-        } else {
-            None
-        },
-        voice: params.and_then(|p| p.voice.clone()),
-        audio_format: params.and_then(|p| p.audio_format.clone()),
-        video_format: params.and_then(|p| p.video_format.clone()),
-        duration_seconds: params.and_then(|p| p.duration_seconds),
-    }
-}
-
-/// Build generation params from stream request.
-fn build_stream_generation_params(
-    req: &ProcessStreamRequest,
+fn build_generation_params(
+    req: &ProcessRequest,
     output_format: OutputFormat,
+    model: Option<String>,
 ) -> GenerationParams {
     let params = req.params.as_ref();
 
@@ -182,6 +162,33 @@ fn build_stream_generation_params(
         audio_format: params.and_then(|p| p.audio_format.clone()),
         video_format: params.and_then(|p| p.video_format.clone()),
         duration_seconds: params.and_then(|p| p.duration_seconds),
+        model,
+    }
+}
+
+/// Build generation params from stream request.
+fn build_stream_generation_params(
+    req: &ProcessStreamRequest,
+    output_format: OutputFormat,
+    model: Option<String>,
+) -> GenerationParams {
+    let params = req.params.as_ref();
+
+    GenerationParams {
+        temperature: params.and_then(|p| p.temperature),
+        top_p: params.and_then(|p| p.top_p),
+        max_tokens: None, // Auto-determined based on content size
+        stop_sequences: params.map(|p| p.stop_sequences.clone()).unwrap_or_default(),
+        output_schema: if output_format == OutputFormat::StructuredJson {
+            req.output_schema.clone()
+        } else {
+            None
+        },
+        voice: params.and_then(|p| p.voice.clone()),
+        audio_format: params.and_then(|p| p.audio_format.clone()),
+        video_format: params.and_then(|p| p.video_format.clone()),
+        duration_seconds: params.and_then(|p| p.duration_seconds),
+        model,
     }
 }
 
@@ -323,12 +330,36 @@ impl GenAiService for GenaiGrpcService {
             }
         }
 
-        // Get the appropriate model based on output format
-        let model = self
-            .state
-            .config
-            .model_for_output(output_format)
-            .to_string();
+        // Resolve model: use request override if provided, else auto-select
+        let model_override = req
+            .model
+            .as_deref()
+            .filter(|m| !m.is_empty())
+            .map(String::from);
+
+        if let Some(ref requested_model) = model_override {
+            if !self.state.config.is_valid_model(requested_model) {
+                dec_grpc_in_flight(method);
+                record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
+                let valid = self.state.config.valid_models().join(", ");
+                tracing::warn!(
+                    request_id = %request_id,
+                    requested_model = %requested_model,
+                    "Unknown model requested"
+                );
+                return Err(Status::invalid_argument(format!(
+                    "Unknown model '{}'. Valid models: {}",
+                    requested_model, valid
+                )));
+            }
+        }
+
+        let model = model_override.clone().unwrap_or_else(|| {
+            self.state
+                .config
+                .model_for_output(output_format)
+                .to_string()
+        });
         span.record("model", &model);
 
         tracing::info!(
@@ -362,7 +393,7 @@ impl GenAiService for GenaiGrpcService {
         };
 
         // Build generation params
-        let params = build_generation_params(&req, output_format);
+        let params = build_generation_params(&req, output_format, model_override);
 
         // Call the provider
         let provider_response = match self
@@ -549,11 +580,36 @@ impl GenAiService for GenaiGrpcService {
             }
         }
 
-        let model = self
-            .state
-            .config
-            .model_for_output(output_format)
-            .to_string();
+        // Resolve model: use request override if provided, else auto-select
+        let model_override = req
+            .model
+            .as_deref()
+            .filter(|m| !m.is_empty())
+            .map(String::from);
+
+        if let Some(ref requested_model) = model_override {
+            if !self.state.config.is_valid_model(requested_model) {
+                dec_grpc_in_flight(method);
+                record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
+                let valid = self.state.config.valid_models().join(", ");
+                tracing::warn!(
+                    request_id = %request_id,
+                    requested_model = %requested_model,
+                    "Unknown model requested"
+                );
+                return Err(Status::invalid_argument(format!(
+                    "Unknown model '{}'. Valid models: {}",
+                    requested_model, valid
+                )));
+            }
+        }
+
+        let model = model_override.clone().unwrap_or_else(|| {
+            self.state
+                .config
+                .model_for_output(output_format)
+                .to_string()
+        });
         span.record("model", &model);
 
         tracing::info!(
@@ -587,7 +643,7 @@ impl GenAiService for GenaiGrpcService {
         };
 
         // Build generation params
-        let params = build_stream_generation_params(&req, output_format);
+        let params = build_stream_generation_params(&req, output_format, model_override);
 
         // Get streaming response from provider
         let mut provider_stream = match self

@@ -51,6 +51,10 @@ message ProcessRequest {
 
   // Request metadata (tenant, user).
   RequestMetadata metadata = 7;
+
+  // Optional model override. When set, overrides auto-selection based on
+  // output_format. Must be one of the configured models.
+  optional string model = 8;
 }
 
 // ProcessStreamRequest for streaming operations.
@@ -75,6 +79,10 @@ message ProcessStreamRequest {
 
   // Request metadata (tenant, user).
   RequestMetadata metadata = 7;
+
+  // Optional model override. When set, overrides auto-selection based on
+  // output_format. Must be one of the configured models.
+  optional string model = 8;
 }
 
 // DocumentContext for document-aware AI operations.

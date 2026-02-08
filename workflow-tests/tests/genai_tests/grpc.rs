@@ -51,6 +51,7 @@ async fn process_returns_text_response() {
                 user_id: "test-user".to_string(),
                 tags: Default::default(),
             }),
+            model: None,
         })
         .await
         .expect("Failed to process request");
@@ -97,6 +98,7 @@ async fn process_returns_error_for_invalid_api_key() {
                 user_id: "test-user".to_string(),
                 tags: Default::default(),
             }),
+            model: None,
         })
         .await;
 
@@ -125,6 +127,7 @@ async fn process_rejects_empty_prompt() {
                 user_id: "test-user".to_string(),
                 tags: Default::default(),
             }),
+            model: None,
         })
         .await;
 
@@ -150,6 +153,7 @@ async fn process_requires_schema_for_structured_json() {
                 user_id: "test-user".to_string(),
                 tags: Default::default(),
             }),
+            model: None,
         })
         .await;
 
@@ -176,6 +180,7 @@ async fn process_rejects_invalid_json_schema() {
                 user_id: "test-user".to_string(),
                 tags: Default::default(),
             }),
+            model: None,
         })
         .await;
 
@@ -250,6 +255,34 @@ async fn session_lifecycle() {
 
     assert!(get_result.is_err());
     assert_eq!(get_result.unwrap_err().code(), tonic::Code::NotFound);
+}
+
+#[tokio::test]
+async fn process_rejects_unknown_model() {
+    let mut client = connect().await;
+
+    let result = client
+        .process(ProcessRequest {
+            prompt: "Hello".to_string(),
+            documents: vec![],
+            output_format: OutputFormat::Text as i32,
+            output_schema: None,
+            session_id: None,
+            params: None,
+            metadata: Some(RequestMetadata {
+                tenant_id: "test-tenant".to_string(),
+                user_id: "test-user".to_string(),
+                tags: Default::default(),
+            }),
+            model: Some("nonexistent-model-xyz".to_string()),
+        })
+        .await;
+
+    assert!(result.is_err());
+    let status = result.unwrap_err();
+    assert_eq!(status.code(), tonic::Code::InvalidArgument);
+    assert!(status.message().contains("Unknown model"));
+    assert!(status.message().contains("Valid models"));
 }
 
 #[tokio::test]

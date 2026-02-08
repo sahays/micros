@@ -115,6 +115,9 @@ pub struct GenerationParams {
 
     /// Video duration in seconds.
     pub duration_seconds: Option<i32>,
+
+    /// Optional model override. When set, overrides the provider's default model.
+    pub model: Option<String>,
 }
 
 /// Document context for AI requests.
