@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod billing;
 pub mod document;
+pub mod genai;
 pub mod invoicing;
 pub mod ledger;
 pub mod notification;
