@@ -64,6 +64,8 @@ tonic-build = "0.12"
 [dev-dependencies]
 tokio-test = "0.4"
 wiremock = "0.5"
+reqwest = { workspace = true, features = ["json"] }
+serial_test = "3.0"
 
 [lib]
 name = "payment_service"

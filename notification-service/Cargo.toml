@@ -45,8 +45,6 @@ tokio-stream = "0.1"
 tonic-build = "0.12"
 
 [dev-dependencies]
-reqwest = { workspace = true, features = ["json"] }
-tower = { workspace = true, features = ["util"] }
 
 [lib]
 name = "notification_service"

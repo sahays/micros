@@ -33,7 +33,7 @@ async fn try_setup_bank_account() -> Option<(String, String, String, String)> {
     let mut ledger_request = Request::new(CreateAccountRequest {
         tenant_id: tenant_id.clone(),
         account_type: AccountType::Asset as i32,
-        account_code: format!("BANK-{}", Uuid::new_v4().to_string()[..8].to_string()),
+        account_code: format!("BANK-{}", &Uuid::new_v4().to_string()[..8]),
         currency: "USD".to_string(),
         allow_negative: true,
         metadata: r#"{"type": "bank_account"}"#.to_string(),

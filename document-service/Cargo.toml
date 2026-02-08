@@ -42,8 +42,6 @@ prost-types = { workspace = true }
 tonic-build = "0.12"
 
 [dev-dependencies]
-reqwest = { workspace = true, features = ["json", "multipart"] }
-tower = { workspace = true, features = ["util"] }
 
 [lib]
 name = "document_service"

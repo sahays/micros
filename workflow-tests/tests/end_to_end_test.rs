@@ -84,7 +84,7 @@ async fn full_billing_cycle() {
     };
 
     // 2. Create subscription
-    let customer_id = format!("cust-{}", Uuid::new_v4().to_string()[..8].to_string());
+    let customer_id = format!("cust-{}", &Uuid::new_v4().to_string()[..8]);
 
     let mut sub_request = Request::new(CreateSubscriptionRequest {
         tenant_id: tenant_id.clone(),
@@ -268,7 +268,7 @@ async fn ledger_double_entry_balance() {
     let mut cash_request = Request::new(CreateAccountRequest {
         tenant_id: tenant_id.clone(),
         account_type: AccountType::Asset as i32,
-        account_code: format!("CASH-{}", Uuid::new_v4().to_string()[..8].to_string()),
+        account_code: format!("CASH-{}", &Uuid::new_v4().to_string()[..8]),
         currency: "USD".to_string(),
         allow_negative: false,
         metadata: "{}".to_string(),
@@ -293,7 +293,7 @@ async fn ledger_double_entry_balance() {
     let mut revenue_request = Request::new(CreateAccountRequest {
         tenant_id: tenant_id.clone(),
         account_type: AccountType::Revenue as i32,
-        account_code: format!("REV-{}", Uuid::new_v4().to_string()[..8].to_string()),
+        account_code: format!("REV-{}", &Uuid::new_v4().to_string()[..8]),
         currency: "USD".to_string(),
         allow_negative: true,
         metadata: "{}".to_string(),

@@ -28,7 +28,7 @@ async fn try_create_test_plan(tenant_id: &str, user_id: &str) -> Option<String> 
 
     let mut request = Request::new(CreatePlanRequest {
         tenant_id: tenant_id.to_string(),
-        name: format!("Test Plan {}", Uuid::new_v4().to_string()[..8].to_string()),
+        name: format!("Test Plan {}", &Uuid::new_v4().to_string()[..8]),
         description: "A test billing plan with usage".to_string(),
         billing_interval: BillingInterval::Monthly as i32,
         interval_count: 1,
@@ -79,7 +79,7 @@ async fn try_create_test_subscription(
 
     let mut request = Request::new(CreateSubscriptionRequest {
         tenant_id: tenant_id.to_string(),
-        customer_id: format!("customer-{}", Uuid::new_v4().to_string()[..8].to_string()),
+        customer_id: format!("customer-{}", &Uuid::new_v4().to_string()[..8]),
         plan_id: plan_id.to_string(),
         billing_anchor_day: 1,
         start_date: "2024-01-01".to_string(),

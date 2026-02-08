@@ -20,20 +20,19 @@ use tonic::transport::Channel;
 use tonic::Request;
 use uuid::Uuid;
 
-// Re-export service clients
-// Services in service-core proto module:
+pub mod helpers;
+
+// Re-export service clients (all from service-core now)
 pub use service_core::grpc::proto::auth::auth_service_client::AuthServiceClient;
 pub use service_core::grpc::proto::auth::authz_service_client::AuthzServiceClient;
+pub use service_core::grpc::proto::billing::billing_service_client::BillingServiceClient;
 pub use service_core::grpc::proto::document::document_service_client::DocumentServiceClient;
 pub use service_core::grpc::proto::genai::gen_ai_service_client::GenAiServiceClient;
+pub use service_core::grpc::proto::invoicing::invoicing_service_client::InvoicingServiceClient;
 pub use service_core::grpc::proto::ledger::ledger_service_client::LedgerServiceClient;
 pub use service_core::grpc::proto::notification::notification_service_client::NotificationServiceClient;
 pub use service_core::grpc::proto::payment::payment_service_client::PaymentServiceClient;
-
-// Services not in service-core (have their own proto modules):
-pub use billing_service::grpc::proto::billing_service_client::BillingServiceClient;
-pub use invoicing_service::grpc::proto::invoicing_service_client::InvoicingServiceClient;
-pub use reconciliation_service::grpc::proto::reconciliation_service_client::ReconciliationServiceClient;
+pub use service_core::grpc::proto::reconciliation::reconciliation_service_client::ReconciliationServiceClient;
 
 // Re-export proto modules for request/response types
 pub mod proto {
@@ -41,7 +40,7 @@ pub mod proto {
         pub use service_core::grpc::proto::auth::*;
     }
     pub mod billing {
-        pub use billing_service::grpc::proto::*;
+        pub use service_core::grpc::proto::billing::*;
     }
     pub mod document {
         pub use service_core::grpc::proto::document::*;
@@ -50,7 +49,7 @@ pub mod proto {
         pub use service_core::grpc::proto::genai::*;
     }
     pub mod invoicing {
-        pub use invoicing_service::grpc::proto::*;
+        pub use service_core::grpc::proto::invoicing::*;
     }
     pub mod ledger {
         pub use service_core::grpc::proto::ledger::*;
@@ -62,7 +61,7 @@ pub mod proto {
         pub use service_core::grpc::proto::payment::*;
     }
     pub mod reconciliation {
-        pub use reconciliation_service::grpc::proto::*;
+        pub use service_core::grpc::proto::reconciliation::*;
     }
 }
 

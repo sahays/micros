@@ -10,6 +10,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=../proto/micros/payment/v1/");
     println!("cargo:rerun-if-changed=../proto/micros/ledger/v1/");
     println!("cargo:rerun-if-changed=../proto/micros/genai/v1/");
+    println!("cargo:rerun-if-changed=../proto/micros/billing/v1/");
+    println!("cargo:rerun-if-changed=../proto/micros/invoicing/v1/");
+    println!("cargo:rerun-if-changed=../proto/micros/reconciliation/v1/");
     println!("cargo:rerun-if-changed=../proto/micros/common/");
 
     // Compile auth service protos (client-side)
@@ -18,8 +21,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build_client(true) // Build clients for calling auth-service
         .compile_protos(
             &[
+                "../proto/micros/auth/v1/admin.proto",
                 "../proto/micros/auth/v1/auth.proto",
                 "../proto/micros/auth/v1/context.proto",
+                "../proto/micros/auth/v1/org.proto",
+                "../proto/micros/auth/v1/role.proto",
+                "../proto/micros/auth/v1/assignment.proto",
+                "../proto/micros/auth/v1/invitation.proto",
+                "../proto/micros/auth/v1/visibility.proto",
+                "../proto/micros/auth/v1/audit.proto",
             ],
             &[&proto_root],
         )?;
@@ -77,6 +87,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build_server(false) // No server code in service-core
         .build_client(true) // Build clients for calling genai-service
         .compile_protos(&["../proto/micros/genai/v1/genai.proto"], &[&proto_root])?;
+
+    // Compile billing service protos (client-side)
+    tonic_build::configure()
+        .build_server(false)
+        .build_client(true)
+        .compile_protos(
+            &["../proto/micros/billing/v1/billing.proto"],
+            &[&proto_root],
+        )?;
+
+    // Compile invoicing service protos (client-side)
+    tonic_build::configure()
+        .build_server(false)
+        .build_client(true)
+        .compile_protos(
+            &["../proto/micros/invoicing/v1/invoicing.proto"],
+            &[&proto_root],
+        )?;
+
+    // Compile reconciliation service protos (client-side)
+    tonic_build::configure()
+        .build_server(false)
+        .build_client(true)
+        .compile_protos(
+            &["../proto/micros/reconciliation/v1/reconciliation.proto"],
+            &[&proto_root],
+        )?;
 
     Ok(())
 }

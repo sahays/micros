@@ -31,11 +31,17 @@ pub mod proto {
     pub mod auth {
         tonic::include_proto!("micros.auth.v1");
     }
+    pub mod billing {
+        tonic::include_proto!("micros.billing.v1");
+    }
     pub mod document {
         tonic::include_proto!("micros.document.v1");
     }
     pub mod genai {
         tonic::include_proto!("micros.genai.v1");
+    }
+    pub mod invoicing {
+        tonic::include_proto!("micros.invoicing.v1");
     }
     pub mod ledger {
         tonic::include_proto!("micros.ledger.v1");
@@ -45,6 +51,9 @@ pub mod proto {
     }
     pub mod payment {
         tonic::include_proto!("micros.payment.v1");
+    }
+    pub mod reconciliation {
+        tonic::include_proto!("micros.reconciliation.v1");
     }
 }
 

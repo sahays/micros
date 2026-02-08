@@ -1,70 +1,26 @@
 #!/bin/bash
-# integ-tests.sh - Run integration tests with database setup/teardown
+# integ-tests.sh - Run integration tests against deployed containers
 #
-# This script runs integration tests for all services that require databases,
-# plus cross-service workflow tests.
-#
-# Test Categories:
-#   - PostgreSQL services: auth, ledger, invoicing, billing, reconciliation
-#   - MongoDB services: document, genai, notification, payment
-#   - Workflow tests: cross-service integration tests (requires all services running)
+# Tests are thin gRPC clients that connect to already-running services.
+# Data isolation is achieved via unique UUID tenant IDs per test.
 #
 # Usage: ./scripts/integ-tests.sh [options]
 #
 # Options:
 #   -p, --package <name>    Run tests for specific package (can be repeated)
-#   --all                   Run all workspace tests (default if no -p specified)
+#                           Valid: workflow-tests, payment-service
+#   --all                   Run all tests (default if no -p specified)
 #   --                      Pass remaining args to cargo test
 #
 # Requirements:
-#   - PostgreSQL: localhost:5432 (for PG services)
-#   - MongoDB: localhost:27017 (for Mongo services)
-#   - All services running via ./scripts/dev-up.sh (for workflow-tests)
-#
-# Database isolation:
-#   Each PostgreSQL service gets its own disposable database:
-#     auth-service         → micros_test_<ts>_auth
-#     ledger-service       → micros_test_<ts>_ledger
-#     invoicing-service    → micros_test_<ts>_invoicing
-#     billing-service      → micros_test_<ts>_billing
-#     reconciliation-service → micros_test_<ts>_reconciliation
+#   - All services running via ./scripts/dev-up.sh
 #
 # Examples:
 #   ./scripts/integ-tests.sh                           # Run all tests
-#   ./scripts/integ-tests.sh -p auth-service           # Run auth-service tests
-#   ./scripts/integ-tests.sh -p workflow-tests         # Run workflow tests only
-#   ./scripts/integ-tests.sh -p reconciliation-service # Run reconciliation tests
+#   ./scripts/integ-tests.sh -p workflow-tests         # Run workflow + service tests
+#   ./scripts/integ-tests.sh -p payment-service        # Run payment embedded tests
 
 set -e
-
-# PostgreSQL Configuration
-PG_HOST="${DB_HOST:-localhost}"
-PG_PORT="${DB_PORT:-5432}"
-PG_USER="${DB_USER:-postgres}"
-PG_PASSWORD="${DB_PASSWORD:-pass@word1}"
-PG_DB_PREFIX="${DB_NAME:-micros_test_$(date +%s)}"
-
-# MongoDB Configuration
-MONGO_HOST="${MONGO_HOST:-localhost}"
-MONGO_PORT="${MONGO_PORT:-27017}"
-MONGO_URI="${MONGODB_URI:-mongodb://${MONGO_HOST}:${MONGO_PORT}}"
-
-# URL-encode the password (@ becomes %40)
-PG_PASSWORD_ENCODED="${PG_PASSWORD//@/%40}"
-
-export MONGODB_URI="${MONGO_URI}"
-
-# Track created databases for cleanup
-PG_CREATED_DBS=()
-PG_AVAILABLE=false
-MONGO_AVAILABLE=false
-
-# Services by database type
-PG_SERVICES=("auth-service" "ledger-service" "invoicing-service" "billing-service" "reconciliation-service")
-MONGO_SERVICES=("document-service" "genai-service" "notification-service" "payment-service")
-
-# Workflow tests - require all services running via docker-compose
-WORKFLOW_SERVICES=("workflow-tests")
 
 # Colors for output
 RED='\033[0;31m'
@@ -121,96 +77,7 @@ log_step() {
     echo -e "${BLUE}[STEP]${NC} $1"
 }
 
-# Derive a short DB suffix from a service name: "auth-service" → "auth"
-service_db_suffix() {
-    echo "$1" | sed 's/-service$//'
-}
-
-# Build the database name for a service
-service_db_name() {
-    echo "${PG_DB_PREFIX}_$(service_db_suffix "$1")"
-}
-
-# Build the database URL for a service
-service_db_url() {
-    local db_name
-    db_name=$(service_db_name "$1")
-    echo "postgres://${PG_USER}:${PG_PASSWORD_ENCODED}@${PG_HOST}:${PG_PORT}/${db_name}"
-}
-
-# Derive the env var name for a service: "auth-service" → "AUTH_TEST_DATABASE_URL"
-service_env_var() {
-    local suffix
-    suffix=$(service_db_suffix "$1" | tr '[:lower:]-' '[:upper:]_')
-    echo "${suffix}_TEST_DATABASE_URL"
-}
-
-# Cleanup function
-cleanup() {
-    local exit_code=$?
-
-    if [ ${#PG_CREATED_DBS[@]} -gt 0 ]; then
-        log_info "Dropping PostgreSQL test databases..."
-        for db_name in "${PG_CREATED_DBS[@]}"; do
-            log_info "  Dropping ${db_name}"
-            PGPASSWORD="${PG_PASSWORD}" psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d postgres \
-                -c "DROP DATABASE IF EXISTS ${db_name};" 2>/dev/null || true
-        done
-    fi
-
-    if [ $exit_code -ne 0 ]; then
-        log_error "Tests failed with exit code: $exit_code"
-    else
-        log_info "All tests completed successfully"
-    fi
-
-    exit $exit_code
-}
-
-# Set up trap for cleanup
-trap cleanup EXIT INT TERM
-
-# Check PostgreSQL availability
-check_postgres() {
-    log_step "Checking PostgreSQL connection..."
-    if PGPASSWORD="${PG_PASSWORD}" psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d postgres -c "SELECT 1;" >/dev/null 2>&1; then
-        log_info "PostgreSQL available at ${PG_HOST}:${PG_PORT}"
-        PG_AVAILABLE=true
-        return 0
-    else
-        log_warn "PostgreSQL not available at ${PG_HOST}:${PG_PORT}"
-        return 1
-    fi
-}
-
-# Check MongoDB availability
-check_mongo() {
-    log_step "Checking MongoDB connection..."
-    if command -v mongosh &> /dev/null; then
-        if mongosh "${MONGO_URI}" --eval "db.runCommand({ping:1})" --quiet >/dev/null 2>&1; then
-            log_info "MongoDB available at ${MONGO_URI}"
-            MONGO_AVAILABLE=true
-            return 0
-        fi
-    elif command -v mongo &> /dev/null; then
-        if mongo "${MONGO_URI}" --eval "db.runCommand({ping:1})" --quiet >/dev/null 2>&1; then
-            log_info "MongoDB available at ${MONGO_URI}"
-            MONGO_AVAILABLE=true
-            return 0
-        fi
-    else
-        # Try with nc as fallback
-        if nc -z "${MONGO_HOST}" "${MONGO_PORT}" 2>/dev/null; then
-            log_info "MongoDB port open at ${MONGO_HOST}:${MONGO_PORT} (assuming available)"
-            MONGO_AVAILABLE=true
-            return 0
-        fi
-    fi
-    log_warn "MongoDB not available at ${MONGO_URI}"
-    return 1
-}
-
-# Check if all services are running (for workflow tests)
+# Check if all services are running via health endpoints
 check_services_running() {
     log_step "Checking if all services are running..."
 
@@ -248,7 +115,7 @@ check_services_running() {
     fi
 }
 
-# Export gRPC endpoints for workflow tests
+# Export gRPC endpoints for all services
 export_grpc_endpoints() {
     export AUTH_GRPC_ENDPOINT="http://localhost:50051"
     export BILLING_GRPC_ENDPOINT="http://localhost:50057"
@@ -263,268 +130,112 @@ export_grpc_endpoints() {
     log_info "gRPC endpoints exported"
 }
 
-# Run workflow tests
-run_workflow_tests() {
-    log_step "Running workflow tests..."
-
-    export_grpc_endpoints
-
-    if [ ${#CARGO_ARGS[@]} -gt 0 ]; then
-        log_info "Running: cargo test -p workflow-tests -- ${CARGO_ARGS[*]}"
-        cargo test -p workflow-tests -- "${CARGO_ARGS[@]}"
-    else
-        log_info "Running: cargo test -p workflow-tests"
-        cargo test -p workflow-tests
-    fi
-}
-
-# Create a per-service PostgreSQL test database
-create_pg_database_for_service() {
-    local service=$1
-    local db_name
-    db_name=$(service_db_name "$service")
-
-    log_info "  Creating database ${db_name} for ${service}"
-
-    PGPASSWORD="${PG_PASSWORD}" psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d postgres \
-        -c "DROP DATABASE IF EXISTS ${db_name};" 2>/dev/null || true
-
-    PGPASSWORD="${PG_PASSWORD}" psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d postgres \
-        -c "CREATE DATABASE ${db_name};"
-
-    PG_CREATED_DBS+=("$db_name")
-}
-
-# Run migrations for a single service into its own database
-run_pg_migrations_for_service() {
-    local service=$1
-    local db_name
-    db_name=$(service_db_name "$service")
-    local db_url
-    db_url=$(service_db_url "$service")
-
-    if [ ! -d "${service}/migrations" ]; then
-        return 0
-    fi
-
-    log_info "  Running migrations for ${service} → ${db_name}"
-
-    if command -v sqlx &> /dev/null; then
-        (
-            cd "${service}"
-            DATABASE_URL="${db_url}" sqlx migrate run 2>&1 || {
-                log_warn "sqlx migrate failed for ${service}, trying direct SQL"
-                cd ..
-                run_migrations_sql "$service" "$db_name"
-            }
-        )
-    else
-        run_migrations_sql "$service" "$db_name"
-    fi
-}
-
-# Run migrations using direct SQL (fallback)
-run_migrations_sql() {
-    local service=$1
-    local db_name=$2
-    local migrations_dir="${service}/migrations"
-
-    for migration in $(ls "${migrations_dir}"/*.sql 2>/dev/null | sort); do
-        if [ -f "$migration" ]; then
-            log_info "    Applying: $(basename "$migration")"
-            PGPASSWORD="${PG_PASSWORD}" psql -h "${PG_HOST}" -p "${PG_PORT}" -U "${PG_USER}" -d "${db_name}" \
-                -f "$migration" >/dev/null 2>&1 || {
-                log_warn "    Migration may have already been applied: $(basename "$migration")"
-            }
-        fi
-    done
-}
-
-# Check if package is in list
-is_in_list() {
-    local item="$1"
-    shift
-    local list=("$@")
-    for i in "${list[@]}"; do
-        if [ "$i" = "$item" ]; then
+# Export ADMIN_API_KEY from .env.dev
+export_admin_api_key() {
+    local env_file=".env.dev"
+    if [ -f "$env_file" ]; then
+        local key
+        key=$(grep '^ADMIN_API_KEY=' "$env_file" | cut -d'=' -f2-)
+        if [ -n "$key" ]; then
+            export ADMIN_API_KEY="$key"
+            log_info "ADMIN_API_KEY exported from ${env_file}"
             return 0
         fi
-    done
-    return 1
-}
-
-# Determine which services to test
-get_services_to_test() {
-    local pg_to_test=()
-    local mongo_to_test=()
-    local workflow_to_test=()
-
-    if [ "$RUN_ALL" = true ]; then
-        pg_to_test=("${PG_SERVICES[@]}")
-        mongo_to_test=("${MONGO_SERVICES[@]}")
-        workflow_to_test=("${WORKFLOW_SERVICES[@]}")
-    else
-        for pkg in "${PACKAGES[@]}"; do
-            if is_in_list "$pkg" "${PG_SERVICES[@]}"; then
-                pg_to_test+=("$pkg")
-            elif is_in_list "$pkg" "${MONGO_SERVICES[@]}"; then
-                mongo_to_test+=("$pkg")
-            elif is_in_list "$pkg" "${WORKFLOW_SERVICES[@]}"; then
-                workflow_to_test+=("$pkg")
-            fi
-        done
     fi
-
-    echo "${pg_to_test[*]}|${mongo_to_test[*]}|${workflow_to_test[*]}"
-}
-
-# Create databases, run migrations, and export env vars for the requested PG services
-setup_pg_databases() {
-    local services=("$@")
-
-    log_step "Setting up per-service PostgreSQL databases..."
-
-    for service in "${services[@]}"; do
-        create_pg_database_for_service "$service"
-        run_pg_migrations_for_service "$service"
-
-        # Export service-specific env var: AUTH_TEST_DATABASE_URL, LEDGER_TEST_DATABASE_URL, etc.
-        local env_var
-        env_var=$(service_env_var "$service")
-        local db_url
-        db_url=$(service_db_url "$service")
-        export "${env_var}=${db_url}"
-        log_info "  ${env_var} → $(service_db_name "$service")"
-    done
-
-    log_info "All PostgreSQL databases ready"
-}
-
-# Run tests for PostgreSQL services
-run_pg_tests() {
-    local services=("$@")
-
-    if [ ${#services[@]} -eq 0 ]; then
-        return 0
-    fi
-
-    log_step "Running PostgreSQL service tests: ${services[*]}"
-
-    for service in "${services[@]}"; do
-        log_info "Testing ${service}..."
-
-        # --test-threads=1 prevents race conditions within a service's tests.
-        local extra_args=("--test-threads=1")
-
-        if [ ${#CARGO_ARGS[@]} -gt 0 ]; then
-            extra_args+=("${CARGO_ARGS[@]}")
-        fi
-
-        log_info "Running: cargo test -p ${service} -- ${extra_args[*]}"
-        cargo test -p "${service}" -- "${extra_args[@]}"
-    done
-}
-
-# Run tests for MongoDB services
-run_mongo_tests() {
-    local services=("$@")
-
-    if [ ${#services[@]} -eq 0 ]; then
-        return 0
-    fi
-
-    log_step "Running MongoDB service tests: ${services[*]}"
-
-    for service in "${services[@]}"; do
-        log_info "Testing ${service}..."
-
-        if [ ${#CARGO_ARGS[@]} -gt 0 ]; then
-            log_info "Running: cargo test -p ${service} -- ${CARGO_ARGS[*]}"
-            cargo test -p "${service}" -- "${CARGO_ARGS[@]}"
-        else
-            log_info "Running: cargo test -p ${service}"
-            cargo test -p "${service}"
-        fi
-    done
+    log_warn "ADMIN_API_KEY not found in ${env_file} — auth-service admin tests may fail"
+    return 0
 }
 
 # Main execution
 main() {
     echo ""
     echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}  Integration Tests${NC}"
+    echo -e "${GREEN}  Integration Tests (thin gRPC client mode)${NC}"
     echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
     echo ""
 
-    # Get services to test
-    local services_result
-    services_result=$(get_services_to_test)
-
-    # Parse the pipe-separated result: pg|mongo|workflow
-    local temp="${services_result#*|}"           # Remove first segment (pg)
-    local pg_services_str="${services_result%%|*}"
-    local mongo_services_str="${temp%%|*}"
-    local workflow_services_str="${temp#*|}"
-
-    # Convert to arrays
-    read -ra pg_services_to_test <<< "$pg_services_str"
-    read -ra mongo_services_to_test <<< "$mongo_services_str"
-    read -ra workflow_services_to_test <<< "$workflow_services_str"
+    # Determine which packages to test
+    local run_workflow=false
+    local run_payment=false
 
     if [ "$RUN_ALL" = true ]; then
-        log_info "Running: all services"
+        run_workflow=true
+        run_payment=true
+    else
+        for pkg in "${PACKAGES[@]}"; do
+            case "$pkg" in
+                workflow-tests) run_workflow=true ;;
+                payment-service) run_payment=true ;;
+                *) log_warn "Unknown package: $pkg (valid: workflow-tests, payment-service)" ;;
+            esac
+        done
+    fi
+
+    if [ "$RUN_ALL" = true ]; then
+        log_info "Running: all tests"
     else
         log_info "Running: ${PACKAGES[*]}"
     fi
     echo ""
 
+    # Verify services are running
+    if ! check_services_running; then
+        exit 1
+    fi
+    echo ""
+
+    # Export endpoints and keys
+    export_grpc_endpoints
+    export_admin_api_key
+    echo ""
+
+    # Pre-compile all test binaries in one pass
+    local compile_pkgs=()
+    if [ "$run_workflow" = true ]; then
+        compile_pkgs+=("-p" "workflow-tests")
+    fi
+    if [ "$run_payment" = true ]; then
+        compile_pkgs+=("-p" "payment-service")
+    fi
+    if [ ${#compile_pkgs[@]} -gt 0 ]; then
+        log_step "Compiling all test binaries..."
+        cargo test --no-run "${compile_pkgs[@]}" 2>&1 | tail -3
+        echo ""
+    fi
+
     local has_failures=false
 
-    # PostgreSQL services
-    if [ ${#pg_services_to_test[@]} -gt 0 ] && [ -n "${pg_services_to_test[0]}" ]; then
-        log_info "PostgreSQL services to test: ${pg_services_to_test[*]}"
-
-        if check_postgres; then
-            setup_pg_databases "${pg_services_to_test[@]}"
-            run_pg_tests "${pg_services_to_test[@]}" || has_failures=true
-        else
-            log_error "PostgreSQL required for: ${pg_services_to_test[*]}"
-            has_failures=true
+    # Workflow tests (all service integration tests + cross-service workflows)
+    if [ "$run_workflow" = true ]; then
+        log_step "Running workflow tests (all service integration tests)..."
+        local extra_args=("--test-threads=1")
+        if [ ${#CARGO_ARGS[@]} -gt 0 ]; then
+            extra_args+=("${CARGO_ARGS[@]}")
         fi
+        log_info "Running: cargo test -p workflow-tests -- ${extra_args[*]}"
+        cargo test -p workflow-tests -- "${extra_args[@]}" || has_failures=true
         echo ""
     fi
 
-    # MongoDB services
-    if [ ${#mongo_services_to_test[@]} -gt 0 ] && [ -n "${mongo_services_to_test[0]}" ]; then
-        log_info "MongoDB services to test: ${mongo_services_to_test[*]}"
-
-        if check_mongo; then
-            log_info "MONGODB_URI: ${MONGO_URI}"
-            run_mongo_tests "${mongo_services_to_test[@]}" || has_failures=true
+    # Payment embedded tests (wiremock)
+    if [ "$run_payment" = true ]; then
+        log_step "Running payment-service embedded tests (wiremock)..."
+        if [ ${#CARGO_ARGS[@]} -gt 0 ]; then
+            log_info "Running: cargo test -p payment-service -- ${CARGO_ARGS[*]}"
+            cargo test -p payment-service -- "${CARGO_ARGS[@]}" || has_failures=true
         else
-            log_error "MongoDB required for: ${mongo_services_to_test[*]}"
-            has_failures=true
-        fi
-        echo ""
-    fi
-
-    # Workflow tests (require all services running)
-    if [ ${#workflow_services_to_test[@]} -gt 0 ] && [ -n "${workflow_services_to_test[0]}" ]; then
-        log_info "Workflow tests to run: ${workflow_services_to_test[*]}"
-
-        if check_services_running; then
-            run_workflow_tests || has_failures=true
-        else
-            log_error "All services must be running for workflow tests"
-            log_error "Start services with: ./scripts/dev-up.sh"
-            has_failures=true
+            log_info "Running: cargo test -p payment-service"
+            cargo test -p payment-service || has_failures=true
         fi
         echo ""
     fi
 
     if [ "$has_failures" = true ]; then
+        log_error "Some tests failed"
         exit 1
     fi
+
+    log_info "All tests completed successfully"
 }
 
 main
