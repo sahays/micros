@@ -1,5 +1,6 @@
 pub mod capability_check;
 pub mod customers;
+pub mod direct_payments;
 pub mod helpers;
 pub mod linked_accounts;
 pub mod payment_links;

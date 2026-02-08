@@ -66,8 +66,26 @@ impl PaymentRepository {
             )
             .build();
 
+        let external_ref_tx_index = IndexModel::builder()
+            .keys(doc! { "app_id": 1, "org_id": 1, "external_reference": 1 })
+            .options(
+                IndexOptions::builder()
+                    .name("tenant_external_ref_transaction_idx".to_string())
+                    .sparse(true)
+                    .build(),
+            )
+            .build();
+
         self.transaction_collection
-            .create_indexes([tenant_tx_index, user_tx_index, status_tx_index], None)
+            .create_indexes(
+                [
+                    tenant_tx_index,
+                    user_tx_index,
+                    status_tx_index,
+                    external_ref_tx_index,
+                ],
+                None,
+            )
             .await?;
 
         // Payment method indexes
@@ -382,5 +400,21 @@ impl PaymentRepository {
         let transactions: Vec<Transaction> = cursor.try_collect().await?;
 
         Ok((transactions, total_count))
+    }
+
+    /// Get a transaction by external reference (UTR, cheque number, etc.) within a tenant.
+    pub async fn get_transaction_by_external_ref(
+        &self,
+        app_id: &str,
+        org_id: &str,
+        external_reference: &str,
+    ) -> Result<Option<Transaction>> {
+        let filter = doc! {
+            "app_id": app_id,
+            "org_id": org_id,
+            "external_reference": external_reference
+        };
+        let transaction = self.transaction_collection.find_one(filter, None).await?;
+        Ok(transaction)
     }
 }

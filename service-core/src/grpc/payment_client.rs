@@ -58,10 +58,14 @@ use super::proto::payment::{
     PauseRazorpaySubscriptionRequest,
     PaymentLink,
     PaymentLinkStatus,
+    PaymentMethodType,
     PlanPeriod,
     RazorpayCustomer,
     RazorpayPlan,
     RazorpaySubscription,
+    // Direct & offline payments
+    RecordDirectUpiPaymentRequest,
+    RecordOfflinePaymentRequest,
     Refund,
     RefundSpeed,
     RefundStatus,
@@ -1286,5 +1290,69 @@ impl PaymentClient {
         let inner = response.into_inner();
 
         Ok((inner.refunds, inner.total_count))
+    }
+
+    // =========================================================================
+    // Direct & Offline Payment Operations
+    // =========================================================================
+
+    /// Record a payment received directly via UPI.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn record_direct_upi_payment(
+        &mut self,
+        app_id: &str,
+        org_id: &str,
+        user_id: Option<&str>,
+        amount_paise: u64,
+        currency: &str,
+        utr: &str,
+        payer_vpa: Option<String>,
+        notes: Option<String>,
+    ) -> Result<Transaction, tonic::Status> {
+        let request = RecordDirectUpiPaymentRequest {
+            amount_paise,
+            currency: currency.to_string(),
+            utr: utr.to_string(),
+            payer_vpa,
+            notes,
+        };
+
+        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let response = self.client.record_direct_upi_payment(request).await?;
+
+        response
+            .into_inner()
+            .transaction
+            .ok_or_else(|| tonic::Status::internal("Missing transaction in response"))
+    }
+
+    /// Record an offline payment (cash, cheque, bank transfer, etc.).
+    #[allow(clippy::too_many_arguments)]
+    pub async fn record_offline_payment(
+        &mut self,
+        app_id: &str,
+        org_id: &str,
+        user_id: Option<&str>,
+        amount_paise: u64,
+        currency: &str,
+        payment_method_type: PaymentMethodType,
+        external_reference: Option<String>,
+        notes: Option<String>,
+    ) -> Result<Transaction, tonic::Status> {
+        let request = RecordOfflinePaymentRequest {
+            amount_paise,
+            currency: currency.to_string(),
+            payment_method_type: payment_method_type.into(),
+            external_reference,
+            notes,
+        };
+
+        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let response = self.client.record_offline_payment(request).await?;
+
+        response
+            .into_inner()
+            .transaction
+            .ok_or_else(|| tonic::Status::internal("Missing transaction in response"))
     }
 }

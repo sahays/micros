@@ -66,4 +66,8 @@ pub mod capabilities {
     // Refund capabilities
     pub const PAYMENT_REFUND_CREATE: &str = "payment.refund:create";
     pub const PAYMENT_REFUND_READ: &str = "payment.refund:read";
+
+    // Direct & offline payment capabilities
+    pub const PAYMENT_DIRECT_UPI_RECORD: &str = "payment.direct_upi:record";
+    pub const PAYMENT_OFFLINE_RECORD: &str = "payment.offline:record";
 }

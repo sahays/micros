@@ -44,6 +44,14 @@ pub struct Transaction {
     pub subscription_id: Option<String>,
     #[serde(default)]
     pub payment_link_id: Option<String>,
+    #[serde(default)]
+    pub payment_channel: Option<PaymentChannel>,
+    #[serde(default)]
+    pub payment_method_type: Option<PaymentMethodType>,
+    #[serde(default)]
+    pub external_reference: Option<String>,
+    #[serde(default)]
+    pub notes: Option<String>,
     pub created_at: DateTime,
     pub updated_at: DateTime,
 }
@@ -57,6 +65,27 @@ pub enum TransactionStatus {
     Failed,
     Refunded,
     PartiallyRefunded,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PaymentChannel {
+    Razorpay,
+    DirectUpi,
+    Offline,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum PaymentMethodType {
+    Upi,
+    Card,
+    Netbanking,
+    Wallet,
+    Cash,
+    Cheque,
+    BankTransfer,
+    Other,
 }
 
 /// Deserialize amount from BSON, handling both Double (legacy) and Int64/Int32 values.

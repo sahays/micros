@@ -1,12 +1,15 @@
 //! Shared gRPC helper functions.
 
 use crate::middleware::TenantContext;
-use crate::models::{Transaction, TransactionStatus};
+use crate::models::{PaymentChannel, PaymentMethodType, Transaction, TransactionStatus};
 use mongodb::bson::DateTime;
 use prost_types::Timestamp;
 use tonic::{Request, Status};
 
-use super::proto::{Transaction as ProtoTransaction, TransactionStatus as ProtoTransactionStatus};
+use super::proto::{
+    PaymentChannel as ProtoPaymentChannel, PaymentMethodType as ProtoPaymentMethodType,
+    Transaction as ProtoTransaction, TransactionStatus as ProtoTransactionStatus,
+};
 
 /// Extract tenant context from gRPC metadata.
 #[allow(clippy::result_large_err)]
@@ -58,6 +61,14 @@ pub fn transaction_to_proto(t: Transaction) -> ProtoTransaction {
         linked_account_id: t.linked_account_id,
         subscription_id: t.subscription_id,
         payment_link_id: t.payment_link_id,
+        payment_channel: t
+            .payment_channel
+            .map(|c| payment_channel_to_proto(c).into()),
+        payment_method_type: t
+            .payment_method_type
+            .map(|m| payment_method_type_to_proto(m).into()),
+        external_reference: t.external_reference,
+        notes: t.notes,
         created_at: datetime_to_timestamp(t.created_at),
         updated_at: datetime_to_timestamp(t.updated_at),
     }
@@ -98,6 +109,54 @@ pub fn check_feature_flag(enabled: bool, name: &str) -> Result<(), Status> {
         )));
     }
     Ok(())
+}
+
+/// Convert model PaymentChannel to proto PaymentChannel.
+pub fn payment_channel_to_proto(channel: PaymentChannel) -> ProtoPaymentChannel {
+    match channel {
+        PaymentChannel::Razorpay => ProtoPaymentChannel::Razorpay,
+        PaymentChannel::DirectUpi => ProtoPaymentChannel::DirectUpi,
+        PaymentChannel::Offline => ProtoPaymentChannel::Offline,
+    }
+}
+
+/// Convert proto PaymentChannel to model PaymentChannel.
+pub fn proto_to_payment_channel(channel: i32) -> Option<PaymentChannel> {
+    match ProtoPaymentChannel::try_from(channel) {
+        Ok(ProtoPaymentChannel::Razorpay) => Some(PaymentChannel::Razorpay),
+        Ok(ProtoPaymentChannel::DirectUpi) => Some(PaymentChannel::DirectUpi),
+        Ok(ProtoPaymentChannel::Offline) => Some(PaymentChannel::Offline),
+        _ => None,
+    }
+}
+
+/// Convert model PaymentMethodType to proto PaymentMethodType.
+pub fn payment_method_type_to_proto(method: PaymentMethodType) -> ProtoPaymentMethodType {
+    match method {
+        PaymentMethodType::Upi => ProtoPaymentMethodType::Upi,
+        PaymentMethodType::Card => ProtoPaymentMethodType::Card,
+        PaymentMethodType::Netbanking => ProtoPaymentMethodType::Netbanking,
+        PaymentMethodType::Wallet => ProtoPaymentMethodType::Wallet,
+        PaymentMethodType::Cash => ProtoPaymentMethodType::Cash,
+        PaymentMethodType::Cheque => ProtoPaymentMethodType::Cheque,
+        PaymentMethodType::BankTransfer => ProtoPaymentMethodType::BankTransfer,
+        PaymentMethodType::Other => ProtoPaymentMethodType::Other,
+    }
+}
+
+/// Convert proto PaymentMethodType to model PaymentMethodType.
+pub fn proto_to_payment_method_type(method: i32) -> Option<PaymentMethodType> {
+    match ProtoPaymentMethodType::try_from(method) {
+        Ok(ProtoPaymentMethodType::Upi) => Some(PaymentMethodType::Upi),
+        Ok(ProtoPaymentMethodType::Card) => Some(PaymentMethodType::Card),
+        Ok(ProtoPaymentMethodType::Netbanking) => Some(PaymentMethodType::Netbanking),
+        Ok(ProtoPaymentMethodType::Wallet) => Some(PaymentMethodType::Wallet),
+        Ok(ProtoPaymentMethodType::Cash) => Some(PaymentMethodType::Cash),
+        Ok(ProtoPaymentMethodType::Cheque) => Some(PaymentMethodType::Cheque),
+        Ok(ProtoPaymentMethodType::BankTransfer) => Some(PaymentMethodType::BankTransfer),
+        Ok(ProtoPaymentMethodType::Other) => Some(PaymentMethodType::Other),
+        _ => None,
+    }
 }
 
 /// Check that Razorpay client is configured.

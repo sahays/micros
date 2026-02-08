@@ -28,14 +28,16 @@ use crate::grpc::proto::{
     ListSettlementsRequest, ListSettlementsResponse, ListTransactionsRequest,
     ListTransactionsResponse, ListTransfersRequest, ListTransfersResponse,
     PauseRazorpaySubscriptionRequest, PauseRazorpaySubscriptionResponse,
-    ReleaseTransferSettlementRequest, ReleaseTransferSettlementResponse,
-    RequestOnDemandSettlementRequest, RequestOnDemandSettlementResponse,
-    ResumeRazorpaySubscriptionRequest, ResumeRazorpaySubscriptionResponse, ReverseTransferRequest,
-    ReverseTransferResponse, UpdateCommissionConfigRequest, UpdateCommissionConfigResponse,
-    UpdateCustomerRequest, UpdateCustomerResponse, UpdateLinkedAccountRequest,
-    UpdateLinkedAccountResponse, UpdateRazorpaySubscriptionRequest,
-    UpdateRazorpaySubscriptionResponse, UpdateTransactionStatusRequest,
-    UpdateTransactionStatusResponse, VerifyRazorpayPaymentRequest, VerifyRazorpayPaymentResponse,
+    RecordDirectUpiPaymentRequest, RecordDirectUpiPaymentResponse, RecordOfflinePaymentRequest,
+    RecordOfflinePaymentResponse, ReleaseTransferSettlementRequest,
+    ReleaseTransferSettlementResponse, RequestOnDemandSettlementRequest,
+    RequestOnDemandSettlementResponse, ResumeRazorpaySubscriptionRequest,
+    ResumeRazorpaySubscriptionResponse, ReverseTransferRequest, ReverseTransferResponse,
+    UpdateCommissionConfigRequest, UpdateCommissionConfigResponse, UpdateCustomerRequest,
+    UpdateCustomerResponse, UpdateLinkedAccountRequest, UpdateLinkedAccountResponse,
+    UpdateRazorpaySubscriptionRequest, UpdateRazorpaySubscriptionResponse,
+    UpdateTransactionStatusRequest, UpdateTransactionStatusResponse, VerifyRazorpayPaymentRequest,
+    VerifyRazorpayPaymentResponse,
 };
 use crate::models::Transaction;
 use crate::models::TransactionStatus;
@@ -47,8 +49,8 @@ use tonic::{Request, Response, Status};
 use uuid::Uuid;
 
 use super::{
-    customers, linked_accounts, payment_links, refunds, settlements, subscriptions, transfers,
-    webhooks,
+    customers, direct_payments, linked_accounts, payment_links, refunds, settlements,
+    subscriptions, transfers, webhooks,
 };
 
 pub struct PaymentGrpcService {
@@ -98,6 +100,10 @@ impl PaymentService for PaymentGrpcService {
             linked_account_id: None,
             subscription_id: None,
             payment_link_id: None,
+            payment_channel: None,
+            payment_method_type: None,
+            external_reference: None,
+            notes: None,
             created_at: now,
             updated_at: now,
         };
@@ -318,6 +324,10 @@ impl PaymentService for PaymentGrpcService {
             linked_account_id: None,
             subscription_id: None,
             payment_link_id: None,
+            payment_channel: Some(crate::models::PaymentChannel::Razorpay),
+            payment_method_type: None,
+            external_reference: None,
+            notes: None,
             created_at: now,
             updated_at: now,
         };
@@ -810,5 +820,23 @@ impl PaymentService for PaymentGrpcService {
         request: Request<ListRefundsRequest>,
     ) -> Result<Response<ListRefundsResponse>, Status> {
         refunds::list_refunds(&self.state, request).await
+    }
+
+    // =========================================================================
+    // Direct & Offline Payment Operations (delegated)
+    // =========================================================================
+
+    async fn record_direct_upi_payment(
+        &self,
+        request: Request<RecordDirectUpiPaymentRequest>,
+    ) -> Result<Response<RecordDirectUpiPaymentResponse>, Status> {
+        direct_payments::record_direct_upi_payment(&self.state, request).await
+    }
+
+    async fn record_offline_payment(
+        &self,
+        request: Request<RecordOfflinePaymentRequest>,
+    ) -> Result<Response<RecordOfflinePaymentResponse>, Status> {
+        direct_payments::record_offline_payment(&self.state, request).await
     }
 }

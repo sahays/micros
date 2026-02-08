@@ -15,6 +15,27 @@ enum TransactionStatus {
   TRANSACTION_STATUS_PARTIALLY_REFUNDED = 6;
 }
 
+// PaymentChannel indicates how the payment was routed.
+enum PaymentChannel {
+  PAYMENT_CHANNEL_UNSPECIFIED = 0;
+  PAYMENT_CHANNEL_RAZORPAY = 1;
+  PAYMENT_CHANNEL_DIRECT_UPI = 2;
+  PAYMENT_CHANNEL_OFFLINE = 3;
+}
+
+// PaymentMethodType indicates the instrument used for payment.
+enum PaymentMethodType {
+  PAYMENT_METHOD_TYPE_UNSPECIFIED = 0;
+  PAYMENT_METHOD_TYPE_UPI = 1;
+  PAYMENT_METHOD_TYPE_CARD = 2;
+  PAYMENT_METHOD_TYPE_NETBANKING = 3;
+  PAYMENT_METHOD_TYPE_WALLET = 4;
+  PAYMENT_METHOD_TYPE_CASH = 5;
+  PAYMENT_METHOD_TYPE_CHEQUE = 6;
+  PAYMENT_METHOD_TYPE_BANK_TRANSFER = 7;
+  PAYMENT_METHOD_TYPE_OTHER = 8;
+}
+
 // Transaction represents a payment transaction.
 message Transaction {
   // Unique transaction identifier.
@@ -55,6 +76,18 @@ message Transaction {
 
   // Payment link ID (for payment link payments).
   optional string payment_link_id = 13;
+
+  // How the payment was routed (Razorpay, DirectUpi, Offline).
+  optional PaymentChannel payment_channel = 14;
+
+  // Payment instrument type (UPI, Card, Cash, Cheque, etc.).
+  optional PaymentMethodType payment_method_type = 15;
+
+  // External reference (UTR, cheque number, bank ref, etc.).
+  optional string external_reference = 16;
+
+  // Free-form notes about the payment.
+  optional string notes = 17;
 }
 
 // CreateTransactionRequest to create a new transaction.

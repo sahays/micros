@@ -3,6 +3,9 @@ mod common;
 #[path = "payment_tests/customer.rs"]
 mod customer;
 
+#[path = "payment_tests/direct_payments.rs"]
+mod direct_payments;
+
 #[path = "payment_tests/refund.rs"]
 mod refund;
 
