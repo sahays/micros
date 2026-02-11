@@ -219,7 +219,12 @@ if [ -n "$REBUILD_FLAG" ] || [ -z "$BUILDER_EXISTS" ]; then
 fi
 
 echo -e "${GREEN}Starting services with Docker Compose...${NC}"
-docker compose -f docker-compose.dev.yml --env-file .env.dev up -d $REBUILD_FLAG $NO_CACHE_FLAG
+if [ -n "$NO_CACHE_FLAG" ] && [ -n "$REBUILD_FLAG" ]; then
+    docker compose -f docker-compose.dev.yml --env-file .env.dev build --no-cache
+    docker compose -f docker-compose.dev.yml --env-file .env.dev up -d
+else
+    docker compose -f docker-compose.dev.yml --env-file .env.dev up -d $REBUILD_FLAG
+fi
 
 echo ""
 echo -e "${GREEN}Services started!${NC}"
