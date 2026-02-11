@@ -162,7 +162,9 @@ GENAI_MONGODB_DATABASE=$(get_env GENAI_MONGODB_DATABASE)
 
 # Extract PostgreSQL connection parts from DATABASE_URL
 PG_USER=$(echo "$DATABASE_URL" | sed -n 's|postgres://\([^:]*\):.*|\1|p')
-PG_PASS=$(echo "$DATABASE_URL" | sed -n 's|postgres://[^:]*:\([^@]*\)@.*|\1|p')
+PG_PASS_RAW=$(echo "$DATABASE_URL" | sed -n 's|postgres://[^:]*:\([^@]*\)@.*|\1|p')
+# URL-decode the password (e.g. %40 -> @)
+PG_PASS=$(printf '%b' "${PG_PASS_RAW//%/\\x}")
 PG_HOST=$(echo "$DATABASE_URL" | sed -n 's|postgres://[^@]*@\([^:]*\):.*|\1|p')
 PG_PORT=$(echo "$DATABASE_URL" | sed -n 's|postgres://[^@]*@[^:]*:\([0-9]*\)/.*|\1|p')
 
