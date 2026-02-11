@@ -55,6 +55,22 @@ services:
     networks:
       - observability-net
 
+  promtail:
+    image: grafana/promtail:latest
+    container_name: ${COMPOSE_PROJECT_NAME:-observability-dev}-promtail
+    volumes:
+      - ./promtail:/etc/promtail
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: -config.file=/etc/promtail/promtail.yaml
+    ports:
+      - "9080:9080"
+    restart: unless-stopped
+    depends_on:
+      - loki
+    networks:
+      - observability-net
+
   grafana:
     image: grafana/grafana:latest
     container_name: ${COMPOSE_PROJECT_NAME:-observability-dev}-grafana

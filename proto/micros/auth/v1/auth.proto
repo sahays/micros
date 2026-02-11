@@ -28,6 +28,12 @@ service AuthService {
 
   // Verify OTP code.
   rpc VerifyOtp(VerifyOtpRequest) returns (VerifyOtpResponse);
+
+  // Reset password using a reset token obtained after OTP verification.
+  rpc ResetPassword(ResetPasswordRequest) returns (ResetPasswordResponse);
+
+  // Change password for an authenticated user.
+  rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
 }
 
 // RegisterRequest for creating a new user account.
@@ -157,8 +163,8 @@ enum OtpPurpose {
 
 // SendOtpRequest for requesting an OTP code.
 message SendOtpRequest {
-  // Tenant ID.
-  string tenant_id = 1;
+  // Tenant slug identifier.
+  string tenant_slug = 1;
 
   // Destination (email or phone number in E.164 format).
   string destination = 2;
@@ -198,4 +204,37 @@ message VerifyOtpResponse {
 
   // For login purpose, auth tokens are returned.
   optional LoginResponse auth = 3;
+
+  // For reset_password purpose, a short-lived reset token is returned.
+  optional string reset_token = 4;
+}
+
+// ResetPasswordRequest for setting a new password after OTP verification.
+message ResetPasswordRequest {
+  // Reset token obtained from VerifyOtp with RESET_PASSWORD purpose.
+  string reset_token = 1;
+
+  // The new password (min 8 characters).
+  string new_password = 2;
+}
+
+// ResetPasswordResponse after successful password reset.
+message ResetPasswordResponse {
+  // Confirmation message.
+  string message = 1;
+}
+
+// ChangePasswordRequest for authenticated password change.
+message ChangePasswordRequest {
+  // The user's current password.
+  string current_password = 1;
+
+  // The new password (min 8 characters).
+  string new_password = 2;
+}
+
+// ChangePasswordResponse after successful password change.
+message ChangePasswordResponse {
+  // Confirmation message.
+  string message = 1;
 }

@@ -8,22 +8,6 @@ services:
   # Services exposed on 10xxx port range
   # ==============================================================================
 
-  # Log Collection (sends to host Loki)
-  promtail:
-    image: grafana/promtail:latest
-    container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-promtail
-    volumes:
-      - ./config/promtail:/etc/promtail
-      - /var/log:/var/log
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    command: -config.file=/etc/promtail/promtail.yaml
-    ports:
-      - "${PROMTAIL_PORT:-10004}:9080"
-    restart: unless-stopped
-    networks:
-      - micros-net
-
   # Database Stack
   postgres:
     image: postgres:16-alpine
@@ -85,6 +69,8 @@ services:
       context: .
       dockerfile: auth-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-auth-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${AUTH_SERVICE_HEALTH_PORT:-10005}:3000"
       - "${AUTH_SERVICE_GRPC_PORT:-50051}:3001"
@@ -137,6 +123,7 @@ services:
       timeout: 3s
       retries: 5
       start_period: 10s
+    restart: unless-stopped
     networks:
       - micros-net
 
@@ -145,6 +132,8 @@ services:
       context: .
       dockerfile: document-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-document-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${DOCUMENT_SERVICE_HEALTH_PORT:-10007}:8080"
       - "${DOCUMENT_SERVICE_GRPC_PORT:-50052}:8081"
@@ -172,6 +161,7 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+    restart: unless-stopped
     networks:
       - micros-net
 
@@ -180,6 +170,8 @@ services:
       context: .
       dockerfile: notification-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-notification-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${NOTIFICATION_SERVICE_HEALTH_PORT:-10008}:8080"
       - "${NOTIFICATION_SERVICE_GRPC_PORT:-50053}:8081"
@@ -220,6 +212,7 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+    restart: unless-stopped
     networks:
       - micros-net
 
@@ -228,6 +221,8 @@ services:
       context: .
       dockerfile: genai-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-genai-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${GENAI_SERVICE_HEALTH_PORT:-10010}:8080"
       - "${GENAI_SERVICE_GRPC_PORT:-50055}:8081"
@@ -261,6 +256,7 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+    restart: unless-stopped
     networks:
       - micros-net
 
@@ -269,6 +265,8 @@ services:
       context: .
       dockerfile: payment-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-payment-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${PAYMENT_SERVICE_HEALTH_PORT:-10009}:3003"
       - "${PAYMENT_SERVICE_GRPC_PORT:-50054}:3004"
@@ -304,6 +302,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    restart: unless-stopped
     networks:
       - micros-net
 
@@ -312,6 +311,8 @@ services:
       context: .
       dockerfile: billing-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-billing-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${BILLING_SERVICE_HEALTH_PORT:-10012}:8080"
       - "${BILLING_SERVICE_GRPC_PORT:-50057}:8081"
@@ -343,6 +344,7 @@ services:
         condition: service_healthy
       auth-service:
         condition: service_healthy
+    restart: unless-stopped
     networks:
       - micros-net
 
@@ -351,6 +353,8 @@ services:
       context: .
       dockerfile: reconciliation-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-reconciliation-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${RECONCILIATION_SERVICE_HEALTH_PORT:-10013}:8080"
       - "${RECONCILIATION_SERVICE_GRPC_PORT:-50058}:8081"
@@ -386,6 +390,7 @@ services:
         condition: service_healthy
       auth-service:
         condition: service_healthy
+    restart: unless-stopped
     networks:
       - micros-net
 
@@ -394,6 +399,8 @@ services:
       context: .
       dockerfile: ledger-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-ledger-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${LEDGER_SERVICE_HEALTH_PORT:-10011}:8080"
       - "${LEDGER_SERVICE_GRPC_PORT:-50056}:8081"
@@ -423,6 +430,7 @@ services:
         condition: service_healthy
       auth-service:
         condition: service_healthy
+    restart: unless-stopped
     networks:
       - micros-net
 
@@ -431,6 +439,8 @@ services:
       context: .
       dockerfile: invoicing-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-prod}-invoicing-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${INVOICING_SERVICE_HEALTH_PORT:-10014}:8080"
       - "${INVOICING_SERVICE_GRPC_PORT:-50059}:8081"
@@ -460,6 +470,7 @@ services:
         condition: service_healthy
       auth-service:
         condition: service_healthy
+    restart: unless-stopped
     networks:
       - micros-net
 

@@ -22,10 +22,10 @@ export COMPOSE_PROJECT_NAME="observability-${ENV}"
 echo -e "${YELLOW}Stopping PLG+T Observability Stack (${ENV})${NC}"
 echo ""
 
-docker-compose down --remove-orphans
+docker compose down --remove-orphans
 
 echo ""
 echo -e "${GREEN}Observability stack stopped!${NC}"
 echo ""
 echo "To also remove volumes (WARNING: deletes all observability data):"
-echo "  cd $SCRIPT_DIR && COMPOSE_PROJECT_NAME=observability-${ENV} docker-compose down -v"
+echo "  cd $SCRIPT_DIR && COMPOSE_PROJECT_NAME=observability-${ENV} docker compose down -v"

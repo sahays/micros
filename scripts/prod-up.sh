@@ -84,7 +84,7 @@ if [ -n "$REBUILD_FLAG" ] || [ -z "$BUILDER_EXISTS" ]; then
 fi
 
 echo -e "${GREEN}Starting services with Docker Compose...${NC}"
-docker-compose -f docker-compose.prod.yml --env-file .env.prod up -d $REBUILD_FLAG $NO_CACHE_FLAG
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d $REBUILD_FLAG $NO_CACHE_FLAG
 
 echo ""
 echo -e "${GREEN}Services started!${NC}"
@@ -124,7 +124,7 @@ echo "  - MongoDB:    localhost:10008 (document, notification, payment, genai)"
 echo "  - Redis:      localhost:10009 (auth, session cache)"
 echo ""
 echo "View logs:"
-echo "  docker-compose -f docker-compose.prod.yml logs -f"
+echo "  docker compose -f docker-compose.prod.yml logs -f"
 echo ""
 echo "Stop services:"
 echo "  ./scripts/prod-down.sh"

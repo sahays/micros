@@ -16,6 +16,6 @@ pub use crypto::hash_password;
 pub use database::Database;
 pub use email::{EmailProvider, EmailService, MockEmailService};
 pub use error::ServiceError;
-pub use jwt::{AccessTokenClaims, JwtService, RefreshTokenClaims, TokenResponse};
+pub use jwt::{AccessTokenClaims, JwtService, RefreshTokenClaims, ResetTokenClaims, TokenResponse};
 pub use notification_client::NotificationClient;
 pub use redis::{MockBlacklist, RedisService, TokenBlacklist};

@@ -72,6 +72,21 @@ pub struct MessageResponse {
     pub message: String,
 }
 
+/// Reset password request (token-based, unauthenticated).
+#[derive(Debug, Deserialize)]
+pub struct ResetPasswordRequest {
+    pub reset_token: String,
+    pub new_password: String,
+}
+
+/// Change password request (authenticated).
+#[derive(Debug, Deserialize)]
+pub struct ChangePasswordRequest {
+    pub user_id: Uuid,
+    pub current_password: String,
+    pub new_password: String,
+}
+
 // ============================================================================
 // Business Logic Implementations
 // ============================================================================
@@ -310,6 +325,117 @@ pub async fn logout_impl(state: &AppState, req: LogoutRequest) -> Result<(), App
     }
 
     Ok(())
+}
+
+/// Reset password using a reset token obtained after OTP verification - implementation.
+pub async fn reset_password_impl(
+    state: &AppState,
+    req: ResetPasswordRequest,
+) -> Result<MessageResponse, AppError> {
+    // Validate new password
+    validate_password(&req.new_password)?;
+
+    // Validate reset token
+    let claims = state
+        .jwt
+        .validate_reset_token(&req.reset_token)
+        .map_err(|e| AppError::AuthError(anyhow::anyhow!("Invalid reset token: {}", e)))?;
+
+    // Check if token has already been used (single-use enforcement)
+    let already_used = state
+        .redis
+        .is_blacklisted(&claims.jti)
+        .await
+        .map_err(|e| AppError::InternalError(anyhow::anyhow!("Redis error: {}", e)))?;
+
+    if already_used {
+        return Err(AppError::AuthError(anyhow::anyhow!(
+            "Reset token has already been used"
+        )));
+    }
+
+    let user_id = Uuid::parse_str(&claims.sub)
+        .map_err(|_| AppError::AuthError(anyhow::anyhow!("Invalid user_id in reset token")))?;
+
+    // Hash new password
+    let new_hash = hash_password(&req.new_password)?;
+
+    // Update the password identity
+    state
+        .db
+        .update_user_identity_hash(user_id, IdentProvider::Password.as_str(), &new_hash)
+        .await
+        .map_err(|e| AppError::InternalError(anyhow::anyhow!("Database error: {}", e)))?;
+
+    // Blacklist the reset token so it can't be reused (10 min TTL matching token expiry)
+    state
+        .redis
+        .blacklist_token(&claims.jti, 600)
+        .await
+        .map_err(|e| AppError::InternalError(anyhow::anyhow!("Redis error: {}", e)))?;
+
+    // Revoke all existing sessions to force re-login everywhere
+    state
+        .db
+        .revoke_all_user_sessions(user_id)
+        .await
+        .map_err(|e| AppError::InternalError(anyhow::anyhow!("Database error: {}", e)))?;
+
+    Ok(MessageResponse {
+        message: "Password has been reset successfully".to_string(),
+    })
+}
+
+/// Change password for an authenticated user - implementation.
+pub async fn change_password_impl(
+    state: &AppState,
+    req: ChangePasswordRequest,
+) -> Result<MessageResponse, AppError> {
+    // Validate new password
+    validate_password(&req.new_password)?;
+
+    // Reject if current and new passwords are the same
+    if req.current_password == req.new_password {
+        return Err(AppError::BadRequest(anyhow::anyhow!(
+            "New password must be different from current password"
+        )));
+    }
+
+    // Find password identity
+    let identity = state
+        .db
+        .find_user_identity(req.user_id, IdentProvider::Password.as_str())
+        .await
+        .map_err(|e| AppError::InternalError(anyhow::anyhow!("Database error: {}", e)))?
+        .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Password identity not found")))?;
+
+    // Verify current password
+    if !verify_password(&req.current_password, &identity.ident_hash)? {
+        return Err(AppError::AuthError(anyhow::anyhow!(
+            "Current password is incorrect"
+        )));
+    }
+
+    // Hash new password
+    let new_hash = hash_password(&req.new_password)?;
+
+    // Update the password identity
+    state
+        .db
+        .update_user_identity_hash(req.user_id, IdentProvider::Password.as_str(), &new_hash)
+        .await
+        .map_err(|e| AppError::InternalError(anyhow::anyhow!("Database error: {}", e)))?;
+
+    // Revoke all existing sessions to force re-login everywhere
+    state
+        .db
+        .revoke_all_user_sessions(req.user_id)
+        .await
+        .map_err(|e| AppError::InternalError(anyhow::anyhow!("Database error: {}", e)))?;
+
+    Ok(MessageResponse {
+        message: "Password has been changed successfully".to_string(),
+    })
 }
 
 // ============================================================================

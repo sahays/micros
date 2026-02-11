@@ -134,12 +134,76 @@ else
     PLGT_MISSING="true"
 fi
 
+if nc -z localhost 9080 2>/dev/null; then
+    echo -e "${GREEN}✓ Promtail is accessible on port 9080${NC}"
+else
+    echo -e "${RED}✗ Promtail is not accessible on port 9080${NC}"
+    PLGT_MISSING="true"
+fi
+
 if [ -n "$PLGT_MISSING" ]; then
     echo ""
     echo -e "${RED}PLG+T observability stack is not fully running${NC}"
     echo "Please start it first: cd observability && ./start.sh"
     exit 1
 fi
+
+echo ""
+
+# Read specific variables from .env.dev (avoid sourcing to handle unquoted spaces)
+get_env() { grep -m1 "^$1=" .env.dev 2>/dev/null | cut -d'=' -f2-; }
+
+DATABASE_URL=$(get_env DATABASE_URL)
+MONGODB_URI=$(get_env MONGODB_URI)
+MONGODB_DATABASE=$(get_env MONGODB_DATABASE)
+NOTIFICATION_MONGODB_DATABASE=$(get_env NOTIFICATION_MONGODB_DATABASE)
+PAYMENT_DATABASE_NAME=$(get_env PAYMENT_DATABASE_NAME)
+GENAI_MONGODB_DATABASE=$(get_env GENAI_MONGODB_DATABASE)
+
+# Extract PostgreSQL connection parts from DATABASE_URL
+PG_USER=$(echo "$DATABASE_URL" | sed -n 's|postgres://\([^:]*\):.*|\1|p')
+PG_PASS=$(echo "$DATABASE_URL" | sed -n 's|postgres://[^:]*:\([^@]*\)@.*|\1|p')
+PG_HOST=$(echo "$DATABASE_URL" | sed -n 's|postgres://[^@]*@\([^:]*\):.*|\1|p')
+PG_PORT=$(echo "$DATABASE_URL" | sed -n 's|postgres://[^@]*@[^:]*:\([0-9]*\)/.*|\1|p')
+
+# PostgreSQL databases to ensure
+PG_DATABASES=(
+    "auth_db:auth-service"
+    "ledger_db:ledger-service"
+    "billing_db:billing-service"
+    "reconciliation_db:reconciliation-service"
+    "invoicing_db:invoicing-service"
+)
+
+echo "Ensuring PostgreSQL databases exist..."
+for entry in "${PG_DATABASES[@]}"; do
+    DB_NAME="${entry%%:*}"
+    DB_SERVICE="${entry##*:}"
+    EXISTS=$(docker run --rm --network host -e PGPASSWORD="$PG_PASS" postgres:16-alpine psql -U "$PG_USER" -h localhost -p "$PG_PORT" -tAc "SELECT 1 FROM pg_database WHERE datname='$DB_NAME'" 2>/dev/null)
+    if [ "$EXISTS" = "1" ]; then
+        echo -e "  ${GREEN}✓${NC} $DB_NAME (${DB_SERVICE})"
+    else
+        docker run --rm --network host -e PGPASSWORD="$PG_PASS" postgres:16-alpine psql -U "$PG_USER" -h localhost -p "$PG_PORT" -c "CREATE DATABASE $DB_NAME" >/dev/null 2>&1
+        echo -e "  ${GREEN}✓${NC} $DB_NAME (${DB_SERVICE}) ${YELLOW}[created]${NC}"
+    fi
+done
+
+# MongoDB databases to ensure (created implicitly on first write)
+MONGO_DATABASES=(
+    "${MONGODB_DATABASE:-micros_db}:document-service"
+    "${NOTIFICATION_MONGODB_DATABASE:-notification_db}:notification-service"
+    "${PAYMENT_DATABASE_NAME:-payment_db}:payment-service"
+    "${GENAI_MONGODB_DATABASE:-genai_db}:genai-service"
+)
+
+echo ""
+echo "Ensuring MongoDB databases exist..."
+for entry in "${MONGO_DATABASES[@]}"; do
+    DB_NAME="${entry%%:*}"
+    DB_SERVICE="${entry##*:}"
+    docker run --rm --network host mongo:6.0 mongosh --host localhost:27017 --quiet --eval "db.getSiblingDB('$DB_NAME').createCollection('_init')" >/dev/null 2>&1 || true
+    echo -e "  ${GREEN}✓${NC} $DB_NAME (${DB_SERVICE})"
+done
 
 echo ""
 
@@ -155,7 +219,7 @@ if [ -n "$REBUILD_FLAG" ] || [ -z "$BUILDER_EXISTS" ]; then
 fi
 
 echo -e "${GREEN}Starting services with Docker Compose...${NC}"
-docker-compose -f docker-compose.dev.yml --env-file .env.dev up -d $REBUILD_FLAG $NO_CACHE_FLAG
+docker compose -f docker-compose.dev.yml --env-file .env.dev up -d $REBUILD_FLAG $NO_CACHE_FLAG
 
 echo ""
 echo -e "${GREEN}Services started!${NC}"
@@ -195,8 +259,8 @@ echo "  - Grafana:    http://localhost:3000 (admin/admin)"
 echo "  - Tempo:      http://localhost:3200"
 echo ""
 echo "View logs:"
-echo "  docker-compose -f docker-compose.dev.yml logs -f"
-echo "  docker-compose -f docker-compose.dev.yml logs -f reconciliation-service"
+echo "  docker compose -f docker-compose.dev.yml logs -f"
+echo "  docker compose -f docker-compose.dev.yml logs -f reconciliation-service"
 echo ""
 echo "Stop services:"
 echo "  ./scripts/dev-down.sh"

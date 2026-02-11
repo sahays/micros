@@ -7,28 +7,14 @@ services:
   # Services connect via host.docker.internal
   # ==============================================================================
 
-  # Log Collection (sends to host Loki)
-  promtail:
-    image: grafana/promtail:latest
-    container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-promtail
-    volumes:
-      - ./config/promtail:/etc/promtail
-      - /var/log:/var/log
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    command: -config.file=/etc/promtail/promtail.yaml
-    ports:
-      - "${PROMTAIL_PORT:-9004}:9080"
-    restart: unless-stopped
-    networks:
-      - micros-net
-
   # Application Stack
   auth-service:
     build:
       context: .
       dockerfile: auth-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-auth-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${AUTH_SERVICE_HEALTH_PORT:-9005}:3000"
       - "${AUTH_SERVICE_GRPC_PORT:-50051}:3001"
@@ -76,6 +62,7 @@ services:
       timeout: 3s
       retries: 5
       start_period: 10s
+    restart: unless-stopped
     networks:
       - micros-net
 
@@ -84,6 +71,8 @@ services:
       context: .
       dockerfile: document-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-document-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${DOCUMENT_SERVICE_HEALTH_PORT:-9007}:8080"
       - "${DOCUMENT_SERVICE_GRPC_PORT:-50052}:8081"
@@ -108,6 +97,7 @@ services:
         max-size: "10m"
         max-file: "3"
         tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    restart: unless-stopped
     networks:
       - micros-net
 
@@ -116,6 +106,8 @@ services:
       context: .
       dockerfile: notification-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-notification-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${NOTIFICATION_SERVICE_HEALTH_PORT:-9008}:8080"
       - "${NOTIFICATION_SERVICE_GRPC_PORT:-50053}:8081"
@@ -153,6 +145,7 @@ services:
         max-size: "10m"
         max-file: "3"
         tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    restart: unless-stopped
     networks:
       - micros-net
 
@@ -161,6 +154,8 @@ services:
       context: .
       dockerfile: genai-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-genai-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${GENAI_SERVICE_HEALTH_PORT:-9010}:8080"
       - "${GENAI_SERVICE_GRPC_PORT:-50055}:8081"
@@ -191,6 +186,7 @@ services:
         max-size: "10m"
         max-file: "3"
         tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    restart: unless-stopped
     networks:
       - micros-net
 
@@ -199,6 +195,8 @@ services:
       context: .
       dockerfile: ledger-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-ledger-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${LEDGER_SERVICE_HEALTH_PORT:-9011}:8080"
       - "${LEDGER_SERVICE_GRPC_PORT:-50056}:8081"
@@ -221,6 +219,7 @@ services:
         max-size: "10m"
         max-file: "3"
         tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    restart: unless-stopped
     networks:
       - micros-net
 
@@ -229,6 +228,8 @@ services:
       context: .
       dockerfile: payment-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-payment-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${PAYMENT_SERVICE_HEALTH_PORT:-9009}:3003"
       - "${PAYMENT_SERVICE_GRPC_PORT:-50054}:3004"
@@ -259,6 +260,7 @@ services:
         max-size: "10m"
         max-file: "3"
         tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    restart: unless-stopped
     networks:
       - micros-net
 
@@ -267,6 +269,8 @@ services:
       context: .
       dockerfile: billing-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-billing-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       auth-service:
         condition: service_healthy
@@ -296,6 +300,7 @@ services:
         max-size: "10m"
         max-file: "3"
         tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    restart: unless-stopped
     networks:
       - micros-net
 
@@ -304,6 +309,8 @@ services:
       context: .
       dockerfile: reconciliation-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-reconciliation-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       auth-service:
         condition: service_healthy
@@ -337,6 +344,7 @@ services:
         max-size: "10m"
         max-file: "3"
         tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    restart: unless-stopped
     networks:
       - micros-net
 
@@ -345,6 +353,8 @@ services:
       context: .
       dockerfile: invoicing-service/Dockerfile
     container_name: ${COMPOSE_PROJECT_NAME:-micros-dev}-invoicing-service
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       auth-service:
         condition: service_healthy
@@ -376,6 +386,7 @@ services:
         max-size: "10m"
         max-file: "3"
         tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    restart: unless-stopped
     networks:
       - micros-net
 

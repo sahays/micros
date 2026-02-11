@@ -23,7 +23,7 @@ use service_core::error::AppError;
 /// Request to send an OTP.
 #[derive(Debug, Deserialize)]
 pub struct SendOtpRequest {
-    pub tenant_id: Uuid,
+    pub tenant_slug: String,
     pub destination: String, // email or phone
     pub channel: OtpChannel,
     pub purpose: OtpPurpose,
@@ -60,12 +60,21 @@ pub struct VerifyOtpVerifyResponse {
     pub purpose: String,
 }
 
+/// Response after verifying OTP for password reset (includes reset token).
+#[derive(Debug, Serialize)]
+pub struct VerifyOtpResetResponse {
+    pub verified: bool,
+    pub purpose: String,
+    pub reset_token: String,
+}
+
 /// Generic verify response that can be either type.
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum VerifyOtpResponse {
     Login(VerifyOtpLoginResponse),
     Verify(VerifyOtpVerifyResponse),
+    Reset(VerifyOtpResetResponse),
 }
 
 // ============================================================================
@@ -86,19 +95,20 @@ const OTP_MAX_ATTEMPTS: i32 = 5;
 /// from gRPC services.
 #[tracing::instrument(
     skip(state),
-    fields(tenant_id = %req.tenant_id, channel = ?req.channel, purpose = ?req.purpose)
+    fields(tenant_slug = %req.tenant_slug, channel = ?req.channel, purpose = ?req.purpose)
 )]
 pub async fn send_otp_impl(
     state: &AppState,
     req: SendOtpRequest,
 ) -> Result<SendOtpResponse, AppError> {
-    // Validate tenant exists
-    let _tenant = state
+    // Validate tenant exists (lookup by slug)
+    let tenant = state
         .db
-        .find_tenant_by_id(req.tenant_id)
+        .find_tenant_by_slug(&req.tenant_slug)
         .await
         .map_err(|e| AppError::InternalError(anyhow::anyhow!("Database error: {}", e)))?
         .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Tenant not found")))?;
+    let tenant_id = tenant.tenant_id;
 
     // Validate destination format
     validate_destination(&req.destination, &req.channel)?;
@@ -129,7 +139,7 @@ pub async fn send_otp_impl(
 
         let user = state
             .db
-            .find_user_by_email_in_tenant(req.tenant_id, &req.destination)
+            .find_user_by_email_in_tenant(tenant_id, &req.destination)
             .await
             .map_err(|e| AppError::InternalError(anyhow::anyhow!("Database error: {}", e)))?;
 
@@ -144,7 +154,7 @@ pub async fn send_otp_impl(
 
     // Create OTP record
     let otp = OtpCode::new(
-        Some(req.tenant_id),
+        Some(tenant_id),
         req.destination.clone(),
         req.channel.clone(),
         req.purpose.clone(),
@@ -328,10 +338,27 @@ pub async fn verify_otp_impl(
             }))
         }
         OtpPurpose::ResetPassword => {
-            // Return success - caller should use this to enable password reset
-            Ok(VerifyOtpResponse::Verify(VerifyOtpVerifyResponse {
+            // Look up user by email to generate a reset token
+            let tenant_id = otp
+                .tenant_id
+                .ok_or_else(|| AppError::BadRequest(anyhow::anyhow!("Tenant ID required")))?;
+
+            let user = find_user_by_email(state, tenant_id, &otp.destination_text).await?;
+
+            let reset_token = state
+                .jwt
+                .generate_reset_token(
+                    &user.user_id.to_string(),
+                    &tenant_id.to_string(),
+                )
+                .map_err(|e| {
+                    AppError::InternalError(anyhow::anyhow!("Reset token generation failed: {}", e))
+                })?;
+
+            Ok(VerifyOtpResponse::Reset(VerifyOtpResetResponse {
                 verified: true,
                 purpose: "reset_password".to_string(),
+                reset_token,
             }))
         }
     }

@@ -68,6 +68,23 @@ pub struct RefreshTokenClaims {
     pub iat: i64,
 }
 
+/// Claims for password reset tokens (short-lived, single-use)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResetTokenClaims {
+    /// Subject (user ID)
+    pub sub: String,
+    /// Tenant ID
+    pub app_id: String,
+    /// Token type (always "reset")
+    pub typ: String,
+    /// Expiration time (Unix timestamp)
+    pub exp: i64,
+    /// Issued at (Unix timestamp)
+    pub iat: i64,
+    /// JWT ID (for single-use enforcement via blacklist)
+    pub jti: String,
+}
+
 use service_core::middleware::rate_limit::HasRateLimitInfo;
 
 /// Claims for app tokens (short-lived, for services)
@@ -278,6 +295,47 @@ impl JwtService {
         Ok(token_data.claims)
     }
 
+    /// Generate a short-lived reset token for password reset (10 minutes)
+    pub fn generate_reset_token(
+        &self,
+        user_id: &str,
+        tenant_id: &str,
+    ) -> Result<String, anyhow::Error> {
+        let now = Utc::now();
+        let exp = now + Duration::minutes(10);
+
+        let claims = ResetTokenClaims {
+            sub: user_id.to_string(),
+            app_id: tenant_id.to_string(),
+            typ: "reset".to_string(),
+            exp: exp.timestamp(),
+            iat: now.timestamp(),
+            jti: Uuid::new_v4().to_string(),
+        };
+
+        let mut header = Header::new(Algorithm::RS256);
+        header.kid = Some(self.key_id.clone());
+        let token = encode(&header, &claims, &self.encoding_key)
+            .map_err(|e| anyhow::anyhow!("Failed to encode reset token: {}", e))?;
+
+        Ok(token)
+    }
+
+    /// Validate and decode a reset token
+    pub fn validate_reset_token(&self, token: &str) -> Result<ResetTokenClaims, anyhow::Error> {
+        let mut validation = Validation::new(Algorithm::RS256);
+        validation.validate_exp = true;
+
+        let token_data = decode::<ResetTokenClaims>(token, &self.decoding_key, &validation)
+            .map_err(|e| anyhow::anyhow!("Invalid reset token: {}", e))?;
+
+        if token_data.claims.typ != "reset" {
+            return Err(anyhow::anyhow!("Invalid token type: expected reset token"));
+        }
+
+        Ok(token_data.claims)
+    }
+
     /// Get access token expiry in seconds (for client info)
     pub fn access_token_expiry_seconds(&self) -> i64 {
         self.access_token_expiry_minutes * 60
@@ -459,6 +517,32 @@ HQIDAQAB
         let claims = service.validate_refresh_token(&token)?;
         assert_eq!(claims.sub, "user_123");
         assert_eq!(claims.jti, token_id);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_reset_token_generation_and_validation() -> Result<(), anyhow::Error> {
+        let (private_file, public_file) = create_test_keys()?;
+
+        let config = JwtConfig {
+            private_key_path: private_file.path().to_str().unwrap().to_string(),
+            public_key_path: public_file.path().to_str().unwrap().to_string(),
+            access_token_expiry_minutes: 15,
+            refresh_token_expiry_days: 7,
+            app_token_expiry_minutes: 60,
+        };
+
+        let service = JwtService::new(&config)?;
+
+        let token = service.generate_reset_token("user_123", "tenant_456")?;
+        assert!(!token.is_empty());
+
+        let claims = service.validate_reset_token(&token)?;
+        assert_eq!(claims.sub, "user_123");
+        assert_eq!(claims.app_id, "tenant_456");
+        assert_eq!(claims.typ, "reset");
+        assert!(!claims.jti.is_empty());
 
         Ok(())
     }

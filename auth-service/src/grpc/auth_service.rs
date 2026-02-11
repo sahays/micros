@@ -3,9 +3,11 @@
 use service_core::grpc::IntoStatus;
 use tonic::{Request, Response, Status};
 
+use crate::grpc::capability_check::require_auth;
 use crate::grpc::proto::auth::{
-    auth_service_server::AuthService, LoginRequest, LoginResponse, LogoutRequest, RefreshRequest,
-    RefreshResponse, RegisterRequest, RegisterResponse, SendOtpRequest, SendOtpResponse,
+    auth_service_server::AuthService, ChangePasswordRequest, ChangePasswordResponse, LoginRequest,
+    LoginResponse, LogoutRequest, RefreshRequest, RefreshResponse, RegisterRequest,
+    RegisterResponse, ResetPasswordRequest, ResetPasswordResponse, SendOtpRequest, SendOtpResponse,
     ValidateTokenRequest, ValidateTokenResponse, VerifyOtpRequest, VerifyOtpResponse,
 };
 use crate::handlers::auth as auth_handler;
@@ -170,9 +172,6 @@ impl AuthService for AuthServiceImpl {
     ) -> Result<Response<SendOtpResponse>, Status> {
         let req = request.into_inner();
 
-        let tenant_id = uuid::Uuid::parse_str(&req.tenant_id)
-            .map_err(|_| Status::invalid_argument("Invalid tenant_id format"))?;
-
         let channel = match req.channel {
             1 => crate::models::OtpChannel::Email,
             2 => crate::models::OtpChannel::Sms,
@@ -189,7 +188,7 @@ impl AuthService for AuthServiceImpl {
         };
 
         let handler_req = otp_handler::SendOtpRequest {
-            tenant_id,
+            tenant_slug: req.tenant_slug,
             destination: req.destination,
             channel,
             purpose,
@@ -223,7 +222,7 @@ impl AuthService for AuthServiceImpl {
             .await
             .map_err(|e| e.into_status())?;
 
-        let (verified, purpose, auth) = match result {
+        let (verified, purpose, auth, reset_token) = match result {
             otp_handler::VerifyOtpResponse::Login(login_resp) => (
                 true,
                 super::proto::auth::OtpPurpose::Login as i32,
@@ -239,6 +238,7 @@ impl AuthService for AuthServiceImpl {
                         tenant_id: String::new(),
                     }),
                 }),
+                None,
             ),
             otp_handler::VerifyOtpResponse::Verify(verify_resp) => {
                 let purpose = match verify_resp.purpose.as_str() {
@@ -247,14 +247,64 @@ impl AuthService for AuthServiceImpl {
                     "reset_password" => super::proto::auth::OtpPurpose::ResetPassword as i32,
                     _ => super::proto::auth::OtpPurpose::Unspecified as i32,
                 };
-                (verify_resp.verified, purpose, None)
+                (verify_resp.verified, purpose, None, None)
             }
+            otp_handler::VerifyOtpResponse::Reset(reset_resp) => (
+                true,
+                super::proto::auth::OtpPurpose::ResetPassword as i32,
+                None,
+                Some(reset_resp.reset_token),
+            ),
         };
 
         Ok(Response::new(VerifyOtpResponse {
             verified,
             purpose,
             auth,
+            reset_token,
+        }))
+    }
+
+    async fn reset_password(
+        &self,
+        request: Request<ResetPasswordRequest>,
+    ) -> Result<Response<ResetPasswordResponse>, Status> {
+        let req = request.into_inner();
+
+        let handler_req = auth_handler::ResetPasswordRequest {
+            reset_token: req.reset_token,
+            new_password: req.new_password,
+        };
+
+        let result = auth_handler::reset_password_impl(&self.state, handler_req)
+            .await
+            .map_err(|e| e.into_status())?;
+
+        Ok(Response::new(ResetPasswordResponse {
+            message: result.message,
+        }))
+    }
+
+    async fn change_password(
+        &self,
+        request: Request<ChangePasswordRequest>,
+    ) -> Result<Response<ChangePasswordResponse>, Status> {
+        let auth_ctx = require_auth(&self.state, &request).await?;
+
+        let req = request.into_inner();
+
+        let handler_req = auth_handler::ChangePasswordRequest {
+            user_id: auth_ctx.user_id,
+            current_password: req.current_password,
+            new_password: req.new_password,
+        };
+
+        let result = auth_handler::change_password_impl(&self.state, handler_req)
+            .await
+            .map_err(|e| e.into_status())?;
+
+        Ok(Response::new(ChangePasswordResponse {
+            message: result.message,
         }))
     }
 }
