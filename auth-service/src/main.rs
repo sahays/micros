@@ -13,16 +13,11 @@ use auth_service::grpc::{
 };
 use auth_service::{config::AuthConfig, db, services, AppState};
 use axum::{extract::State, routing::get, Json, Router};
-use opentelemetry::KeyValue;
-use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::{runtime, trace as sdktrace, Resource};
-use service_core::grpc::interceptors::trace_context_interceptor;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::signal;
 use tonic::transport::Server as GrpcServer;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -33,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
     let config = AuthConfig::from_env()?;
 
     // Initialize tracing with JSON format for PLG stack
-    init_tracing(&config);
+    service_core::observability::init_tracing(&config.service_name, &config.log_level);
 
     tracing::info!(
         service = %config.service_name,
@@ -145,42 +140,15 @@ async fn main() -> anyhow::Result<()> {
     let grpc_server = GrpcServer::builder()
         .add_service(grpc_health_service)
         .add_service(reflection_service)
-        .add_service(AdminServiceServer::with_interceptor(
-            admin_service,
-            trace_context_interceptor,
-        ))
-        .add_service(AuthServiceServer::with_interceptor(
-            auth_service,
-            trace_context_interceptor,
-        ))
-        .add_service(AuthzServiceServer::with_interceptor(
-            authz_service,
-            trace_context_interceptor,
-        ))
-        .add_service(OrgServiceServer::with_interceptor(
-            org_service,
-            trace_context_interceptor,
-        ))
-        .add_service(RoleServiceServer::with_interceptor(
-            role_service,
-            trace_context_interceptor,
-        ))
-        .add_service(AssignmentServiceServer::with_interceptor(
-            assignment_service,
-            trace_context_interceptor,
-        ))
-        .add_service(InvitationServiceServer::with_interceptor(
-            invitation_service,
-            trace_context_interceptor,
-        ))
-        .add_service(VisibilityServiceServer::with_interceptor(
-            visibility_service,
-            trace_context_interceptor,
-        ))
-        .add_service(AuditServiceServer::with_interceptor(
-            audit_service,
-            trace_context_interceptor,
-        ))
+        .add_service(AdminServiceServer::new(admin_service))
+        .add_service(AuthServiceServer::new(auth_service))
+        .add_service(AuthzServiceServer::new(authz_service))
+        .add_service(OrgServiceServer::new(org_service))
+        .add_service(RoleServiceServer::new(role_service))
+        .add_service(AssignmentServiceServer::new(assignment_service))
+        .add_service(InvitationServiceServer::new(invitation_service))
+        .add_service(VisibilityServiceServer::new(visibility_service))
+        .add_service(AuditServiceServer::new(audit_service))
         .serve_with_shutdown(grpc_addr, shutdown_signal());
 
     // Run both servers concurrently
@@ -269,68 +237,4 @@ async fn shutdown_signal() {
             tracing::info!("Received SIGTERM, starting graceful shutdown");
         },
     }
-}
-
-/// Initialize tracing with JSON format for PLG stack.
-///
-/// When OTLP_ENDPOINT is configured, traces are exported to Tempo.
-/// Logs are always output as JSON to stdout for Promtail collection.
-fn init_tracing(config: &AuthConfig) {
-    let env_filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new(&config.log_level));
-
-    // Try to set up OpenTelemetry if OTLP endpoint is configured
-    if let Some(ref otlp_endpoint) = config.otlp_endpoint {
-        let otlp_exporter = opentelemetry_otlp::new_exporter()
-            .tonic()
-            .with_endpoint(otlp_endpoint);
-
-        match opentelemetry_otlp::new_pipeline()
-            .tracing()
-            .with_exporter(otlp_exporter)
-            .with_trace_config(
-                sdktrace::Config::default().with_resource(Resource::new(vec![
-                    KeyValue::new("service.name", config.service_name.clone()),
-                    KeyValue::new("service.version", config.service_version.clone()),
-                ])),
-            )
-            .install_batch(runtime::Tokio)
-        {
-            Ok(tracer) => {
-                let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-                tracing_subscriber::registry()
-                    .with(env_filter)
-                    .with(telemetry)
-                    .with(
-                        tracing_subscriber::fmt::layer()
-                            .with_file(true)
-                            .with_line_number(true)
-                            .with_target(true)
-                            .json()
-                            .flatten_event(true),
-                    )
-                    .init();
-                return;
-            }
-            Err(e) => {
-                eprintln!(
-                    "Failed to initialize OTLP tracer (endpoint: {}): {}. Falling back to JSON-only logging.",
-                    otlp_endpoint, e
-                );
-            }
-        }
-    }
-
-    // Fallback: JSON logging without OpenTelemetry
-    tracing_subscriber::registry()
-        .with(env_filter)
-        .with(
-            tracing_subscriber::fmt::layer()
-                .with_file(true)
-                .with_line_number(true)
-                .with_target(true)
-                .json()
-                .flatten_event(true),
-        )
-        .init();
 }

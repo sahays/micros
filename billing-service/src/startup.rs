@@ -3,16 +3,15 @@
 use crate::config::BillingConfig;
 use crate::grpc::{
     proto::{billing_service_server::BillingServiceServer, FILE_DESCRIPTOR_SET},
-    trace_context_interceptor, BillingServiceImpl, CapabilityChecker,
+    BillingServiceImpl, CapabilityChecker,
 };
-use crate::services::{get_metrics, init_metrics, Database};
+use crate::services::Database;
 use axum::{
     extract::State, http::StatusCode, middleware, response::IntoResponse, routing::get, Json,
     Router,
 };
 use serde_json::json;
 use service_core::error::AppError;
-use service_core::middleware::metrics::metrics_middleware;
 use service_core::middleware::tracing::request_id_middleware;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -77,16 +76,6 @@ async fn readiness_check(State(state): State<HealthState>) -> impl IntoResponse 
     }
 }
 
-/// Metrics endpoint for Prometheus scraping.
-async fn metrics_handler() -> impl IntoResponse {
-    let metrics = get_metrics();
-    (
-        StatusCode::OK,
-        [("content-type", "text/plain; charset=utf-8")],
-        metrics,
-    )
-}
-
 /// Application container for managing server lifecycle.
 pub struct Application {
     http_port: u16,
@@ -109,9 +98,6 @@ impl Application {
     }
 
     async fn build_internal(config: BillingConfig, run_migrations: bool) -> Result<Self, AppError> {
-        // Initialize metrics
-        init_metrics();
-
         // Connect to database
         let db = Database::new(
             &config.database.url,
@@ -211,9 +197,7 @@ impl Application {
         let http_router = Router::new()
             .route("/health", get(health_check))
             .route("/ready", get(readiness_check))
-            .route("/metrics", get(metrics_handler))
             .layer(TraceLayer::new_for_http())
-            .layer(middleware::from_fn(metrics_middleware))
             .layer(middleware::from_fn(request_id_middleware))
             .with_state(health_state);
 
@@ -240,16 +224,12 @@ impl Application {
             .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
             .on_response(DefaultOnResponse::new().level(Level::DEBUG));
 
-        // Create billing service with trace context interceptor for W3C trace propagation
-        let billing_service_with_interceptor =
-            BillingServiceServer::with_interceptor(billing_service, trace_context_interceptor);
-
         let incoming = tokio_stream::wrappers::TcpListenerStream::new(self.grpc_listener);
         let grpc_server = GrpcServer::builder()
             .layer(grpc_trace_layer)
             .add_service(grpc_health_service)
             .add_service(reflection_service)
-            .add_service(billing_service_with_interceptor)
+            .add_service(BillingServiceServer::new(billing_service))
             .serve_with_incoming(incoming);
 
         tracing::info!(

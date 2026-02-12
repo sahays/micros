@@ -4,7 +4,6 @@
 
 use crate::models::{BankStatement, BankTransaction, TransactionMatch, TransactionStatus};
 use crate::services::database::Database;
-use crate::services::metrics::DB_QUERY_DURATION;
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use service_core::error::AppError;
@@ -24,10 +23,6 @@ impl Database {
         tenant_id: &str,
         transaction_id: &str,
     ) -> Result<Option<BankTransaction>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_bank_transaction"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let txn_uuid = Uuid::from_str(transaction_id)
@@ -49,8 +44,6 @@ impl Database {
         .map_err(|e| {
             AppError::DatabaseError(anyhow::anyhow!("Failed to get bank transaction: {}", e))
         })?;
-
-        timer.observe_duration();
         Ok(transaction)
     }
 
@@ -62,10 +55,6 @@ impl Database {
         page_size: i32,
         page_token: Option<&str>,
     ) -> Result<(Vec<BankTransaction>, Option<String>), AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_staged_transactions"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let stmt_uuid = Uuid::from_str(statement_id)
@@ -108,8 +97,6 @@ impl Database {
         }
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get staged transactions: {}", e)))?;
 
-        timer.observe_duration();
-
         let has_more = transactions.len() > limit as usize;
         let mut transactions = transactions;
         if has_more {
@@ -134,10 +121,6 @@ impl Database {
         reference: Option<&str>,
         amount: Option<&str>,
     ) -> Result<Option<BankTransaction>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["update_staged_transaction"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let txn_uuid = Uuid::from_str(transaction_id)
@@ -175,8 +158,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to update staged transaction: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(transaction)
     }
 
@@ -187,10 +168,6 @@ impl Database {
         tenant_id: &str,
         transaction_id: &str,
     ) -> Result<Option<BankStatement>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_statement_by_transaction"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let txn_uuid = Uuid::from_str(transaction_id)
@@ -216,8 +193,6 @@ impl Database {
                 e
             ))
         })?;
-
-        timer.observe_duration();
         Ok(statement)
     }
 
@@ -234,10 +209,6 @@ impl Database {
         match_method: &str,
         matched_by: &str,
     ) -> Result<Vec<TransactionMatch>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["match_transaction"])
-            .start_timer();
-
         let _tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let txn_uuid = Uuid::from_str(bank_transaction_id)
@@ -294,8 +265,6 @@ impl Database {
             ))
         })?;
 
-        timer.observe_duration();
-
         Ok(matches)
     }
 
@@ -305,10 +274,6 @@ impl Database {
         tenant_id: &str,
         bank_transaction_id: &str,
     ) -> Result<(), AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["unmatch_transaction"])
-            .start_timer();
-
         let txn_uuid = Uuid::from_str(bank_transaction_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid bank_transaction_id")))?;
 
@@ -343,8 +308,6 @@ impl Database {
             ))
         })?;
 
-        timer.observe_duration();
-
         Ok(())
     }
 
@@ -355,10 +318,6 @@ impl Database {
         bank_transaction_id: &str,
         _reason: Option<&str>,
     ) -> Result<(), AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["exclude_transaction"])
-            .start_timer();
-
         let txn_uuid = Uuid::from_str(bank_transaction_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid bank_transaction_id")))?;
 
@@ -376,8 +335,6 @@ impl Database {
         .map_err(|e| {
             AppError::DatabaseError(anyhow::anyhow!("Failed to exclude transaction: {}", e))
         })?;
-
-        timer.observe_duration();
 
         Ok(())
     }

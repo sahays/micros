@@ -7,7 +7,6 @@ use crate::grpc::proto::{
 };
 use crate::grpc::service::InvoicingServiceImpl;
 use crate::models::{CreateLineItem, UpdateLineItem};
-use crate::services::metrics::{GRPC_REQUESTS_TOTAL, GRPC_REQUEST_DURATION};
 use rust_decimal::Decimal;
 use std::str::FromStr;
 use tonic::{Request, Response, Status};
@@ -23,36 +22,21 @@ impl InvoicingServiceImpl {
         &self,
         request: Request<AddLineItemRequest>,
     ) -> Result<Response<AddLineItemResponse>, Status> {
-        let timer = GRPC_REQUEST_DURATION
-            .with_label_values(&["AddLineItem"])
-            .start_timer();
         let req = request.into_inner();
 
         let tenant_id = Uuid::parse_str(&req.tenant_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["AddLineItem", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid tenant_id format")
         })?;
 
         let invoice_id = Uuid::parse_str(&req.invoice_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["AddLineItem", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid invoice_id format")
         })?;
 
         let quantity = Decimal::from_str(&req.quantity).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["AddLineItem", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid quantity format")
         })?;
 
         let unit_price = Decimal::from_str(&req.unit_price).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["AddLineItem", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid unit_price format")
         })?;
 
@@ -60,9 +44,6 @@ impl InvoicingServiceImpl {
             None
         } else {
             Some(Uuid::parse_str(&req.tax_rate_id).map_err(|_| {
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["AddLineItem", "invalid_argument"])
-                    .inc();
                 Status::invalid_argument("Invalid tax_rate_id format")
             })?)
         };
@@ -71,9 +52,6 @@ impl InvoicingServiceImpl {
             None
         } else {
             Some(Uuid::parse_str(&req.ledger_account_id).map_err(|_| {
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["AddLineItem", "invalid_argument"])
-                    .inc();
                 Status::invalid_argument("Invalid ledger_account_id format")
             })?)
         };
@@ -91,9 +69,6 @@ impl InvoicingServiceImpl {
 
         let line_item = self.db.add_line_item(&input).await.map_err(|e| {
             warn!(error = %e, "Failed to add line item");
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["AddLineItem", "error"])
-                .inc();
             match e {
                 service_core::error::AppError::BadRequest(err) => {
                     Status::failed_precondition(err.to_string())
@@ -123,11 +98,6 @@ impl InvoicingServiceImpl {
                 Status::internal("Failed to get line items")
             })?;
 
-        GRPC_REQUESTS_TOTAL
-            .with_label_values(&["AddLineItem", "ok"])
-            .inc();
-        timer.observe_duration();
-
         Ok(Response::new(AddLineItemResponse {
             line_item: Some(line_item_to_proto(&line_item)),
             invoice: Some(invoice_to_proto(&invoice, &line_items)),
@@ -142,29 +112,17 @@ impl InvoicingServiceImpl {
         &self,
         request: Request<UpdateLineItemRequest>,
     ) -> Result<Response<UpdateLineItemResponse>, Status> {
-        let timer = GRPC_REQUEST_DURATION
-            .with_label_values(&["UpdateLineItem"])
-            .start_timer();
         let req = request.into_inner();
 
         let tenant_id = Uuid::parse_str(&req.tenant_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["UpdateLineItem", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid tenant_id format")
         })?;
 
         let invoice_id = Uuid::parse_str(&req.invoice_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["UpdateLineItem", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid invoice_id format")
         })?;
 
         let line_item_id = Uuid::parse_str(&req.line_item_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["UpdateLineItem", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid line_item_id format")
         })?;
 
@@ -172,9 +130,6 @@ impl InvoicingServiceImpl {
             None
         } else {
             Some(Decimal::from_str(&req.quantity).map_err(|_| {
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["UpdateLineItem", "invalid_argument"])
-                    .inc();
                 Status::invalid_argument("Invalid quantity format")
             })?)
         };
@@ -183,9 +138,6 @@ impl InvoicingServiceImpl {
             None
         } else {
             Some(Decimal::from_str(&req.unit_price).map_err(|_| {
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["UpdateLineItem", "invalid_argument"])
-                    .inc();
                 Status::invalid_argument("Invalid unit_price format")
             })?)
         };
@@ -194,9 +146,6 @@ impl InvoicingServiceImpl {
             None
         } else {
             Some(Uuid::parse_str(&req.tax_rate_id).map_err(|_| {
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["UpdateLineItem", "invalid_argument"])
-                    .inc();
                 Status::invalid_argument("Invalid tax_rate_id format")
             })?)
         };
@@ -205,9 +154,6 @@ impl InvoicingServiceImpl {
             None
         } else {
             Some(Uuid::parse_str(&req.ledger_account_id).map_err(|_| {
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["UpdateLineItem", "invalid_argument"])
-                    .inc();
                 Status::invalid_argument("Invalid ledger_account_id format")
             })?)
         };
@@ -235,9 +181,6 @@ impl InvoicingServiceImpl {
             .await
             .map_err(|e| {
                 warn!(error = %e, "Failed to update line item");
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["UpdateLineItem", "error"])
-                    .inc();
                 match e {
                     service_core::error::AppError::BadRequest(err) => {
                         Status::failed_precondition(err.to_string())
@@ -245,8 +188,6 @@ impl InvoicingServiceImpl {
                     _ => Status::internal("Failed to update line item"),
                 }
             })?;
-
-        timer.observe_duration();
 
         match line_item {
             Some(item) => {
@@ -269,18 +210,12 @@ impl InvoicingServiceImpl {
                         Status::internal("Failed to get line items")
                     })?;
 
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["UpdateLineItem", "ok"])
-                    .inc();
                 Ok(Response::new(UpdateLineItemResponse {
                     line_item: Some(line_item_to_proto(&item)),
                     invoice: Some(invoice_to_proto(&invoice, &line_items)),
                 }))
             }
             None => {
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["UpdateLineItem", "not_found"])
-                    .inc();
                 Err(Status::not_found("Line item not found"))
             }
         }
@@ -294,29 +229,17 @@ impl InvoicingServiceImpl {
         &self,
         request: Request<RemoveLineItemRequest>,
     ) -> Result<Response<RemoveLineItemResponse>, Status> {
-        let timer = GRPC_REQUEST_DURATION
-            .with_label_values(&["RemoveLineItem"])
-            .start_timer();
         let req = request.into_inner();
 
         let tenant_id = Uuid::parse_str(&req.tenant_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["RemoveLineItem", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid tenant_id format")
         })?;
 
         let invoice_id = Uuid::parse_str(&req.invoice_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["RemoveLineItem", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid invoice_id format")
         })?;
 
         let line_item_id = Uuid::parse_str(&req.line_item_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["RemoveLineItem", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid line_item_id format")
         })?;
 
@@ -326,9 +249,6 @@ impl InvoicingServiceImpl {
             .await
             .map_err(|e| {
                 warn!(error = %e, "Failed to remove line item");
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["RemoveLineItem", "error"])
-                    .inc();
                 match e {
                     service_core::error::AppError::BadRequest(err) => {
                         Status::failed_precondition(err.to_string())
@@ -338,9 +258,6 @@ impl InvoicingServiceImpl {
             })?;
 
         if !removed {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["RemoveLineItem", "not_found"])
-                .inc();
             return Err(Status::not_found("Line item not found"));
         }
 
@@ -363,11 +280,6 @@ impl InvoicingServiceImpl {
                 warn!(error = %e, "Failed to get line items");
                 Status::internal("Failed to get line items")
             })?;
-
-        GRPC_REQUESTS_TOTAL
-            .with_label_values(&["RemoveLineItem", "ok"])
-            .inc();
-        timer.observe_duration();
 
         Ok(Response::new(RemoveLineItemResponse {
             invoice: Some(invoice_to_proto(&invoice, &line_items)),

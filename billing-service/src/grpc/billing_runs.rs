@@ -7,12 +7,9 @@ use crate::models::{
     BillingCycleStatus, BillingRunStatus, BillingRunType, ChargeType, CreateCharge,
     ListBillingRunsFilter, SubscriptionStatus,
 };
-use crate::services::{
-    record_billing_run, record_error, record_grpc_request, record_grpc_request_duration, Database,
-};
+use crate::services::Database;
 use rust_decimal::Decimal;
 use std::sync::Arc;
-use std::time::Instant;
 use tonic::{Request, Response, Status};
 
 pub async fn run_billing(
@@ -20,9 +17,6 @@ pub async fn run_billing(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<RunBillingRequest>,
 ) -> Result<Response<RunBillingResponse>, Status> {
-    let start = Instant::now();
-    let method = "RunBilling";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_RUN_EXECUTE)
         .await?;
@@ -38,9 +32,6 @@ pub async fn run_billing(
         .create_billing_run(tenant_id, run_type)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
@@ -49,9 +40,6 @@ pub async fn run_billing(
         .find_subscriptions_due_for_billing(tenant_id)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
@@ -220,21 +208,12 @@ pub async fn run_billing(
         )
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let billing_run = billing_run.ok_or_else(|| {
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal("Failed to update billing run")
     })?;
-
-    record_billing_run(&tenant_id.to_string(), run_type.as_str(), status.as_str());
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(RunBillingResponse {
         billing_run: Some(billing_run_to_proto(billing_run, results)),
@@ -247,9 +226,6 @@ pub async fn run_billing_for_subscription(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<RunBillingForSubscriptionRequest>,
 ) -> Result<Response<RunBillingForSubscriptionResponse>, Status> {
-    let start = Instant::now();
-    let method = "RunBillingForSubscription";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_RUN_EXECUTE)
         .await?;
@@ -269,9 +245,6 @@ pub async fn run_billing_for_subscription(
         .create_billing_run(tenant_id, BillingRunType::Single)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
@@ -280,21 +253,14 @@ pub async fn run_billing_for_subscription(
         .get_subscription(tenant_id, subscription_id)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let subscription = subscription.ok_or_else(|| {
-        record_grpc_request(method, "not_found");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::not_found("Subscription not found")
     })?;
 
     if subscription.status != SubscriptionStatus::Active.as_str() {
-        record_grpc_request(method, "failed_precondition");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         return Err(Status::failed_precondition("Subscription must be active"));
     }
 
@@ -303,15 +269,10 @@ pub async fn run_billing_for_subscription(
         .get_current_billing_cycle(subscription_id)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let cycle = cycle.ok_or_else(|| {
-        record_grpc_request(method, "failed_precondition");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::failed_precondition("No pending billing cycle")
     })?;
 
@@ -320,15 +281,10 @@ pub async fn run_billing_for_subscription(
         .get_plan(tenant_id, subscription.plan_id)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let plan = plan.ok_or_else(|| {
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal("Plan not found")
     })?;
 
@@ -347,9 +303,6 @@ pub async fn run_billing_for_subscription(
     };
 
     db.create_charge(&recurring_input).await.map_err(|e| {
-        record_error("database", method);
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal(e.to_string())
     })?;
 
@@ -378,9 +331,6 @@ pub async fn run_billing_for_subscription(
             };
 
             db.create_charge(&usage_input).await.map_err(|e| {
-                record_error("database", method);
-                record_grpc_request(method, "error");
-                record_grpc_request_duration(method, start.elapsed().as_secs_f64());
                 Status::internal(e.to_string())
             })?;
         }
@@ -390,17 +340,11 @@ pub async fn run_billing_for_subscription(
     db.update_billing_cycle_status(cycle.cycle_id, BillingCycleStatus::Invoiced, None)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     // Mark usage as invoiced
     db.mark_usage_invoiced(cycle.cycle_id).await.map_err(|e| {
-        record_error("database", method);
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal(e.to_string())
     })?;
 
@@ -409,9 +353,6 @@ pub async fn run_billing_for_subscription(
         .create_billing_run_result(billing_run.run_id, subscription_id, "success", None, None)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
@@ -426,15 +367,8 @@ pub async fn run_billing_for_subscription(
     )
     .await
     .map_err(|e| {
-        record_error("database", method);
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal(e.to_string())
     })?;
-
-    record_billing_run(&tenant_id.to_string(), "single", "completed");
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(RunBillingForSubscriptionResponse {
         result: Some(billing_run_result_to_proto(result)),
@@ -446,9 +380,6 @@ pub async fn get_billing_run(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetBillingRunRequest>,
 ) -> Result<Response<GetBillingRunResponse>, Status> {
-    let start = Instant::now();
-    let method = "GetBillingRun";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_RUN_READ)
         .await?;
@@ -460,27 +391,16 @@ pub async fn get_billing_run(
     tracing::debug!(tenant_id = %tenant_id, run_id = %run_id, "Getting billing run");
 
     let billing_run = db.get_billing_run(tenant_id, run_id).await.map_err(|e| {
-        record_error("database", method);
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal(e.to_string())
     })?;
 
     let billing_run = billing_run.ok_or_else(|| {
-        record_grpc_request(method, "not_found");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::not_found("Billing run not found")
     })?;
 
     let results = db.get_billing_run_results(run_id).await.map_err(|e| {
-        record_error("database", method);
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal(e.to_string())
     })?;
-
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(GetBillingRunResponse {
         billing_run: Some(billing_run_to_proto(
@@ -498,9 +418,6 @@ pub async fn list_billing_runs(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListBillingRunsRequest>,
 ) -> Result<Response<ListBillingRunsResponse>, Status> {
-    let start = Instant::now();
-    let method = "ListBillingRuns";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_RUN_READ)
         .await?;
@@ -532,9 +449,6 @@ pub async fn list_billing_runs(
         .list_billing_runs(tenant_id, &filter)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
@@ -546,9 +460,6 @@ pub async fn list_billing_runs(
         .last()
         .map(|r| r.run_id.clone())
         .unwrap_or_default();
-
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(ListBillingRunsResponse {
         billing_runs: proto_runs,

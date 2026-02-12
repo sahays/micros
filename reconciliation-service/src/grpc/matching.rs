@@ -2,7 +2,7 @@
 
 use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::proto::*;
-use crate::services::{record_error, record_transaction_match, Database};
+use crate::services::Database;
 use service_core::grpc::LedgerClient;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -215,11 +215,8 @@ pub async fn match_transaction(
         )
         .await
         .map_err(|e| {
-            record_error("match_error");
             Status::internal(format!("Failed to match transaction: {}", e))
         })?;
-
-    record_transaction_match("manual");
 
     Ok(Response::new(MatchTransactionResponse {
         matches: matches.into_iter().map(|m| m.into()).collect(),
@@ -261,11 +258,8 @@ pub async fn unmatch_transaction(
     db.unmatch_transaction(&_auth.tenant_id, &req.bank_transaction_id)
         .await
         .map_err(|e| {
-            record_error("unmatch_error");
             Status::internal(format!("Failed to unmatch transaction: {}", e))
         })?;
-
-    record_transaction_match("unmatch");
 
     Ok(Response::new(UnmatchTransactionResponse { success: true }))
 }

@@ -4,9 +4,8 @@ use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::helpers::*;
 use crate::grpc::proto::*;
 use crate::models::{BillingCycleStatus, ListBillingCyclesFilter, ListChargesFilter};
-use crate::services::{record_error, record_grpc_request, record_grpc_request_duration, Database};
+use crate::services::Database;
 use std::sync::Arc;
-use std::time::Instant;
 use tonic::{Request, Response, Status};
 
 pub async fn get_billing_cycle(
@@ -14,9 +13,6 @@ pub async fn get_billing_cycle(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetBillingCycleRequest>,
 ) -> Result<Response<GetBillingCycleResponse>, Status> {
-    let start = Instant::now();
-    let method = "GetBillingCycle";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_CYCLE_READ)
         .await?;
@@ -31,15 +27,10 @@ pub async fn get_billing_cycle(
         .get_billing_cycle(tenant_id, cycle_id)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let cycle = cycle.ok_or_else(|| {
-        record_grpc_request(method, "not_found");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::not_found("Billing cycle not found")
     })?;
 
@@ -47,14 +38,8 @@ pub async fn get_billing_cycle(
         .list_charges(tenant_id, cycle_id, &ListChargesFilter::default())
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
-
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(GetBillingCycleResponse {
         billing_cycle: Some(cycle_to_proto(
@@ -69,9 +54,6 @@ pub async fn list_billing_cycles(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListBillingCyclesRequest>,
 ) -> Result<Response<ListBillingCyclesResponse>, Status> {
-    let start = Instant::now();
-    let method = "ListBillingCycles";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_CYCLE_READ)
         .await?;
@@ -100,9 +82,6 @@ pub async fn list_billing_cycles(
         .list_billing_cycles(tenant_id, subscription_id, &filter)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
@@ -115,9 +94,6 @@ pub async fn list_billing_cycles(
         .map(|c| c.cycle_id.clone())
         .unwrap_or_default();
 
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
-
     Ok(Response::new(ListBillingCyclesResponse {
         billing_cycles: proto_cycles,
         next_page_token,
@@ -129,9 +105,6 @@ pub async fn advance_billing_cycle(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<AdvanceBillingCycleRequest>,
 ) -> Result<Response<AdvanceBillingCycleResponse>, Status> {
-    let start = Instant::now();
-    let method = "AdvanceBillingCycle";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_CYCLE_MANAGE)
         .await?;
@@ -151,9 +124,6 @@ pub async fn advance_billing_cycle(
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to advance billing cycle");
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             match e {
                 service_core::error::AppError::NotFound(_) => Status::not_found(e.to_string()),
                 service_core::error::AppError::BadRequest(_) => {
@@ -162,9 +132,6 @@ pub async fn advance_billing_cycle(
                 _ => Status::internal(e.to_string()),
             }
         })?;
-
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(AdvanceBillingCycleResponse {
         previous_cycle: Some(cycle_to_proto(previous_cycle, vec![])),

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Micros** is a production-ready Rust microservices monorepo with gRPC communication and full PLG (Prometheus, Loki, Grafana) + Tempo observability stack.
+**Micros** is a production-ready Rust microservices monorepo with gRPC communication and structured JSON logging.
 
 **Services (9 microservices + shared library):**
 - `auth-service`: Authentication, authorization, capability-based access control (PostgreSQL)
@@ -19,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `service-core`: Shared middleware, gRPC utilities, observability, error handling
 - `workflow-tests`: Cross-service integration tests
 
-**Communication:** gRPC (Tonic) for inter-service communication; HTTP only for health checks and metrics.
+**Communication:** gRPC (Tonic) for inter-service communication; HTTP only for health checks.
 
 **Databases:** PostgreSQL (auth, billing, invoicing, ledger, reconciliation) and MongoDB (document, genai, notification, payment).
 
@@ -58,8 +58,6 @@ openssl rsa -in auth-service/keys/private.pem -pubout -out auth-service/keys/pub
 
 # Start prerequisites on host:
 # - PostgreSQL (5432), MongoDB (27017), Redis (6379)
-# - PLG+T observability stack:
-cd observability && ./start.sh
 ```
 
 ## Architecture
@@ -108,7 +106,7 @@ service-name/
 │   ├── config/           # Configuration loading
 │   ├── db/               # Database setup, migrations
 │   ├── grpc/             # gRPC service implementations
-│   ├── handlers/         # HTTP handlers (health, metrics)
+│   ├── handlers/         # HTTP handlers (health)
 │   ├── models/           # Domain models, DTOs
 │   └── services/         # Business logic
 ├── migrations/           # SQL migrations (PostgreSQL services)
@@ -121,9 +119,9 @@ service-name/
 
 Shared infrastructure used by all services:
 
-- **grpc/**: Client wrappers, interceptors (tracing, metrics, retry), capability checker, health checks
+- **grpc/**: Client wrappers, interceptors (tenant ID, request ID), retry, capability checker, health checks
 - **middleware/**: HTTP middleware (signature validation, rate limiting, bot detection, security headers)
-- **observability/**: Structured JSON logging, OpenTelemetry tracing to Tempo
+- **observability/**: Structured JSON logging to stdout via `tracing` + `tracing-subscriber`
 - **error.rs**: Unified `AppError` type with Axum/Tonic response conversion
 
 ### TestApp Pattern
@@ -173,37 +171,16 @@ Single `.env` file per environment (`.env.dev`, `.env.prod`). No service-specifi
 - **Dev**: Databases on host via `host.docker.internal`, services on ports 9005-9014
 - **Prod**: Everything containerized, ports 10005-10014
 
-### Observability
+### Logging
 
-PLG+T (Prometheus, Loki, Grafana, Tempo) runs on the host machine as a prerequisite for `dev-up.sh`.
+Services emit structured JSON logs to stdout via the `tracing` crate. No external observability stack required.
 
-**Standard Ports:**
-| Service | Port | Purpose |
-|---------|------|---------|
-| Prometheus | 9090 | Metrics scraping & storage |
-| Loki | 3100 | Log aggregation |
-| Grafana | 3000 | Dashboards UI |
-| Tempo | 3200 | Trace query API |
-| Tempo OTLP | 4317 | Trace ingestion (gRPC) |
-
-**Commands:**
-```bash
-cd observability && ./start.sh   # Start PLG+T stack (required before dev-up.sh)
-cd observability && ./stop.sh    # Stop PLG+T stack
-```
-
-**Data Flow:**
-- **Traces**: Services → OTLP (`host.docker.internal:4317`) → Tempo
-- **Logs**: Services → stdout (JSON) → Promtail → Loki (`host.docker.internal:3100`)
-- **Metrics**: Prometheus scrapes `/health` endpoints
-
-**App-Specific Logging:**
-Services emit only app-specific logs (no framework noise). Configured via:
+**Configuration:**
 ```
 RUST_LOG=<service>=${LOG_LEVEL},service_core=${LOG_LEVEL}
 ```
 
-See `docs/specs/observability.md` for full specification.
+Services only emit app-specific logs (no framework noise).
 
 ## Common Gotchas
 
@@ -211,7 +188,7 @@ See `docs/specs/observability.md` for full specification.
 
 **service-core changes**: Trigger full rebuild of all services. Use `cargo build -p <service>` during development.
 
-**gRPC ports**: Services expose both HTTP (health/metrics) and gRPC ports. Check docker-compose for mappings.
+**gRPC ports**: Services expose both HTTP (health) and gRPC ports. Check docker-compose for mappings.
 
 **Test isolation**: PostgreSQL tests use `--test-threads=1` to prevent race conditions on shared databases.
 

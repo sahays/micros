@@ -11,7 +11,6 @@ pub struct AuthConfig {
     pub service_name: String,
     pub service_version: String,
     pub log_level: String,
-    pub otlp_endpoint: Option<String>,
     pub database: DatabaseConfig,
     pub redis: RedisConfig,
     pub jwt: JwtConfig,
@@ -76,7 +75,6 @@ pub struct GmailConfig {
 pub struct SecurityConfig {
     pub allowed_origins: Vec<String>,
     pub require_signatures: bool,
-    pub admin_api_key: String,
     /// When true, internal service callers are trusted without JWT validation.
     /// Auth context is extracted from x-user-id and x-tenant-id headers.
     pub trust_internal_services: bool,
@@ -128,7 +126,6 @@ impl AuthConfig {
             service_name: get_env("SERVICE_NAME", Some("auth-service"), is_prod)?,
             service_version: get_env("SERVICE_VERSION", Some(env!("CARGO_PKG_VERSION")), is_prod)?,
             log_level: get_env("LOG_LEVEL", Some("info"), is_prod)?,
-            otlp_endpoint: env::var("OTLP_ENDPOINT").ok(),
             database: DatabaseConfig {
                 url: get_env("DATABASE_URL", None, is_prod)?,
                 max_connections: get_env("DATABASE_MAX_CONNECTIONS", Some("10"), is_prod)?
@@ -217,7 +214,6 @@ impl AuthConfig {
                     .map(|s| s.trim().to_string())
                     .collect(),
                     require_signatures,
-                    admin_api_key: get_env("ADMIN_API_KEY", None, true)?,
                     trust_internal_services,
                     signature_config: service_core::middleware::signature::SignatureConfig {
                         require_signatures,

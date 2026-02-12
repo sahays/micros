@@ -6,7 +6,6 @@ use crate::grpc::helpers::{
 };
 use crate::grpc::proto::*;
 use crate::models;
-use crate::services::metrics::{record_refund, record_refund_amount};
 use crate::services::razorpay_refunds;
 use crate::startup::AppState;
 use mongodb::bson::DateTime;
@@ -157,13 +156,6 @@ pub async fn initiate_refund(
             tracing::error!(error = %e, "Failed to update transaction status");
             Status::internal("Failed to update transaction status")
         })?;
-
-    let speed_label = match speed {
-        models::RefundSpeed::Optimum => "optimum",
-        models::RefundSpeed::Normal => "normal",
-    };
-    record_refund(&tenant.app_id, "created", speed_label);
-    record_refund_amount(&tenant.app_id, &payment.currency, refund_amount);
 
     Ok(Response::new(InitiateRefundResponse {
         refund: Some(refund_to_proto(refund)),

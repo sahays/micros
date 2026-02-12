@@ -4,7 +4,6 @@ use crate::models::{
     CreateInvoice, CreateLineItem, Invoice, LineItem, ListInvoicesFilter, UpdateInvoice,
     UpdateLineItem,
 };
-use crate::services::metrics::DB_QUERY_DURATION;
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use service_core::error::AppError;
@@ -21,10 +20,6 @@ impl Database {
     /// Create a new draft invoice.
     #[instrument(skip(self, input), fields(tenant_id = %input.tenant_id))]
     pub async fn create_invoice(&self, input: &CreateInvoice) -> Result<Invoice, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["create_invoice"])
-            .start_timer();
-
         let invoice_id = Uuid::new_v4();
         let invoice = sqlx::query_as::<_, Invoice>(
             r#"
@@ -60,8 +55,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to create invoice: {}", e)))?;
 
-        timer.observe_duration();
-
         info!(invoice_id = %invoice.invoice_id, "Draft invoice created");
 
         Ok(invoice)
@@ -74,10 +67,6 @@ impl Database {
         tenant_id: Uuid,
         invoice_id: Uuid,
     ) -> Result<Option<Invoice>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_invoice"])
-            .start_timer();
-
         let invoice = sqlx::query_as::<_, Invoice>(
             r#"
             SELECT invoice_id, tenant_id, invoice_number, invoice_type, status, customer_id, customer_name,
@@ -94,8 +83,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get invoice: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(invoice)
     }
 
@@ -106,10 +93,6 @@ impl Database {
         tenant_id: Uuid,
         filter: &ListInvoicesFilter,
     ) -> Result<Vec<Invoice>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["list_invoices"])
-            .start_timer();
-
         let limit = filter.page_size.clamp(1, 100) as i64;
         let status_str = filter.status.map(|s| s.as_str().to_string());
 
@@ -168,8 +151,6 @@ impl Database {
         }
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to list invoices: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(invoices)
     }
 
@@ -182,10 +163,6 @@ impl Database {
         issue_date: NaiveDate,
         journal_id: Option<Uuid>,
     ) -> Result<Option<Invoice>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["issue_invoice"])
-            .start_timer();
-
         // First check if invoice is in draft status
         let existing = self.get_invoice(tenant_id, invoice_id).await?;
         match existing {
@@ -231,8 +208,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to issue invoice: {}", e)))?;
 
-        timer.observe_duration();
-
         if let Some(ref inv) = invoice {
             info!(
                 invoice_id = %inv.invoice_id,
@@ -251,10 +226,6 @@ impl Database {
         tenant_id: Uuid,
         invoice_id: Uuid,
     ) -> Result<Option<Invoice>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["void_invoice"])
-            .start_timer();
-
         // Check if invoice is in issued status
         let existing = self.get_invoice(tenant_id, invoice_id).await?;
         match existing {
@@ -285,8 +256,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to void invoice: {}", e)))?;
 
-        timer.observe_duration();
-
         if let Some(ref inv) = invoice {
             info!(invoice_id = %inv.invoice_id, "Invoice voided");
         }
@@ -301,10 +270,6 @@ impl Database {
         tenant_id: Uuid,
         invoice_id: Uuid,
     ) -> Result<bool, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["delete_invoice"])
-            .start_timer();
-
         let result = sqlx::query(
             r#"
             DELETE FROM invoices
@@ -316,8 +281,6 @@ impl Database {
         .execute(self.pool())
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to delete invoice: {}", e)))?;
-
-        timer.observe_duration();
 
         let deleted = result.rows_affected() > 0;
         if deleted {
@@ -335,10 +298,6 @@ impl Database {
         invoice_id: Uuid,
         input: &UpdateInvoice,
     ) -> Result<Option<Invoice>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["update_invoice"])
-            .start_timer();
-
         // First check if invoice is in draft status
         let existing = self.get_invoice(tenant_id, invoice_id).await?;
         match existing {
@@ -387,8 +346,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to update invoice: {}", e)))?;
 
-        timer.observe_duration();
-
         if let Some(ref inv) = invoice {
             info!(invoice_id = %inv.invoice_id, "Invoice updated");
         }
@@ -403,10 +360,6 @@ impl Database {
     /// Add a line item to an invoice.
     #[instrument(skip(self, input), fields(tenant_id = %input.tenant_id, invoice_id = %input.invoice_id))]
     pub async fn add_line_item(&self, input: &CreateLineItem) -> Result<LineItem, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["add_line_item"])
-            .start_timer();
-
         // Verify invoice is in draft status
         let invoice = self.get_invoice(input.tenant_id, input.invoice_id).await?;
         match invoice {
@@ -467,8 +420,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to add line item: {}", e)))?;
 
-        timer.observe_duration();
-
         info!(line_item_id = %line_item.line_item_id, "Line item added");
 
         Ok(line_item)
@@ -481,10 +432,6 @@ impl Database {
         tenant_id: Uuid,
         invoice_id: Uuid,
     ) -> Result<Vec<LineItem>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_line_items"])
-            .start_timer();
-
         let line_items = sqlx::query_as::<_, LineItem>(
             r#"
             SELECT line_item_id, invoice_id, tenant_id, description, quantity, unit_price,
@@ -500,8 +447,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get line items: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(line_items)
     }
 
@@ -515,10 +460,6 @@ impl Database {
         line_item_id: Uuid,
         input: &UpdateLineItem,
     ) -> Result<Option<LineItem>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["update_line_item"])
-            .start_timer();
-
         // Verify invoice is in draft status
         let invoice = self.get_invoice(tenant_id, invoice_id).await?;
         match invoice {
@@ -587,8 +528,6 @@ impl Database {
             AppError::DatabaseError(anyhow::anyhow!("Failed to update line item: {}", e))
         })?;
 
-        timer.observe_duration();
-
         Ok(line_item)
     }
 
@@ -600,10 +539,6 @@ impl Database {
         invoice_id: Uuid,
         line_item_id: Uuid,
     ) -> Result<bool, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["remove_line_item"])
-            .start_timer();
-
         // Verify invoice is in draft status
         let invoice = self.get_invoice(tenant_id, invoice_id).await?;
         match invoice {
@@ -630,8 +565,6 @@ impl Database {
         .map_err(|e| {
             AppError::DatabaseError(anyhow::anyhow!("Failed to remove line item: {}", e))
         })?;
-
-        timer.observe_duration();
 
         Ok(result.rows_affected() > 0)
     }

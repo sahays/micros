@@ -3,7 +3,6 @@
 //! Provides administrative operations including the bootstrap mechanism
 //! for creating the first tenant and superadmin user.
 
-use crate::grpc::capability_check::require_admin_api_key;
 use crate::grpc::proto::auth::{
     admin_service_server::AdminService, BootstrapRequest, BootstrapResponse,
 };
@@ -40,9 +39,6 @@ impl AdminService for AdminServiceImpl {
         &self,
         request: Request<BootstrapRequest>,
     ) -> Result<Response<BootstrapResponse>, Status> {
-        // Validate admin API key
-        require_admin_api_key(&self.state.config, &request)?;
-
         let req = request.into_inner();
 
         // Validate input

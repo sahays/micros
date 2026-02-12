@@ -5,7 +5,6 @@
 use crate::grpc::proto;
 use crate::models::{BankTransaction, MatchType, MatchingRule, TransactionStatus};
 use crate::services::database::Database;
-use crate::services::metrics::DB_QUERY_DURATION;
 use service_core::error::AppError;
 use std::str::FromStr;
 use tracing::{info, instrument};
@@ -26,10 +25,6 @@ impl Database {
         target_account_id: Option<&str>,
         priority: i32,
     ) -> Result<MatchingRule, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["create_matching_rule"])
-            .start_timer();
-
         let rule_id = Uuid::new_v4();
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
@@ -55,8 +50,6 @@ impl Database {
         .fetch_one(self.pool())
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to create matching rule: {}", e)))?;
-
-        timer.observe_duration();
         info!(rule_id = %rule.rule_id, "Matching rule created");
 
         Ok(rule)
@@ -68,10 +61,6 @@ impl Database {
         tenant_id: &str,
         rule_id: &str,
     ) -> Result<Option<MatchingRule>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_matching_rule"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let rule_uuid = Uuid::from_str(rule_id)
@@ -92,8 +81,6 @@ impl Database {
         .map_err(|e| {
             AppError::DatabaseError(anyhow::anyhow!("Failed to get matching rule: {}", e))
         })?;
-
-        timer.observe_duration();
         Ok(rule)
     }
 
@@ -105,10 +92,6 @@ impl Database {
         page_token: Option<&str>,
         active_only: bool,
     ) -> Result<(Vec<MatchingRule>, Option<String>), AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["list_matching_rules"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let limit = page_size.clamp(1, 100) as i64;
@@ -149,8 +132,6 @@ impl Database {
         }
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to list matching rules: {}", e)))?;
 
-        timer.observe_duration();
-
         let has_more = rules.len() > limit as usize;
         let mut rules = rules;
         if has_more {
@@ -177,10 +158,6 @@ impl Database {
         priority: Option<i32>,
         is_active: Option<bool>,
     ) -> Result<Option<MatchingRule>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["update_matching_rule"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let rule_uuid = Uuid::from_str(rule_id)
@@ -217,8 +194,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to update matching rule: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(rule)
     }
 
@@ -228,10 +203,6 @@ impl Database {
         tenant_id: &str,
         rule_id: &str,
     ) -> Result<(), AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["delete_matching_rule"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let rule_uuid = Uuid::from_str(rule_id)
@@ -251,8 +222,6 @@ impl Database {
             AppError::DatabaseError(anyhow::anyhow!("Failed to delete matching rule: {}", e))
         })?;
 
-        timer.observe_duration();
-
         Ok(())
     }
 
@@ -264,10 +233,6 @@ impl Database {
         tenant_id: &str,
         statement_id: &str,
     ) -> Result<i32, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["apply_matching_rules"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let stmt_uuid = Uuid::from_str(statement_id)
@@ -289,7 +254,6 @@ impl Database {
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get rules: {}", e)))?;
 
         if rules.is_empty() {
-            timer.observe_duration();
             return Ok(0);
         }
 
@@ -375,8 +339,6 @@ impl Database {
                 }
             }
         }
-
-        timer.observe_duration();
         info!(
             statement_id = %statement_id,
             matched_count = matched_count,

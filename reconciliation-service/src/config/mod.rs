@@ -10,7 +10,6 @@ pub struct ReconciliationConfig {
     pub service_name: String,
     pub service_version: String,
     pub log_level: String,
-    pub otlp_endpoint: Option<String>,
     pub database: DatabaseConfig,
     pub ledger_service: LedgerServiceConfig,
     pub genai_service: GenaiServiceConfig,
@@ -56,7 +55,6 @@ impl ReconciliationConfig {
             service_version: env::var("SERVICE_VERSION")
                 .unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_string()),
             log_level: env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string()),
-            otlp_endpoint: env::var("OTLP_ENDPOINT").ok(),
             database: DatabaseConfig {
                 url: env::var("DATABASE_URL").map_err(|_| {
                     AppError::ConfigError(anyhow::anyhow!("DATABASE_URL is required"))

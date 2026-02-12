@@ -6,7 +6,7 @@ use serial_test::serial;
 use tonic::transport::Channel;
 use tonic::Request;
 use uuid::Uuid;
-use workflow_tests::helpers::auth::{with_admin_key, with_auth, TestApp};
+use workflow_tests::helpers::auth::{with_auth, TestApp};
 use workflow_tests::proto::auth::{
     assignment_service_client::AssignmentServiceClient, BootstrapRequest, CreateAssignmentRequest,
     CreateOrgNodeRequest, CreateRoleRequest, ListTenantOrgNodesRequest, ListTenantRolesRequest,
@@ -21,14 +21,17 @@ fn unique_slug(prefix: &str) -> String {
 async fn setup_with_superadmin(app: &TestApp) -> (String, String, String, String) {
     let slug = unique_slug("captest");
     let mut client = app.admin_client().await;
-    let request = with_admin_key(Request::new(BootstrapRequest {
-        tenant_slug: slug.clone(),
-        tenant_label: "Capability Test Tenant".to_string(),
-        admin_email: format!("admin@{}.com", slug),
-        admin_password: "AdminPass123!".to_string(),
-        admin_display_name: None,
-    }));
-    let response = client.bootstrap(request).await.unwrap().into_inner();
+    let response = client
+        .bootstrap(Request::new(BootstrapRequest {
+            tenant_slug: slug.clone(),
+            tenant_label: "Capability Test Tenant".to_string(),
+            admin_email: format!("admin@{}.com", slug),
+            admin_password: "AdminPass123!".to_string(),
+            admin_display_name: None,
+        }))
+        .await
+        .unwrap()
+        .into_inner();
     (
         response.tenant_id,
         response.root_org_node_id,

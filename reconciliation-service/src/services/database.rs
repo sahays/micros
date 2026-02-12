@@ -1,6 +1,5 @@
 //! Database service for reconciliation-service.
 
-use crate::services::metrics::DB_QUERY_DURATION;
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use service_core::error::AppError;
@@ -61,16 +60,11 @@ impl Database {
     /// Check database health.
     #[instrument(skip(self))]
     pub async fn health_check(&self) -> Result<(), AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["health_check"])
-            .start_timer();
-
         sqlx::query("SELECT 1")
             .execute(&self.pool)
             .await
             .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Health check failed: {}", e)))?;
 
-        timer.observe_duration();
         Ok(())
     }
 

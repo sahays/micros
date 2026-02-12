@@ -1,7 +1,6 @@
 //! Tax rate database operations for invoicing-service.
 
 use crate::models::{CreateTaxRate, TaxRate, UpdateTaxRate};
-use crate::services::metrics::DB_QUERY_DURATION;
 use chrono::NaiveDate;
 use service_core::error::AppError;
 use tracing::{info, instrument};
@@ -13,10 +12,6 @@ impl Database {
     /// Create a new tax rate.
     #[instrument(skip(self, input), fields(tenant_id = %input.tenant_id))]
     pub async fn create_tax_rate(&self, input: &CreateTaxRate) -> Result<TaxRate, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["create_tax_rate"])
-            .start_timer();
-
         let tax_rate_id = Uuid::new_v4();
         let tax_rate = sqlx::query_as::<_, TaxRate>(
             r#"
@@ -45,8 +40,6 @@ impl Database {
             _ => AppError::DatabaseError(anyhow::anyhow!("Failed to create tax rate: {}", e)),
         })?;
 
-        timer.observe_duration();
-
         info!(tax_rate_id = %tax_rate.tax_rate_id, name = %tax_rate.name, "Tax rate created");
 
         Ok(tax_rate)
@@ -59,10 +52,6 @@ impl Database {
         tenant_id: Uuid,
         tax_rate_id: Uuid,
     ) -> Result<Option<TaxRate>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_tax_rate"])
-            .start_timer();
-
         let tax_rate = sqlx::query_as::<_, TaxRate>(
             r#"
             SELECT tax_rate_id, tenant_id, name, rate, calculation, effective_from, effective_to, active, created_utc
@@ -75,8 +64,6 @@ impl Database {
         .fetch_optional(self.pool())
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get tax rate: {}", e)))?;
-
-        timer.observe_duration();
 
         Ok(tax_rate)
     }
@@ -91,10 +78,6 @@ impl Database {
         page_size: i32,
         page_token: Option<Uuid>,
     ) -> Result<Vec<TaxRate>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["list_tax_rates"])
-            .start_timer();
-
         let limit = page_size.clamp(1, 100) as i64;
         let as_of = as_of_date.unwrap_or_else(|| chrono::Utc::now().date_naive());
 
@@ -141,8 +124,6 @@ impl Database {
         }
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to list tax rates: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(tax_rates)
     }
 
@@ -154,10 +135,6 @@ impl Database {
         tax_rate_id: Uuid,
         input: &UpdateTaxRate,
     ) -> Result<Option<TaxRate>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["update_tax_rate"])
-            .start_timer();
-
         let tax_rate = sqlx::query_as::<_, TaxRate>(
             r#"
             UPDATE tax_rates
@@ -182,8 +159,6 @@ impl Database {
         .fetch_optional(self.pool())
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to update tax rate: {}", e)))?;
-
-        timer.observe_duration();
 
         Ok(tax_rate)
     }

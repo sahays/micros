@@ -10,7 +10,6 @@ use crate::grpc::proto::{
 use crate::models::DocumentStatus as ModelDocumentStatus;
 use crate::startup::AppState;
 use crate::workers::ProcessingJob;
-use metrics::counter;
 use mongodb::bson::doc;
 use prost_types::Timestamp;
 use tonic::{Request, Response, Status};
@@ -81,13 +80,6 @@ pub async fn process_document(
             tracing::error!(document_id = %document.id, "Failed to enqueue processing job");
             Status::internal("Worker queue is full")
         })?;
-
-        // Record metering metrics
-        let labels = [
-            ("tenant_id", tenant.app_id.clone()),
-            ("mime_type", document.mime_type.clone()),
-        ];
-        counter!("document_processing_requests_total", &labels).increment(1);
 
         tracing::info!(document_id = %document.id, "Processing job enqueued via gRPC");
     } else {

@@ -6,7 +6,6 @@ use crate::models::{
     SubscriptionStatus,
 };
 use crate::services::database::Database;
-use crate::services::metrics::DB_QUERY_DURATION;
 use chrono::NaiveDate;
 use service_core::error::AppError;
 use tracing::{info, instrument};
@@ -23,10 +22,6 @@ impl Database {
         &self,
         input: &CreateSubscription,
     ) -> Result<Subscription, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["create_subscription"])
-            .start_timer();
-
         let subscription_id = Uuid::new_v4();
         let status = if input.trial_end_date.is_some() {
             SubscriptionStatus::Trial
@@ -66,7 +61,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to create subscription: {}", e)))?;
 
-        timer.observe_duration();
         info!(subscription_id = %subscription.subscription_id, "Subscription created");
 
         Ok(subscription)
@@ -79,10 +73,6 @@ impl Database {
         tenant_id: Uuid,
         subscription_id: Uuid,
     ) -> Result<Option<Subscription>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_subscription"])
-            .start_timer();
-
         let subscription = sqlx::query_as::<_, Subscription>(
             r#"
             SELECT subscription_id, tenant_id, customer_id, plan_id, status, billing_anchor_day, start_date, end_date, trial_end_date, current_period_start, current_period_end, proration_mode, pending_plan_id, metadata, created_utc, updated_utc
@@ -96,8 +86,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get subscription: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(subscription)
     }
 
@@ -108,10 +96,6 @@ impl Database {
         tenant_id: Uuid,
         filter: &ListSubscriptionsFilter,
     ) -> Result<Vec<Subscription>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["list_subscriptions"])
-            .start_timer();
-
         let limit = filter.page_size.clamp(1, 100) as i64;
         let status_str = filter.status.map(|s| s.as_str().to_string());
 
@@ -160,8 +144,6 @@ impl Database {
         }
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to list subscriptions: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(subscriptions)
     }
 
@@ -174,10 +156,6 @@ impl Database {
         status: SubscriptionStatus,
         end_date: Option<NaiveDate>,
     ) -> Result<Option<Subscription>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["update_subscription_status"])
-            .start_timer();
-
         let subscription = sqlx::query_as::<_, Subscription>(
             r#"
             UPDATE subscriptions
@@ -194,8 +172,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to update subscription status: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(subscription)
     }
 
@@ -208,10 +184,6 @@ impl Database {
         new_plan_id: Uuid,
         mode: ProrationMode,
     ) -> Result<Option<Subscription>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["change_subscription_plan"])
-            .start_timer();
-
         let subscription = match mode {
             ProrationMode::Immediate | ProrationMode::None => {
                 // Change plan immediately
@@ -247,8 +219,6 @@ impl Database {
             }
         }
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to change plan: {}", e)))?;
-
-        timer.observe_duration();
 
         Ok(subscription)
     }

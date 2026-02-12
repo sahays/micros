@@ -5,14 +5,13 @@ use crate::grpc::{
     proto::{ledger_service_server::LedgerServiceServer, FILE_DESCRIPTOR_SET},
     CapabilityChecker, LedgerServiceImpl,
 };
-use crate::services::{get_metrics, Database};
+use crate::services::Database;
 use axum::{
     extract::State, http::StatusCode, middleware, response::IntoResponse, routing::get, Json,
     Router,
 };
 use serde_json::json;
 use service_core::error::AppError;
-use service_core::middleware::metrics::metrics_middleware;
 use service_core::middleware::tracing::request_id_middleware;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -74,16 +73,6 @@ async fn readiness_check(State(state): State<HealthState>) -> impl IntoResponse 
             StatusCode::SERVICE_UNAVAILABLE
         }
     }
-}
-
-/// Metrics endpoint for Prometheus scraping.
-async fn metrics_handler() -> impl IntoResponse {
-    let metrics = get_metrics();
-    (
-        StatusCode::OK,
-        [("content-type", "text/plain; charset=utf-8")],
-        metrics,
-    )
 }
 
 /// Application container for managing server lifecycle.
@@ -199,7 +188,7 @@ impl Application {
 
     /// Run the application until stopped.
     pub async fn run_until_stopped(self) -> std::io::Result<()> {
-        // Build minimal HTTP router (health + metrics)
+        // Build minimal HTTP router (health checks)
         let health_state = HealthState {
             db: self.state.db.clone(),
         };
@@ -207,9 +196,7 @@ impl Application {
         let http_router = Router::new()
             .route("/health", get(health_check))
             .route("/ready", get(readiness_check))
-            .route("/metrics", get(metrics_handler))
             .layer(TraceLayer::new_for_http())
-            .layer(middleware::from_fn(metrics_middleware))
             .layer(middleware::from_fn(request_id_middleware))
             .with_state(health_state);
 

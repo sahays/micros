@@ -1,7 +1,6 @@
 //! Receipt and statement database operations for invoicing-service.
 
 use crate::models::{CreateReceipt, Invoice, ListReceiptsFilter, Receipt};
-use crate::services::metrics::DB_QUERY_DURATION;
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use service_core::error::AppError;
@@ -18,10 +17,6 @@ impl Database {
     /// Record a payment and create a receipt.
     #[instrument(skip(self, input), fields(tenant_id = %input.tenant_id, invoice_id = %input.invoice_id))]
     pub async fn record_payment(&self, input: &CreateReceipt) -> Result<Receipt, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["record_payment"])
-            .start_timer();
-
         // Verify invoice is in issued status
         let invoice = self.get_invoice(input.tenant_id, input.invoice_id).await?;
         let invoice = match invoice {
@@ -72,8 +67,6 @@ impl Database {
             AppError::DatabaseError(anyhow::anyhow!("Failed to record payment: {}", e))
         })?;
 
-        timer.observe_duration();
-
         info!(
             receipt_id = %receipt.receipt_id,
             receipt_number = %receipt.receipt_number,
@@ -91,10 +84,6 @@ impl Database {
         tenant_id: Uuid,
         receipt_id: Uuid,
     ) -> Result<Option<Receipt>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_receipt"])
-            .start_timer();
-
         let receipt = sqlx::query_as::<_, Receipt>(
             r#"
             SELECT receipt_id, tenant_id, receipt_number, invoice_id, customer_id, amount, currency,
@@ -109,8 +98,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get receipt: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(receipt)
     }
 
@@ -121,10 +108,6 @@ impl Database {
         tenant_id: Uuid,
         filter: &ListReceiptsFilter,
     ) -> Result<Vec<Receipt>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["list_receipts"])
-            .start_timer();
-
         let limit = filter.page_size.clamp(1, 100) as i64;
 
         let receipts = if let Some(cursor) = filter.page_token {
@@ -178,8 +161,6 @@ impl Database {
         }
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to list receipts: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(receipts)
     }
 
@@ -196,10 +177,6 @@ impl Database {
         customer_id: Uuid,
         before_date: NaiveDate,
     ) -> Result<Decimal, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["calculate_opening_balance"])
-            .start_timer();
-
         // Sum of issued invoice totals before period start
         let invoice_total: Option<Decimal> = sqlx::query_scalar(
             r#"
@@ -239,8 +216,6 @@ impl Database {
             AppError::DatabaseError(anyhow::anyhow!("Failed to calculate payment total: {}", e))
         })?;
 
-        timer.observe_duration();
-
         let opening =
             invoice_total.unwrap_or(Decimal::ZERO) - payment_total.unwrap_or(Decimal::ZERO);
         Ok(opening)
@@ -255,10 +230,6 @@ impl Database {
         start_date: NaiveDate,
         end_date: NaiveDate,
     ) -> Result<Vec<Invoice>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_invoices_for_statement"])
-            .start_timer();
-
         let invoices = sqlx::query_as::<_, Invoice>(
             r#"
             SELECT invoice_id, tenant_id, invoice_number, invoice_type, status, customer_id, customer_name,
@@ -284,8 +255,6 @@ impl Database {
             AppError::DatabaseError(anyhow::anyhow!("Failed to get invoices for statement: {}", e))
         })?;
 
-        timer.observe_duration();
-
         Ok(invoices)
     }
 
@@ -298,10 +267,6 @@ impl Database {
         start_date: NaiveDate,
         end_date: NaiveDate,
     ) -> Result<Vec<Receipt>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_receipts_for_statement"])
-            .start_timer();
-
         let receipts = sqlx::query_as::<_, Receipt>(
             r#"
             SELECT receipt_id, tenant_id, receipt_number, invoice_id, customer_id, amount, currency,
@@ -326,8 +291,6 @@ impl Database {
                 e
             ))
         })?;
-
-        timer.observe_duration();
 
         Ok(receipts)
     }

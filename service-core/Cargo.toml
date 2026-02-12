@@ -20,12 +20,8 @@ hmac = { workspace = true }
 http = { workspace = true }
 jsonwebtoken = { workspace = true }
 lettre = { workspace = true }
-metrics-exporter-prometheus = { workspace = true }
 mongodb = { workspace = true }
 once_cell = { workspace = true }
-opentelemetry = { workspace = true }
-opentelemetry-otlp = { workspace = true }
-opentelemetry_sdk = { workspace = true, features = ["rt-tokio"] }
 rand = { workspace = true }
 redis = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
@@ -38,14 +34,12 @@ tokio = { workspace = true, features = ["full"] }
 tower = { workspace = true }
 tower-http = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
-tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["json", "env-filter"] }
 validator = { workspace = true, features = ["derive"] }
 uuid = { workspace = true }
 isbot = { workspace = true }
 dashmap = { workspace = true }
 governor = "0.6.3"
-metrics = { workspace = true }
 http-body-util = { workspace = true }
 serde_urlencoded = { workspace = true }
 subtle = { workspace = true }

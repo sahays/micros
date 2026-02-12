@@ -188,28 +188,6 @@ fn extract_auth_context_from_headers<T>(request: &Request<T>) -> Result<AuthCont
     Ok(AuthContext { user_id, tenant_id })
 }
 
-/// Validate admin API key from request metadata.
-///
-/// Used for administrative operations that require the X-Admin-Api-Key header.
-#[allow(clippy::result_large_err)]
-pub fn require_admin_api_key<T>(
-    config: &crate::config::AuthConfig,
-    request: &Request<T>,
-) -> Result<(), Status> {
-    let provided_key = request
-        .metadata()
-        .get("x-admin-api-key")
-        .ok_or_else(|| Status::unauthenticated("Missing X-Admin-Api-Key header"))?
-        .to_str()
-        .map_err(|_| Status::unauthenticated("Invalid X-Admin-Api-Key header encoding"))?;
-
-    if provided_key != config.security.admin_api_key {
-        return Err(Status::unauthenticated("Invalid admin API key"));
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

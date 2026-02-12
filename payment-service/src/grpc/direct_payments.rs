@@ -4,7 +4,6 @@ use crate::grpc::capability_check::{capabilities, CapabilityMetadata};
 use crate::grpc::helpers::{extract_tenant_context, transaction_to_proto};
 use crate::grpc::proto::*;
 use crate::models::{PaymentChannel, PaymentMethodType, Transaction, TransactionStatus};
-use crate::services::metrics::{record_amount, record_transaction};
 use crate::startup::AppState;
 use mongodb::bson::DateTime;
 use tonic::{Request, Response, Status};
@@ -91,9 +90,6 @@ pub async fn record_direct_upi_payment(
             tracing::error!(error = %e, "Failed to create direct UPI transaction");
             Status::internal("Failed to record direct UPI payment")
         })?;
-
-    record_transaction(&tenant.app_id, "completed");
-    record_amount(&tenant.app_id, &req.currency, req.amount_paise);
 
     Ok(Response::new(RecordDirectUpiPaymentResponse {
         transaction: Some(transaction_to_proto(transaction)),
@@ -203,9 +199,6 @@ pub async fn record_offline_payment(
             tracing::error!(error = %e, "Failed to create offline transaction");
             Status::internal("Failed to record offline payment")
         })?;
-
-    record_transaction(&tenant.app_id, "completed");
-    record_amount(&tenant.app_id, &req.currency, req.amount_paise);
 
     Ok(Response::new(RecordOfflinePaymentResponse {
         transaction: Some(transaction_to_proto(transaction)),

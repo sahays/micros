@@ -8,7 +8,6 @@ use crate::grpc::proto::{
     ListModelsResponse, ModelInfo,
 };
 use crate::models::{Session, SessionDocument};
-use crate::services::metrics::{dec_grpc_in_flight, inc_grpc_in_flight, record_grpc_request};
 use crate::startup::AppState;
 use std::time::Instant;
 use tonic::{Request, Response, Status};
@@ -19,8 +18,6 @@ pub async fn create_session(
     request: Request<CreateSessionRequest>,
 ) -> Result<Response<CreateSessionResponse>, Status> {
     let start = Instant::now();
-    let method = "CreateSession";
-    inc_grpc_in_flight(method);
 
     let auth = state
         .capability_checker
@@ -59,15 +56,11 @@ pub async fn create_session(
     tracing::info!("Creating session");
 
     if let Err(e) = state.db.insert_session(&session).await {
-        dec_grpc_in_flight(method);
-        record_grpc_request(method, "INTERNAL", start.elapsed().as_secs_f64());
         tracing::error!(error = %e, "Failed to create session");
         return Err(Status::internal(format!("Failed to create session: {}", e)));
     }
 
     let duration = start.elapsed();
-    dec_grpc_in_flight(method);
-    record_grpc_request(method, "OK", duration.as_secs_f64());
 
     tracing::info!(
         duration_ms = duration.as_millis(),
@@ -85,8 +78,6 @@ pub async fn get_session(
     request: Request<GetSessionRequest>,
 ) -> Result<Response<GetSessionResponse>, Status> {
     let start = Instant::now();
-    let method = "GetSession";
-    inc_grpc_in_flight(method);
 
     let auth = state
         .capability_checker
@@ -96,8 +87,6 @@ pub async fn get_session(
     let req = request.into_inner();
 
     if req.session_id.is_empty() {
-        dec_grpc_in_flight(method);
-        record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
         tracing::warn!("GetSession called with empty session_id");
         return Err(Status::invalid_argument("session_id is required"));
     }
@@ -114,8 +103,6 @@ pub async fn get_session(
     {
         Ok(Some(s)) => s,
         Ok(None) => {
-            dec_grpc_in_flight(method);
-            record_grpc_request(method, "NOT_FOUND", start.elapsed().as_secs_f64());
             tracing::warn!("Session not found");
             return Err(Status::not_found(format!(
                 "Session not found: {}",
@@ -123,8 +110,6 @@ pub async fn get_session(
             )));
         }
         Err(e) => {
-            dec_grpc_in_flight(method);
-            record_grpc_request(method, "INTERNAL", start.elapsed().as_secs_f64());
             tracing::error!(error = %e, "Failed to get session");
             return Err(Status::internal(format!("Failed to get session: {}", e)));
         }
@@ -141,8 +126,6 @@ pub async fn get_session(
     };
 
     let duration = start.elapsed();
-    dec_grpc_in_flight(method);
-    record_grpc_request(method, "OK", duration.as_secs_f64());
 
     tracing::info!(
         duration_ms = duration.as_millis(),
@@ -162,8 +145,6 @@ pub async fn delete_session(
     request: Request<DeleteSessionRequest>,
 ) -> Result<Response<DeleteSessionResponse>, Status> {
     let start = Instant::now();
-    let method = "DeleteSession";
-    inc_grpc_in_flight(method);
 
     let auth = state
         .capability_checker
@@ -173,8 +154,6 @@ pub async fn delete_session(
     let req = request.into_inner();
 
     if req.session_id.is_empty() {
-        dec_grpc_in_flight(method);
-        record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
         tracing::warn!("DeleteSession called with empty session_id");
         return Err(Status::invalid_argument("session_id is required"));
     }
@@ -191,16 +170,12 @@ pub async fn delete_session(
     {
         Ok(deleted) => deleted,
         Err(e) => {
-            dec_grpc_in_flight(method);
-            record_grpc_request(method, "INTERNAL", start.elapsed().as_secs_f64());
             tracing::error!(error = %e, "Failed to delete session");
             return Err(Status::internal(format!("Failed to delete session: {}", e)));
         }
     };
 
     if !success {
-        dec_grpc_in_flight(method);
-        record_grpc_request(method, "NOT_FOUND", start.elapsed().as_secs_f64());
         tracing::warn!("Session not found for deletion");
         return Err(Status::not_found(format!(
             "Session not found: {}",
@@ -209,8 +184,6 @@ pub async fn delete_session(
     }
 
     let duration = start.elapsed();
-    dec_grpc_in_flight(method);
-    record_grpc_request(method, "OK", duration.as_secs_f64());
 
     tracing::info!(duration_ms = duration.as_millis(), "Session deleted");
 
@@ -223,8 +196,6 @@ pub async fn get_usage(
     request: Request<GetUsageRequest>,
 ) -> Result<Response<GetUsageResponse>, Status> {
     let start = Instant::now();
-    let method = "GetUsage";
-    inc_grpc_in_flight(method);
 
     let auth = state
         .capability_checker
@@ -244,8 +215,6 @@ pub async fn get_usage(
         .as_ref()
         .and_then(|t| chrono::DateTime::from_timestamp(t.seconds, t.nanos as u32))
         .ok_or_else(|| {
-            dec_grpc_in_flight(method);
-            record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
             tracing::warn!("Invalid or missing start_time");
             Status::invalid_argument("start_time is required")
         })?;
@@ -255,8 +224,6 @@ pub async fn get_usage(
         .as_ref()
         .and_then(|t| chrono::DateTime::from_timestamp(t.seconds, t.nanos as u32))
         .ok_or_else(|| {
-            dec_grpc_in_flight(method);
-            record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
             tracing::warn!("Invalid or missing end_time");
             Status::invalid_argument("end_time is required")
         })?;
@@ -279,8 +246,6 @@ pub async fn get_usage(
     {
         Ok(r) => r,
         Err(e) => {
-            dec_grpc_in_flight(method);
-            record_grpc_request(method, "INTERNAL", start.elapsed().as_secs_f64());
             tracing::error!(error = %e, "Failed to get usage");
             return Err(Status::internal(format!("Failed to get usage: {}", e)));
         }
@@ -299,8 +264,6 @@ pub async fn get_usage(
         .collect();
 
     let duration = start.elapsed();
-    dec_grpc_in_flight(method);
-    record_grpc_request(method, "OK", duration.as_secs_f64());
 
     tracing::info!(
         duration_ms = duration.as_millis(),
@@ -324,8 +287,6 @@ pub async fn list_models(
     request: Request<ListModelsRequest>,
 ) -> Result<Response<ListModelsResponse>, Status> {
     let start = Instant::now();
-    let method = "ListModels";
-    inc_grpc_in_flight(method);
 
     let _auth = state
         .capability_checker
@@ -368,8 +329,6 @@ pub async fn list_models(
     ];
 
     let duration = start.elapsed();
-    dec_grpc_in_flight(method);
-    record_grpc_request(method, "OK", duration.as_secs_f64());
 
     tracing::debug!(
         duration_ms = duration.as_millis(),

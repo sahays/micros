@@ -8,13 +8,11 @@ use crate::grpc::{
     proto::{document_service_server::DocumentServiceServer, FILE_DESCRIPTOR_SET},
     CapabilityChecker, DocumentGrpcService,
 };
-use crate::services::{get_metrics, LocalStorage, MongoDb, Storage};
+use crate::services::{LocalStorage, MongoDb, Storage};
 use crate::workers::{ProcessingJob, WorkerOrchestrator};
 use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::get, Json, Router};
 use serde_json::json;
 use service_core::error::AppError;
-use service_core::grpc::interceptors::{metrics_interceptor, trace_context_interceptor};
-use service_core::tower::ServiceBuilder;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -65,15 +63,6 @@ async fn readiness_check(State(state): State<HealthState>) -> impl IntoResponse 
         Ok(_) => StatusCode::OK,
         Err(_) => StatusCode::SERVICE_UNAVAILABLE,
     }
-}
-
-/// Prometheus metrics endpoint.
-async fn metrics_endpoint() -> impl IntoResponse {
-    (
-        StatusCode::OK,
-        [("content-type", "text/plain; charset=utf-8")],
-        get_metrics(),
-    )
 }
 
 /// Application container for managing server lifecycle.
@@ -193,7 +182,7 @@ impl Application {
     ///
     /// This starts both the HTTP health server and the gRPC server concurrently.
     pub async fn run_until_stopped(self) -> std::io::Result<()> {
-        // Build minimal HTTP router (health + metrics only)
+        // Build minimal HTTP router (health only)
         let health_state = HealthState {
             db: self.state.db.clone(),
         };
@@ -201,7 +190,6 @@ impl Application {
         let http_router = Router::new()
             .route("/health", get(health_check))
             .route("/ready", get(readiness_check))
-            .route("/metrics", get(metrics_endpoint))
             .with_state(health_state);
 
         // Build gRPC server
@@ -221,15 +209,8 @@ impl Application {
                 std::io::Error::other(format!("Failed to build reflection service: {}", e))
             })?;
 
-        // Apply metering and tracing interceptors
-        let layer = ServiceBuilder::new()
-            .layer(tonic::service::interceptor(trace_context_interceptor))
-            .layer(tonic::service::interceptor(metrics_interceptor))
-            .into_inner();
-
         let incoming = tokio_stream::wrappers::TcpListenerStream::new(self.grpc_listener);
         let grpc_server = GrpcServer::builder()
-            .layer(layer)
             .add_service(grpc_health_service)
             .add_service(reflection_service)
             .add_service(DocumentServiceServer::new(document_service))

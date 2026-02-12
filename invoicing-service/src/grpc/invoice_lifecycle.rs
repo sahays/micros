@@ -5,11 +5,7 @@ use crate::grpc::proto::{
     IssueInvoiceRequest, IssueInvoiceResponse, VoidInvoiceRequest, VoidInvoiceResponse,
 };
 use crate::grpc::service::InvoicingServiceImpl;
-use crate::services::metrics::{
-    ERRORS_TOTAL, GRPC_REQUESTS_TOTAL, GRPC_REQUEST_DURATION, INVOICES_TOTAL, INVOICE_AMOUNT_TOTAL,
-};
 use chrono::NaiveDate;
-use rust_decimal::prelude::ToPrimitive;
 use service_core::grpc::TransactionEntry;
 use tonic::{Request, Response, Status};
 use tracing::{info, instrument, warn, Span};
@@ -29,25 +25,14 @@ impl InvoicingServiceImpl {
         &self,
         request: Request<IssueInvoiceRequest>,
     ) -> Result<Response<IssueInvoiceResponse>, Status> {
-        let timer = GRPC_REQUEST_DURATION
-            .with_label_values(&["IssueInvoice"])
-            .start_timer();
         let req = request.into_inner();
 
         let tenant_id = Uuid::parse_str(&req.tenant_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["IssueInvoice", "invalid_argument"])
-                .inc();
-            ERRORS_TOTAL.with_label_values(&["validation_error"]).inc();
             Status::invalid_argument("Invalid tenant_id format")
         })?;
         Span::current().record("tenant_id", tenant_id.to_string());
 
         let invoice_id = Uuid::parse_str(&req.invoice_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["IssueInvoice", "invalid_argument"])
-                .inc();
-            ERRORS_TOTAL.with_label_values(&["validation_error"]).inc();
             Status::invalid_argument("Invalid invoice_id format")
         })?;
         Span::current().record("invoice_id", invoice_id.to_string());
@@ -56,10 +41,6 @@ impl InvoicingServiceImpl {
             chrono::Utc::now().date_naive()
         } else {
             NaiveDate::parse_from_str(&req.issue_date, "%Y-%m-%d").map_err(|_| {
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["IssueInvoice", "invalid_argument"])
-                    .inc();
-                ERRORS_TOTAL.with_label_values(&["validation_error"]).inc();
                 Status::invalid_argument("Invalid issue_date format")
             })?
         };
@@ -71,13 +52,9 @@ impl InvoicingServiceImpl {
             .await
             .map_err(|e| {
                 warn!(error = %e, "Failed to get invoice for ledger entry");
-                ERRORS_TOTAL.with_label_values(&["db_error"]).inc();
                 Status::internal("Failed to get invoice")
             })?;
         let existing_invoice = existing_invoice.ok_or_else(|| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["IssueInvoice", "not_found"])
-                .inc();
             Status::not_found("Invoice not found")
         })?;
 
@@ -87,7 +64,6 @@ impl InvoicingServiceImpl {
             .await
             .map_err(|e| {
                 warn!(error = %e, "Failed to get line items for ledger entry");
-                ERRORS_TOTAL.with_label_values(&["db_error"]).inc();
                 Status::internal("Failed to get line items")
             })?;
 
@@ -151,33 +127,18 @@ impl InvoicingServiceImpl {
 
         let invoice = self.db.issue_invoice(tenant_id, invoice_id, issue_date, journal_id).await.map_err(|e| {
             warn!(tenant_id = %tenant_id, invoice_id = %invoice_id, error = %e, "Failed to issue invoice");
-            GRPC_REQUESTS_TOTAL.with_label_values(&["IssueInvoice", "error"]).inc();
-            ERRORS_TOTAL.with_label_values(&["db_error"]).inc();
             match e {
                 service_core::error::AppError::BadRequest(err) => Status::failed_precondition(err.to_string()),
                 _ => Status::internal("Failed to issue invoice"),
             }
         })?;
 
-        timer.observe_duration();
-
         match invoice {
             Some(inv) => {
                 let line_items = self.db.get_line_items(tenant_id, invoice_id).await.map_err(|e| {
                     warn!(tenant_id = %tenant_id, invoice_id = %invoice_id, error = %e, "Failed to get line items");
-                    ERRORS_TOTAL.with_label_values(&["db_error"]).inc();
                     Status::internal("Failed to get line items")
                 })?;
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["IssueInvoice", "ok"])
-                    .inc();
-                INVOICES_TOTAL.with_label_values(&["issued"]).inc();
-                // Track invoice amount by currency for business metrics
-                if let Some(amount) = inv.total.to_f64() {
-                    INVOICE_AMOUNT_TOTAL
-                        .with_label_values(&[&inv.currency])
-                        .inc_by(amount);
-                }
                 info!(
                     tenant_id = %tenant_id,
                     invoice_id = %inv.invoice_id,
@@ -191,10 +152,6 @@ impl InvoicingServiceImpl {
                 }))
             }
             None => {
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["IssueInvoice", "not_found"])
-                    .inc();
-                ERRORS_TOTAL.with_label_values(&["not_found"]).inc();
                 Err(Status::not_found("Invoice not found"))
             }
         }
@@ -213,25 +170,14 @@ impl InvoicingServiceImpl {
         &self,
         request: Request<VoidInvoiceRequest>,
     ) -> Result<Response<VoidInvoiceResponse>, Status> {
-        let timer = GRPC_REQUEST_DURATION
-            .with_label_values(&["VoidInvoice"])
-            .start_timer();
         let req = request.into_inner();
 
         let tenant_id = Uuid::parse_str(&req.tenant_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["VoidInvoice", "invalid_argument"])
-                .inc();
-            ERRORS_TOTAL.with_label_values(&["validation_error"]).inc();
             Status::invalid_argument("Invalid tenant_id format")
         })?;
         Span::current().record("tenant_id", tenant_id.to_string());
 
         let invoice_id = Uuid::parse_str(&req.invoice_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["VoidInvoice", "invalid_argument"])
-                .inc();
-            ERRORS_TOTAL.with_label_values(&["validation_error"]).inc();
             Status::invalid_argument("Invalid invoice_id format")
         })?;
         Span::current().record("invoice_id", invoice_id.to_string());
@@ -243,7 +189,6 @@ impl InvoicingServiceImpl {
             .await
             .map_err(|e| {
                 warn!(error = %e, "Failed to get invoice for reversing entry");
-                ERRORS_TOTAL.with_label_values(&["db_error"]).inc();
                 Status::internal("Failed to get invoice")
             })?;
 
@@ -256,7 +201,6 @@ impl InvoicingServiceImpl {
                     .await
                     .map_err(|e| {
                         warn!(error = %e, "Failed to get line items for reversing entry");
-                        ERRORS_TOTAL.with_label_values(&["db_error"]).inc();
                         Status::internal("Failed to get line items")
                     })?;
 
@@ -307,37 +251,24 @@ impl InvoicingServiceImpl {
 
         let invoice = self.db.void_invoice(tenant_id, invoice_id).await.map_err(|e| {
             warn!(tenant_id = %tenant_id, invoice_id = %invoice_id, error = %e, "Failed to void invoice");
-            GRPC_REQUESTS_TOTAL.with_label_values(&["VoidInvoice", "error"]).inc();
-            ERRORS_TOTAL.with_label_values(&["db_error"]).inc();
             match e {
                 service_core::error::AppError::BadRequest(err) => Status::failed_precondition(err.to_string()),
                 _ => Status::internal("Failed to void invoice"),
             }
         })?;
 
-        timer.observe_duration();
-
         match invoice {
             Some(inv) => {
                 let line_items = self.db.get_line_items(tenant_id, invoice_id).await.map_err(|e| {
                     warn!(tenant_id = %tenant_id, invoice_id = %invoice_id, error = %e, "Failed to get line items");
-                    ERRORS_TOTAL.with_label_values(&["db_error"]).inc();
                     Status::internal("Failed to get line items")
                 })?;
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["VoidInvoice", "ok"])
-                    .inc();
-                INVOICES_TOTAL.with_label_values(&["void"]).inc();
                 info!(tenant_id = %tenant_id, invoice_id = %inv.invoice_id, "Invoice voided");
                 Ok(Response::new(VoidInvoiceResponse {
                     invoice: Some(invoice_to_proto(&inv, &line_items)),
                 }))
             }
             None => {
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["VoidInvoice", "not_found"])
-                    .inc();
-                ERRORS_TOTAL.with_label_values(&["not_found"]).inc();
                 Err(Status::not_found("Invoice not found"))
             }
         }

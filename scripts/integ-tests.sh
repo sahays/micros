@@ -130,22 +130,6 @@ export_grpc_endpoints() {
     log_info "gRPC endpoints exported"
 }
 
-# Export ADMIN_API_KEY from .env.dev
-export_admin_api_key() {
-    local env_file=".env.dev"
-    if [ -f "$env_file" ]; then
-        local key
-        key=$(grep '^ADMIN_API_KEY=' "$env_file" | cut -d'=' -f2-)
-        if [ -n "$key" ]; then
-            export ADMIN_API_KEY="$key"
-            log_info "ADMIN_API_KEY exported from ${env_file}"
-            return 0
-        fi
-    fi
-    log_warn "ADMIN_API_KEY not found in ${env_file} — auth-service admin tests may fail"
-    return 0
-}
-
 # Main execution
 main() {
     echo ""
@@ -184,9 +168,8 @@ main() {
     fi
     echo ""
 
-    # Export endpoints and keys
+    # Export endpoints
     export_grpc_endpoints
-    export_admin_api_key
     echo ""
 
     # Pre-compile all test binaries in one pass

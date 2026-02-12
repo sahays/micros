@@ -6,7 +6,6 @@ use crate::grpc::helpers::{
 };
 use crate::grpc::proto::*;
 use crate::models;
-use crate::services::metrics::record_payment_link;
 use crate::services::razorpay_payment_links;
 use crate::startup::AppState;
 use mongodb::bson::DateTime;
@@ -94,8 +93,6 @@ pub async fn create_payment_link(
             tracing::error!(error = %e, "Failed to save payment link");
             Status::internal("Failed to save payment link")
         })?;
-
-    record_payment_link(&tenant.app_id, "created");
 
     Ok(Response::new(CreatePaymentLinkResponse {
         payment_link: Some(payment_link_to_proto(link)),
@@ -186,8 +183,6 @@ pub async fn cancel_payment_link(
             tracing::error!(error = %e, "Failed to update payment link status");
             Status::internal("Failed to update payment link")
         })?;
-
-    record_payment_link(&tenant.app_id, "cancelled");
 
     let updated = state
         .repository

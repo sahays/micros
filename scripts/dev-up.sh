@@ -39,7 +39,7 @@ if [ -n "$NO_CACHE_FLAG" ]; then
 fi
 
 echo -e "${GREEN}Starting Micros Development Stack${NC}"
-echo "Prerequisites: PostgreSQL, MongoDB, Redis, and PLG+T stack must be running"
+echo "Prerequisites: PostgreSQL, MongoDB, and Redis must be running"
 echo ""
 
 if [ -n "$REBUILD_FLAG" ]; then
@@ -98,53 +98,6 @@ if nc -z localhost 6379 2>/dev/null; then
 else
     echo -e "${RED}✗ Redis is not accessible on port 6379${NC}"
     echo "Please start Redis on your host machine first"
-    exit 1
-fi
-
-# Check if PLG+T observability stack is running
-echo ""
-echo "Checking PLG+T observability stack..."
-PLGT_MISSING=""
-
-if nc -z localhost 9090 2>/dev/null; then
-    echo -e "${GREEN}✓ Prometheus is accessible on port 9090${NC}"
-else
-    echo -e "${RED}✗ Prometheus is not accessible on port 9090${NC}"
-    PLGT_MISSING="true"
-fi
-
-if nc -z localhost 3100 2>/dev/null; then
-    echo -e "${GREEN}✓ Loki is accessible on port 3100${NC}"
-else
-    echo -e "${RED}✗ Loki is not accessible on port 3100${NC}"
-    PLGT_MISSING="true"
-fi
-
-if nc -z localhost 3000 2>/dev/null; then
-    echo -e "${GREEN}✓ Grafana is accessible on port 3000${NC}"
-else
-    echo -e "${RED}✗ Grafana is not accessible on port 3000${NC}"
-    PLGT_MISSING="true"
-fi
-
-if nc -z localhost 4317 2>/dev/null; then
-    echo -e "${GREEN}✓ Tempo OTLP is accessible on port 4317${NC}"
-else
-    echo -e "${RED}✗ Tempo OTLP is not accessible on port 4317${NC}"
-    PLGT_MISSING="true"
-fi
-
-if nc -z localhost 9080 2>/dev/null; then
-    echo -e "${GREEN}✓ Promtail is accessible on port 9080${NC}"
-else
-    echo -e "${RED}✗ Promtail is not accessible on port 9080${NC}"
-    PLGT_MISSING="true"
-fi
-
-if [ -n "$PLGT_MISSING" ]; then
-    echo ""
-    echo -e "${RED}PLG+T observability stack is not fully running${NC}"
-    echo "Please start it first: cd observability && ./start.sh"
     exit 1
 fi
 
@@ -258,12 +211,6 @@ echo "Databases (on host machine):"
 echo "  - PostgreSQL: localhost:5432  (auth, ledger, billing, reconciliation, invoicing)"
 echo "  - MongoDB:    localhost:27017 (document, notification, payment, genai)"
 echo "  - Redis:      localhost:6379  (auth, session cache)"
-echo ""
-echo "Observability (PLG+T on host):"
-echo "  - Prometheus: http://localhost:9090"
-echo "  - Loki:       http://localhost:3100"
-echo "  - Grafana:    http://localhost:3000 (admin/admin)"
-echo "  - Tempo:      http://localhost:3200"
 echo ""
 echo "View logs:"
 echo "  docker compose -f docker-compose.dev.yml logs -f"

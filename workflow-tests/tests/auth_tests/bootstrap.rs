@@ -5,7 +5,7 @@
 use serial_test::serial;
 use tonic::Request;
 use uuid::Uuid;
-use workflow_tests::helpers::auth::{with_admin_key, with_auth, TestApp};
+use workflow_tests::helpers::auth::{with_auth, TestApp};
 use workflow_tests::proto::auth::{BootstrapRequest, ListTenantOrgNodesRequest};
 
 fn unique_slug(prefix: &str) -> String {
@@ -19,15 +19,15 @@ async fn bootstrap_creates_tenant_and_superadmin() {
     let mut client = app.admin_client().await;
     let slug = unique_slug("acme");
 
-    let request = with_admin_key(Request::new(BootstrapRequest {
-        tenant_slug: slug.clone(),
-        tenant_label: "Acme Corporation".to_string(),
-        admin_email: format!("admin@{}.com", slug),
-        admin_password: "SecurePass123!".to_string(),
-        admin_display_name: Some("System Admin".to_string()),
-    }));
-
-    let response = client.bootstrap(request).await;
+    let response = client
+        .bootstrap(Request::new(BootstrapRequest {
+            tenant_slug: slug.clone(),
+            tenant_label: "Acme Corporation".to_string(),
+            admin_email: format!("admin@{}.com", slug),
+            admin_password: "SecurePass123!".to_string(),
+            admin_display_name: Some("System Admin".to_string()),
+        }))
+        .await;
     assert!(
         response.is_ok(),
         "Bootstrap should succeed: {:?}",
@@ -49,81 +49,31 @@ async fn bootstrap_creates_tenant_and_superadmin() {
 
 #[tokio::test]
 #[serial]
-async fn bootstrap_fails_without_admin_api_key() {
-    let app = TestApp::spawn().await;
-    let mut client = app.admin_client().await;
-    let slug = unique_slug("acme");
-
-    // Request without admin API key
-    let request = Request::new(BootstrapRequest {
-        tenant_slug: slug.clone(),
-        tenant_label: "Acme Corporation".to_string(),
-        admin_email: format!("admin@{}.com", slug),
-        admin_password: "SecurePass123!".to_string(),
-        admin_display_name: None,
-    });
-
-    let response = client.bootstrap(request).await;
-    assert!(response.is_err());
-
-    let status = response.unwrap_err();
-    assert_eq!(status.code(), tonic::Code::Unauthenticated);
-    assert!(status.message().contains("X-Admin-Api-Key"));
-}
-
-#[tokio::test]
-#[serial]
-async fn bootstrap_fails_with_invalid_admin_api_key() {
-    let app = TestApp::spawn().await;
-    let mut client = app.admin_client().await;
-    let slug = unique_slug("acme");
-
-    // Request with wrong admin API key
-    let mut request = Request::new(BootstrapRequest {
-        tenant_slug: slug.clone(),
-        tenant_label: "Acme Corporation".to_string(),
-        admin_email: format!("admin@{}.com", slug),
-        admin_password: "SecurePass123!".to_string(),
-        admin_display_name: None,
-    });
-    request
-        .metadata_mut()
-        .insert("x-admin-api-key", "wrong-key".parse().unwrap());
-
-    let response = client.bootstrap(request).await;
-    assert!(response.is_err());
-
-    let status = response.unwrap_err();
-    assert_eq!(status.code(), tonic::Code::Unauthenticated);
-}
-
-#[tokio::test]
-#[serial]
 async fn bootstrap_fails_on_second_call() {
     let app = TestApp::spawn().await;
     let mut client = app.admin_client().await;
     let slug = unique_slug("acme");
 
     // First bootstrap should succeed
-    let request = with_admin_key(Request::new(BootstrapRequest {
-        tenant_slug: slug.clone(),
-        tenant_label: "Acme Corporation".to_string(),
-        admin_email: format!("admin@{}.com", slug),
-        admin_password: "SecurePass123!".to_string(),
-        admin_display_name: None,
-    }));
-
-    let response = client.bootstrap(request).await;
+    let response = client
+        .bootstrap(Request::new(BootstrapRequest {
+            tenant_slug: slug.clone(),
+            tenant_label: "Acme Corporation".to_string(),
+            admin_email: format!("admin@{}.com", slug),
+            admin_password: "SecurePass123!".to_string(),
+            admin_display_name: None,
+        }))
+        .await;
     assert!(response.is_ok());
 
     // Second bootstrap should fail (bootstrap is a one-time operation)
-    let request = with_admin_key(Request::new(BootstrapRequest {
+    let request = Request::new(BootstrapRequest {
         tenant_slug: slug.clone(),
         tenant_label: "Another Corp".to_string(),
         admin_email: format!("admin2@{}.com", slug),
         admin_password: "SecurePass123!".to_string(),
         admin_display_name: None,
-    }));
+    });
 
     let response = client.bootstrap(request).await;
     assert!(response.is_err());
@@ -140,13 +90,13 @@ async fn bootstrap_validates_password_requirements() {
     let slug = unique_slug("acme");
 
     // Password too short
-    let request = with_admin_key(Request::new(BootstrapRequest {
+    let request = Request::new(BootstrapRequest {
         tenant_slug: slug.clone(),
         tenant_label: "Acme Corporation".to_string(),
         admin_email: format!("admin@{}.com", slug),
         admin_password: "short".to_string(), // Too short
         admin_display_name: None,
-    }));
+    });
 
     let response = client.bootstrap(request).await;
     assert!(response.is_err());
@@ -163,13 +113,13 @@ async fn bootstrap_validates_required_fields() {
     let mut client = app.admin_client().await;
 
     // Missing tenant_slug
-    let request = with_admin_key(Request::new(BootstrapRequest {
+    let request = Request::new(BootstrapRequest {
         tenant_slug: "".to_string(),
         tenant_label: "Acme Corporation".to_string(),
         admin_email: "admin@test.com".to_string(),
         admin_password: "SecurePass123!".to_string(),
         admin_display_name: None,
-    }));
+    });
 
     let response = client.bootstrap(request).await;
     assert!(response.is_err());
@@ -179,13 +129,13 @@ async fn bootstrap_validates_required_fields() {
 
     // Missing admin_email
     let slug = unique_slug("acme");
-    let request = with_admin_key(Request::new(BootstrapRequest {
+    let request = Request::new(BootstrapRequest {
         tenant_slug: slug,
         tenant_label: "Acme Corporation".to_string(),
         admin_email: "".to_string(),
         admin_password: "SecurePass123!".to_string(),
         admin_display_name: None,
-    }));
+    });
 
     let response = client.bootstrap(request).await;
     assert!(response.is_err());
@@ -201,13 +151,13 @@ async fn bootstrap_returns_valid_access_token() {
     let mut client = app.admin_client().await;
     let slug = unique_slug("acme");
 
-    let request = with_admin_key(Request::new(BootstrapRequest {
+    let request = Request::new(BootstrapRequest {
         tenant_slug: slug.clone(),
         tenant_label: "Acme Corporation".to_string(),
         admin_email: format!("admin@{}.com", slug),
         admin_password: "SecurePass123!".to_string(),
         admin_display_name: None,
-    }));
+    });
 
     let response = client.bootstrap(request).await.unwrap().into_inner();
 

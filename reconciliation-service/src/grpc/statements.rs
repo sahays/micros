@@ -2,7 +2,7 @@
 
 use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::proto::*;
-use crate::services::{record_error, record_statement_import, record_transaction_match, Database};
+use crate::services::Database;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 
@@ -26,12 +26,8 @@ pub async fn import_statement(
         .create_statement(&_auth.tenant_id, &req.bank_account_id, &req.document_id)
         .await
         .map_err(|e| {
-            record_statement_import("failed");
-            record_error("database_error");
             Status::internal(format!("Failed to import statement: {}", e))
         })?;
-
-    record_statement_import("success");
 
     // TODO: Trigger async GenAI extraction via genai-service
 
@@ -155,12 +151,8 @@ pub async fn commit_statement(
         .commit_statement(&_auth.tenant_id, &req.statement_id)
         .await
         .map_err(|e| {
-            record_statement_import("commit_failed");
-            record_error("database_error");
             Status::internal(format!("Failed to commit statement: {}", e))
         })?;
-
-    record_statement_import("committed");
 
     // Apply matching rules to auto-match transactions
     let auto_matched = db
@@ -168,14 +160,8 @@ pub async fn commit_statement(
         .await
         .unwrap_or_else(|e| {
             tracing::warn!(error = %e, "Failed to apply matching rules");
-            record_error("auto_match_error");
             0
         });
-
-    // Record auto-matched transactions
-    for _ in 0..auto_matched {
-        record_transaction_match("auto");
-    }
 
     tracing::info!(
         statement_id = %req.statement_id,

@@ -4,14 +4,9 @@ use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::helpers::*;
 use crate::grpc::proto::*;
 use crate::models::{ChargeType, CreateCharge, ListChargesFilter, SubscriptionStatus};
-use crate::services::{
-    record_charge_amount, record_charge_created, record_error, record_grpc_request,
-    record_grpc_request_duration, Database,
-};
-use rust_decimal::prelude::ToPrimitive;
+use crate::services::Database;
 use rust_decimal::Decimal;
 use std::sync::Arc;
-use std::time::Instant;
 use tonic::{Request, Response, Status};
 
 pub async fn get_charge(
@@ -19,9 +14,6 @@ pub async fn get_charge(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetChargeRequest>,
 ) -> Result<Response<GetChargeResponse>, Status> {
-    let start = Instant::now();
-    let method = "GetCharge";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_CYCLE_READ)
         .await?;
@@ -33,20 +25,12 @@ pub async fn get_charge(
     tracing::debug!(tenant_id = %tenant_id, charge_id = %charge_id, "Getting charge");
 
     let charge = db.get_charge(tenant_id, charge_id).await.map_err(|e| {
-        record_error("database", method);
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal(e.to_string())
     })?;
 
     let charge = charge.ok_or_else(|| {
-        record_grpc_request(method, "not_found");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::not_found("Charge not found")
     })?;
-
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(GetChargeResponse {
         charge: Some(charge_to_proto(charge)),
@@ -58,9 +42,6 @@ pub async fn list_charges(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListChargesRequest>,
 ) -> Result<Response<ListChargesResponse>, Status> {
-    let start = Instant::now();
-    let method = "ListCharges";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_CYCLE_READ)
         .await?;
@@ -89,9 +70,6 @@ pub async fn list_charges(
         .list_charges(tenant_id, cycle_id, &filter)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
@@ -100,9 +78,6 @@ pub async fn list_charges(
         .last()
         .map(|c| c.charge_id.clone())
         .unwrap_or_default();
-
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(ListChargesResponse {
         charges: proto_charges,
@@ -115,9 +90,6 @@ pub async fn create_one_time_charge(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<CreateOneTimeChargeRequest>,
 ) -> Result<Response<CreateOneTimeChargeResponse>, Status> {
-    let start = Instant::now();
-    let method = "CreateOneTimeCharge";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_CHARGE_CREATE)
         .await?;
@@ -138,7 +110,6 @@ pub async fn create_one_time_charge(
         .get_subscription(tenant_id, subscription_id)
         .await
         .map_err(|e| {
-            record_error("database", method);
             Status::internal(e.to_string())
         })?;
 
@@ -150,24 +121,11 @@ pub async fn create_one_time_charge(
         ));
     }
 
-    // Get plan for currency
-    let plan = db
-        .get_plan(tenant_id, subscription.plan_id)
-        .await
-        .map_err(|e| {
-            record_error("database", method);
-            Status::internal(e.to_string())
-        })?;
-    let currency = plan
-        .map(|p| p.currency)
-        .unwrap_or_else(|| "USD".to_string());
-
     // Get current billing cycle
     let cycle = db
         .get_current_billing_cycle(subscription_id)
         .await
         .map_err(|e| {
-            record_error("database", method);
             Status::internal(e.to_string())
         })?;
 
@@ -194,20 +152,8 @@ pub async fn create_one_time_charge(
 
     let charge = db.create_charge(&input).await.map_err(|e| {
         tracing::error!(error = %e, "Failed to create charge");
-        record_error("database", method);
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal(e.to_string())
     })?;
-
-    // Track monetary amount for financial reporting
-    if let Some(amount_f64) = amount.to_f64() {
-        record_charge_amount(&tenant_id.to_string(), &currency, "one_time", amount_f64);
-    }
-
-    record_charge_created(&tenant_id.to_string(), "one_time");
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(CreateOneTimeChargeResponse {
         charge: Some(charge_to_proto(charge)),

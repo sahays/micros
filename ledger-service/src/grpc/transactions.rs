@@ -7,12 +7,8 @@ use crate::grpc::proto::{
 };
 use crate::grpc::service::{entries_to_transaction, parse_tenant_id};
 use crate::models::{Direction, PostEntry};
-use crate::services::metrics::{
-    AMOUNT_TOTAL, ENTRIES_TOTAL, GRPC_REQUESTS_TOTAL, GRPC_REQUEST_DURATION, TRANSACTIONS_TOTAL,
-};
 use crate::services::Database;
 use chrono::NaiveDate;
-use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::Decimal;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -29,10 +25,6 @@ pub async fn post_transaction(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<PostTransactionRequest>,
 ) -> Result<Response<PostTransactionResponse>, Status> {
-    let timer = GRPC_REQUEST_DURATION
-        .with_label_values(&["PostTransaction"])
-        .start_timer();
-
     let auth = capability_checker
         .require_capability(&request, capabilities::LEDGER_TRANSACTION_CREATE)
         .await?;
@@ -41,9 +33,6 @@ pub async fn post_transaction(
     let req = request.into_inner();
 
     if req.entries.is_empty() {
-        GRPC_REQUESTS_TOTAL
-            .with_label_values(&["PostTransaction", "invalid_argument"])
-            .inc();
         return Err(Status::invalid_argument(
             "At least 2 entries required for a transaction",
         ));
@@ -52,23 +41,14 @@ pub async fn post_transaction(
     let mut entries = Vec::with_capacity(req.entries.len());
     for proto_entry in &req.entries {
         let account_id = Uuid::parse_str(&proto_entry.account_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["PostTransaction", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid account_id format in entry")
         })?;
 
         let amount = Decimal::from_str(&proto_entry.amount).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["PostTransaction", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid amount format in entry")
         })?;
 
         let direction = Direction::from_proto(proto_entry.direction).ok_or_else(|| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["PostTransaction", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid direction in entry")
         })?;
 
@@ -83,9 +63,6 @@ pub async fn post_transaction(
         chrono::Utc::now().date_naive()
     } else {
         NaiveDate::parse_from_str(&req.effective_date, "%Y-%m-%d").map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["PostTransaction", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid effective_date format (expected YYYY-MM-DD)")
         })?
     };
@@ -100,14 +77,11 @@ pub async fn post_transaction(
         None
     } else {
         Some(serde_json::from_str(&req.metadata).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["PostTransaction", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid metadata JSON")
         })?)
     };
 
-    let (journal_id, inserted_entries, currency) = db
+    let (journal_id, inserted_entries, _currency) = db
         .post_transaction(
             tenant_id,
             &entries,
@@ -118,9 +92,6 @@ pub async fn post_transaction(
         .await
         .map_err(|e| {
             warn!(error = %e, "Failed to post transaction");
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["PostTransaction", "error"])
-                .inc();
             match e {
                 service_core::error::AppError::BadRequest(err) => {
                     Status::invalid_argument(err.to_string())
@@ -128,23 +99,6 @@ pub async fn post_transaction(
                 _ => Status::internal("Failed to post transaction"),
             }
         })?;
-
-    GRPC_REQUESTS_TOTAL
-        .with_label_values(&["PostTransaction", "ok"])
-        .inc();
-    TRANSACTIONS_TOTAL.with_label_values(&["ok"]).inc();
-
-    for entry in &entries {
-        let direction_str = entry.direction.as_str();
-        ENTRIES_TOTAL.with_label_values(&[direction_str]).inc();
-        if let Some(amount_f64) = entry.amount.to_f64() {
-            AMOUNT_TOTAL
-                .with_label_values(&[direction_str, &currency])
-                .inc_by(amount_f64);
-        }
-    }
-
-    timer.observe_duration();
 
     info!(
         journal_id = %journal_id,
@@ -170,10 +124,6 @@ pub async fn get_transaction(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetTransactionRequest>,
 ) -> Result<Response<GetTransactionResponse>, Status> {
-    let timer = GRPC_REQUEST_DURATION
-        .with_label_values(&["GetTransaction"])
-        .start_timer();
-
     let auth = capability_checker
         .require_capability(&request, capabilities::LEDGER_TRANSACTION_READ)
         .await?;
@@ -182,9 +132,6 @@ pub async fn get_transaction(
     let req = request.into_inner();
 
     let journal_id = Uuid::parse_str(&req.journal_id).map_err(|_| {
-        GRPC_REQUESTS_TOTAL
-            .with_label_values(&["GetTransaction", "invalid_argument"])
-            .inc();
         Status::invalid_argument("Invalid journal_id format")
     })?;
 
@@ -193,24 +140,12 @@ pub async fn get_transaction(
         .await
         .map_err(|e| {
             warn!(error = %e, "Failed to get transaction");
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GetTransaction", "error"])
-                .inc();
             Status::internal("Failed to get transaction")
         })?;
 
-    timer.observe_duration();
-
     if entries.is_empty() {
-        GRPC_REQUESTS_TOTAL
-            .with_label_values(&["GetTransaction", "not_found"])
-            .inc();
         return Err(Status::not_found("Transaction not found"));
     }
-
-    GRPC_REQUESTS_TOTAL
-        .with_label_values(&["GetTransaction", "ok"])
-        .inc();
 
     Ok(Response::new(GetTransactionResponse {
         transaction: Some(entries_to_transaction(tenant_id, journal_id, &entries)),
@@ -227,10 +162,6 @@ pub async fn list_transactions(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListTransactionsRequest>,
 ) -> Result<Response<ListTransactionsResponse>, Status> {
-    let timer = GRPC_REQUEST_DURATION
-        .with_label_values(&["ListTransactions"])
-        .start_timer();
-
     let auth = capability_checker
         .require_capability(&request, capabilities::LEDGER_TRANSACTION_READ)
         .await?;
@@ -242,9 +173,6 @@ pub async fn list_transactions(
         None
     } else {
         Some(Uuid::parse_str(&req.account_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["ListTransactions", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid account_id format")
         })?)
     };
@@ -254,9 +182,6 @@ pub async fn list_transactions(
     } else {
         Some(
             NaiveDate::parse_from_str(&req.start_date, "%Y-%m-%d").map_err(|_| {
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["ListTransactions", "invalid_argument"])
-                    .inc();
                 Status::invalid_argument("Invalid start_date format (expected YYYY-MM-DD)")
             })?,
         )
@@ -267,9 +192,6 @@ pub async fn list_transactions(
     } else {
         Some(
             NaiveDate::parse_from_str(&req.end_date, "%Y-%m-%d").map_err(|_| {
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["ListTransactions", "invalid_argument"])
-                    .inc();
                 Status::invalid_argument("Invalid end_date format (expected YYYY-MM-DD)")
             })?,
         )
@@ -279,9 +201,6 @@ pub async fn list_transactions(
         None
     } else {
         Some(Uuid::parse_str(&req.page_token).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["ListTransactions", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid page_token format")
         })?)
     };
@@ -299,17 +218,8 @@ pub async fn list_transactions(
         .await
         .map_err(|e| {
             warn!(error = %e, "Failed to list transactions");
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["ListTransactions", "error"])
-                .inc();
             Status::internal("Failed to list transactions")
         })?;
-
-    timer.observe_duration();
-
-    GRPC_REQUESTS_TOTAL
-        .with_label_values(&["ListTransactions", "ok"])
-        .inc();
 
     let next_page_token = if transactions.len() == page_size as usize {
         transactions.last().map(|(jid, _)| jid.to_string())

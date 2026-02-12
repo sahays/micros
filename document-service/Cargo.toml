@@ -27,8 +27,6 @@ chrono = { workspace = true }
 base64 = { workspace = true }
 backoff = { workspace = true }
 tokio-util = { workspace = true }
-metrics = { workspace = true }
-metrics-exporter-prometheus = { workspace = true }
 tokio-stream = "0.1"
 
 # gRPC dependencies

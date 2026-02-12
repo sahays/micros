@@ -2,7 +2,6 @@
 
 use crate::models::{Account, AccountType, Direction, LedgerEntry, PostEntry};
 use crate::services::database::Database;
-use crate::services::metrics::DB_QUERY_DURATION;
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use service_core::error::AppError;
@@ -28,9 +27,6 @@ impl Database {
         idempotency_key: Option<&str>,
         metadata: Option<serde_json::Value>,
     ) -> Result<(Uuid, Vec<LedgerEntry>, String), AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["post_transaction"])
-            .start_timer();
 
         // Validate at least 2 entries
         if entries.len() < 2 {
@@ -192,7 +188,6 @@ impl Database {
                 // Return existing transaction
                 tx.rollback().await.ok();
                 let entries = self.get_entries_by_journal(tenant_id, journal_id).await?;
-                timer.observe_duration();
                 return Ok((journal_id, entries, first_currency.clone()));
             }
         }
@@ -243,7 +238,6 @@ impl Database {
 
                         if let Some(jid) = existing_journal {
                             let entries = self.get_entries_by_journal(tenant_id, jid).await?;
-                            timer.observe_duration();
                             return Ok((jid, entries, first_currency.clone()));
                         }
                     }
@@ -264,7 +258,6 @@ impl Database {
             AppError::DatabaseError(anyhow::anyhow!("Failed to commit transaction: {}", e))
         })?;
 
-        timer.observe_duration();
 
         info!(
             journal_id = %journal_id,
@@ -283,9 +276,6 @@ impl Database {
         tenant_id: Uuid,
         journal_id: Uuid,
     ) -> Result<Vec<LedgerEntry>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_entries_by_journal"])
-            .start_timer();
 
         let entries = sqlx::query_as::<_, LedgerEntry>(
             r#"
@@ -301,7 +291,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get entries: {}", e)))?;
 
-        timer.observe_duration();
 
         Ok(entries)
     }
@@ -318,9 +307,6 @@ impl Database {
         page_size: i32,
         page_token: Option<Uuid>,
     ) -> Result<Vec<(Uuid, Vec<LedgerEntry>)>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["list_transactions"])
-            .start_timer();
 
         let limit = page_size.clamp(1, 100) as i64;
 
@@ -400,7 +386,6 @@ impl Database {
             }
         }
 
-        timer.observe_duration();
 
         Ok(result)
     }

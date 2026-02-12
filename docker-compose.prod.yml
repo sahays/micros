@@ -3,7 +3,7 @@ services:
   # Production Configuration
   # ==============================================================================
   # All services including databases are containerized
-  # PLG+T observability stack runs on HOST (see observability/ directory)
+  # Logs: Structured JSON to stdout
   # PostgreSQL (auth), MongoDB (document/notification/payment), Redis (all)
   # Services exposed on 10xxx port range
   # ==============================================================================
@@ -93,17 +93,10 @@ services:
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-}
       - GMAIL_USER=${GMAIL_USER:-}
       - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD:-}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://host.docker.internal:4317}
       # Notification Service Integration (gRPC)
       - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-http://notification-service:3001}
       - NOTIFICATION_SERVICE_ENABLED=${NOTIFICATION_SERVICE_ENABLED:-true}
       - NOTIFICATION_SERVICE_TIMEOUT=${NOTIFICATION_SERVICE_TIMEOUT:-30}
-      # Admin API Key (required)
-      - ADMIN_API_KEY=${ADMIN_API_KEY}
-    labels:
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=3000"
-      - "prometheus.io/path=/health"
     logging:
       driver: "json-file"
       options:
@@ -143,15 +136,10 @@ services:
       - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:27017}
       - MONGODB_DATABASE=${MONGODB_DATABASE:-micros_db}
       - RUST_LOG=${RUST_LOG:-document_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://host.docker.internal:4317}
       - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
       - STORAGE_LOCAL_PATH=${STORAGE_LOCAL_PATH:-./storage}
       - REQUIRE_SIGNATURES=${REQUIRE_SIGNATURES:-true}
       - SIGNING_SECRET=${DOCUMENT_SERVICE_SIGNING_SECRET:-prod-signing-secret}
-    labels:
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=8080"
-      - "prometheus.io/path=/health"
     logging:
       driver: "json-file"
       options:
@@ -182,7 +170,6 @@ services:
       - MONGODB_URI=${NOTIFICATION_MONGODB_URI:-mongodb://mongo:27017}
       - MONGODB_DATABASE=${NOTIFICATION_MONGODB_DATABASE:-notification_db}
       - RUST_LOG=${RUST_LOG:-notification_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://host.docker.internal:4317}
       # SMTP Configuration
       - SMTP_HOST=${NOTIFICATION_SMTP_HOST:-smtp.gmail.com}
       - SMTP_PORT=${NOTIFICATION_SMTP_PORT:-587}
@@ -199,10 +186,6 @@ services:
       - FCM_PROJECT_ID=${NOTIFICATION_FCM_PROJECT_ID:-}
       - FCM_SERVICE_ACCOUNT_KEY=${NOTIFICATION_FCM_SERVICE_ACCOUNT_KEY:-}
       - FCM_ENABLED=${NOTIFICATION_FCM_ENABLED:-false}
-    labels:
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=3000"
-      - "prometheus.io/path=/health"
     logging:
       driver: "json-file"
       options:
@@ -233,7 +216,6 @@ services:
       - MONGODB_URI=${GENAI_MONGODB_URI:-mongodb://mongo:27017}
       - MONGODB_DATABASE=${GENAI_MONGODB_DATABASE:-genai_db}
       - RUST_LOG=${RUST_LOG:-genai_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://host.docker.internal:4317}
       # Model Configuration
       - GENAI_TEXT_MODEL=${GENAI_TEXT_MODEL:-gemini-2.0-flash}
       - GENAI_AUDIO_MODEL=${GENAI_AUDIO_MODEL:-gemini-2.0-flash}
@@ -243,10 +225,6 @@ services:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       # Document Service
       - DOCUMENT_SERVICE_GRPC_URL=${DOCUMENT_SERVICE_GRPC_URL:-http://document-service:8081}
-    labels:
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=8080"
-      - "prometheus.io/path=/health"
     logging:
       driver: "json-file"
       options:
@@ -278,7 +256,6 @@ services:
       - PAYMENT_DATABASE_NAME=${PAYMENT_DATABASE_NAME:-payment_db}
       - PAYMENT_REDIS_URL=${PAYMENT_REDIS_URL:-redis://redis:6379/0}
       - RUST_LOG=${RUST_LOG:-payment_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://host.docker.internal:4317}
       - PAYMENT_SIGNATURE_ENABLED=${PAYMENT_SIGNATURE_ENABLED:-true}
       - PAYMENT_SIGNATURE_SECRET=${PAYMENT_SIGNATURE_SECRET:-prod-secret}
       - PAYMENT_UPI_VPA=${PAYMENT_UPI_VPA:-merchant@upi}
@@ -287,10 +264,6 @@ services:
       - RAZORPAY_KEY_SECRET=${RAZORPAY_KEY_SECRET:-}
       - RAZORPAY_WEBHOOK_SECRET=${RAZORPAY_WEBHOOK_SECRET:-}
       - RAZORPAY_API_BASE_URL=${RAZORPAY_API_BASE_URL:-https://api.razorpay.com/v1}
-    labels:
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=3003"
-      - "prometheus.io/path=/health"
     logging:
       driver: "json-file"
       options:
@@ -324,15 +297,10 @@ services:
       - DATABASE_MAX_CONNECTIONS=${BILLING_DATABASE_MAX_CONNECTIONS:-10}
       - DATABASE_MIN_CONNECTIONS=${BILLING_DATABASE_MIN_CONNECTIONS:-2}
       - RUST_LOG=${RUST_LOG:-billing_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://host.docker.internal:4317}
       # Invoicing Service Integration (gRPC)
       - INVOICING_SERVICE_URL=${INVOICING_SERVICE_URL:-http://invoicing-service:8081}
       # Auth Service Integration
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
-    labels:
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=8080"
-      - "prometheus.io/path=/health"
     logging:
       driver: "json-file"
       options:
@@ -366,7 +334,6 @@ services:
       - DATABASE_MAX_CONNECTIONS=${RECONCILIATION_DATABASE_MAX_CONNECTIONS:-10}
       - DATABASE_MIN_CONNECTIONS=${RECONCILIATION_DATABASE_MIN_CONNECTIONS:-2}
       - RUST_LOG=${RUST_LOG:-reconciliation_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://host.docker.internal:4317}
       # Ledger Service Integration (gRPC)
       - LEDGER_SERVICE_URL=${LEDGER_SERVICE_URL:-http://ledger-service:8081}
       # GenAI Service Integration (gRPC)
@@ -375,10 +342,6 @@ services:
       - DOCUMENT_SERVICE_URL=${DOCUMENT_SERVICE_URL:-http://document-service:8081}
       # Auth Service Integration
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
-    labels:
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=8080"
-      - "prometheus.io/path=/health"
     logging:
       driver: "json-file"
       options:
@@ -412,13 +375,8 @@ services:
       - DATABASE_MAX_CONNECTIONS=${LEDGER_DATABASE_MAX_CONNECTIONS:-10}
       - DATABASE_MIN_CONNECTIONS=${LEDGER_DATABASE_MIN_CONNECTIONS:-2}
       - RUST_LOG=${RUST_LOG:-ledger_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://host.docker.internal:4317}
       # Auth Service Integration
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
-    labels:
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=8080"
-      - "prometheus.io/path=/health"
     logging:
       driver: "json-file"
       options:
@@ -452,13 +410,8 @@ services:
       - DATABASE_MAX_CONNECTIONS=${INVOICING_DATABASE_MAX_CONNECTIONS:-10}
       - DATABASE_MIN_CONNECTIONS=${INVOICING_DATABASE_MIN_CONNECTIONS:-2}
       - RUST_LOG=${RUST_LOG:-invoicing_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
-      - OTLP_ENDPOINT=${OTLP_ENDPOINT:-http://host.docker.internal:4317}
       # Auth Service Integration
       - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
-    labels:
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=8080"
-      - "prometheus.io/path=/health"
     logging:
       driver: "json-file"
       options:

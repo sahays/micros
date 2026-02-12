@@ -5,7 +5,7 @@ use crate::grpc::{
     proto::{invoicing_service_server::InvoicingServiceServer, FILE_DESCRIPTOR_SET},
     InvoicingServiceImpl,
 };
-use crate::services::{get_metrics, init_metrics, Database};
+use crate::services::Database;
 use axum::{
     extract::State, http::StatusCode, middleware, response::IntoResponse, routing::get, Json,
     Router,
@@ -13,7 +13,6 @@ use axum::{
 use serde_json::json;
 use service_core::error::AppError;
 use service_core::grpc::LedgerClient;
-use service_core::middleware::metrics::metrics_middleware;
 use service_core::middleware::tracing::request_id_middleware;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -78,16 +77,6 @@ async fn readiness_check(State(state): State<HealthState>) -> impl IntoResponse 
     }
 }
 
-/// Metrics endpoint for Prometheus scraping.
-async fn metrics_handler() -> impl IntoResponse {
-    let metrics = get_metrics();
-    (
-        StatusCode::OK,
-        [("content-type", "text/plain; charset=utf-8")],
-        metrics,
-    )
-}
-
 /// Application container for managing server lifecycle.
 pub struct Application {
     http_port: u16,
@@ -113,9 +102,6 @@ impl Application {
         config: InvoicingConfig,
         run_migrations: bool,
     ) -> Result<Self, AppError> {
-        // Initialize metrics
-        init_metrics();
-
         // Connect to database
         let db = Database::new(
             &config.database.url,
@@ -219,9 +205,7 @@ impl Application {
         let http_router = Router::new()
             .route("/health", get(health_check))
             .route("/ready", get(readiness_check))
-            .route("/metrics", get(metrics_handler))
             .layer(TraceLayer::new_for_http())
-            .layer(middleware::from_fn(metrics_middleware))
             .layer(middleware::from_fn(request_id_middleware))
             .with_state(health_state);
 

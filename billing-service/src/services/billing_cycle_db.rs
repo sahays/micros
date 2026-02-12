@@ -6,7 +6,6 @@ use crate::models::{
     ListBillingCyclesFilter, ListChargesFilter, SubscriptionStatus,
 };
 use crate::services::database::Database;
-use crate::services::metrics::DB_QUERY_DURATION;
 use crate::services::subscription_db::calculate_period_end;
 use chrono::NaiveDate;
 use service_core::error::AppError;
@@ -26,10 +25,6 @@ impl Database {
         period_start: NaiveDate,
         period_end: NaiveDate,
     ) -> Result<BillingCycle, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["create_billing_cycle"])
-            .start_timer();
-
         let cycle_id = Uuid::new_v4();
         let cycle = sqlx::query_as::<_, BillingCycle>(
             r#"
@@ -46,8 +41,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to create billing cycle: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(cycle)
     }
 
@@ -58,10 +51,6 @@ impl Database {
         tenant_id: Uuid,
         cycle_id: Uuid,
     ) -> Result<Option<BillingCycle>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_billing_cycle"])
-            .start_timer();
-
         let cycle = sqlx::query_as::<_, BillingCycle>(
             r#"
             SELECT bc.cycle_id, bc.subscription_id, bc.period_start, bc.period_end, bc.status, bc.invoice_id, bc.created_utc, bc.updated_utc
@@ -76,8 +65,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get billing cycle: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(cycle)
     }
 
@@ -87,10 +74,6 @@ impl Database {
         &self,
         subscription_id: Uuid,
     ) -> Result<Option<BillingCycle>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_current_billing_cycle"])
-            .start_timer();
-
         let cycle = sqlx::query_as::<_, BillingCycle>(
             r#"
             SELECT cycle_id, subscription_id, period_start, period_end, status, invoice_id, created_utc, updated_utc
@@ -105,8 +88,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get current billing cycle: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(cycle)
     }
 
@@ -118,10 +99,6 @@ impl Database {
         subscription_id: Uuid,
         filter: &ListBillingCyclesFilter,
     ) -> Result<Vec<BillingCycle>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["list_billing_cycles"])
-            .start_timer();
-
         let limit = filter.page_size.clamp(1, 100) as i64;
         let status_str = filter.status.map(|s| s.as_str().to_string());
 
@@ -166,8 +143,6 @@ impl Database {
         }
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to list billing cycles: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(cycles)
     }
 
@@ -179,10 +154,6 @@ impl Database {
         status: BillingCycleStatus,
         invoice_id: Option<Uuid>,
     ) -> Result<Option<BillingCycle>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["update_billing_cycle_status"])
-            .start_timer();
-
         let cycle = sqlx::query_as::<_, BillingCycle>(
             r#"
             UPDATE billing_cycles
@@ -197,8 +168,6 @@ impl Database {
         .fetch_optional(self.pool())
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to update billing cycle status: {}", e)))?;
-
-        timer.observe_duration();
 
         Ok(cycle)
     }
@@ -272,10 +241,6 @@ impl Database {
     /// Create a charge.
     #[instrument(skip(self, input), fields(cycle_id = %input.cycle_id))]
     pub async fn create_charge(&self, input: &CreateCharge) -> Result<Charge, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["create_charge"])
-            .start_timer();
-
         let charge_id = Uuid::new_v4();
         let charge = sqlx::query_as::<_, Charge>(
             r#"
@@ -299,8 +264,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to create charge: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(charge)
     }
 
@@ -311,10 +274,6 @@ impl Database {
         tenant_id: Uuid,
         charge_id: Uuid,
     ) -> Result<Option<Charge>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_charge"])
-            .start_timer();
-
         let charge = sqlx::query_as::<_, Charge>(
             r#"
             SELECT c.charge_id, c.cycle_id, c.charge_type, c.description, c.quantity, c.unit_price, c.amount, c.is_prorated, c.proration_factor, c.component_id, c.metadata, c.created_utc
@@ -330,8 +289,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get charge: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(charge)
     }
 
@@ -343,10 +300,6 @@ impl Database {
         cycle_id: Uuid,
         filter: &ListChargesFilter,
     ) -> Result<Vec<Charge>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["list_charges"])
-            .start_timer();
-
         let limit = filter.page_size.clamp(1, 100) as i64;
         let charge_type_str = filter.charge_type.map(|c| c.as_str().to_string());
 
@@ -392,8 +345,6 @@ impl Database {
             .await
         }
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to list charges: {}", e)))?;
-
-        timer.observe_duration();
 
         Ok(charges)
     }

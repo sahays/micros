@@ -1,6 +1,5 @@
 //! Database service for billing-service.
 
-use crate::services::metrics::DB_QUERY_DURATION;
 use service_core::error::AppError;
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use std::time::Duration;
@@ -48,16 +47,11 @@ impl Database {
     /// Check database health.
     #[instrument(skip(self))]
     pub async fn health_check(&self) -> Result<(), AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["health_check"])
-            .start_timer();
-
         sqlx::query("SELECT 1")
             .execute(&self.pool)
             .await
             .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Health check failed: {}", e)))?;
 
-        timer.observe_duration();
         Ok(())
     }
 

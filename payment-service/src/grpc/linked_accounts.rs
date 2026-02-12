@@ -6,7 +6,6 @@ use crate::grpc::helpers::{
 };
 use crate::grpc::proto::*;
 use crate::models;
-use crate::services::metrics::{record_commission_amount, record_linked_account};
 use crate::services::razorpay_accounts;
 use crate::startup::AppState;
 use mongodb::bson::DateTime;
@@ -120,8 +119,6 @@ pub async fn create_linked_account(
             tracing::error!(error = %e, "Failed to save linked account");
             Status::internal("Failed to save linked account")
         })?;
-
-    record_linked_account(&tenant.app_id, "created");
 
     Ok(Response::new(CreateLinkedAccountResponse {
         linked_account: Some(linked_account_to_proto(account)),
@@ -307,8 +304,6 @@ pub async fn update_commission_config(
             tracing::error!(error = %e, "Failed to update commission config");
             Status::internal("Failed to update commission config")
         })?;
-
-    record_commission_amount(&tenant.app_id, "INR", commission_model.value);
 
     let account = state
         .repository

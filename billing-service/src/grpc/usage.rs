@@ -5,12 +5,8 @@ use crate::grpc::helpers::*;
 use crate::grpc::proto::*;
 use crate::models::ListUsageFilter;
 use crate::models::RecordUsage;
-use crate::services::{
-    record_error, record_grpc_request, record_grpc_request_duration, record_usage_operation,
-    Database,
-};
+use crate::services::Database;
 use std::sync::Arc;
-use std::time::Instant;
 use tonic::{Request, Response, Status};
 
 pub async fn record_usage(
@@ -18,9 +14,6 @@ pub async fn record_usage(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<RecordUsageRequest>,
 ) -> Result<Response<RecordUsageResponse>, Status> {
-    let start = Instant::now();
-    let method = "RecordUsage";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_USAGE_WRITE)
         .await?;
@@ -43,15 +36,10 @@ pub async fn record_usage(
         .get_subscription(tenant_id, subscription_id)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     subscription.ok_or_else(|| {
-        record_grpc_request(method, "not_found");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::not_found("Subscription not found")
     })?;
 
@@ -70,15 +58,8 @@ pub async fn record_usage(
 
     let record = db.record_usage(&input).await.map_err(|e| {
         tracing::error!(error = %e, "Failed to record usage");
-        record_error("database", method);
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal(e.to_string())
     })?;
-
-    record_usage_operation(&tenant_id.to_string(), &component_id.to_string());
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(RecordUsageResponse {
         usage_record: Some(usage_record_to_proto(record)),
@@ -90,9 +71,6 @@ pub async fn get_usage(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetUsageRequest>,
 ) -> Result<Response<GetUsageResponse>, Status> {
-    let start = Instant::now();
-    let method = "GetUsage";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_USAGE_READ)
         .await?;
@@ -107,20 +85,12 @@ pub async fn get_usage(
         .get_usage_record(tenant_id, record_id)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let record = record.ok_or_else(|| {
-        record_grpc_request(method, "not_found");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::not_found("Usage record not found")
     })?;
-
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(GetUsageResponse {
         usage_record: Some(usage_record_to_proto(record)),
@@ -132,9 +102,6 @@ pub async fn list_usage(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListUsageRequest>,
 ) -> Result<Response<ListUsageResponse>, Status> {
-    let start = Instant::now();
-    let method = "ListUsage";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_USAGE_READ)
         .await?;
@@ -169,9 +136,6 @@ pub async fn list_usage(
         .list_usage_records(tenant_id, subscription_id, &filter)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
@@ -180,9 +144,6 @@ pub async fn list_usage(
         .last()
         .map(|r| r.record_id.clone())
         .unwrap_or_default();
-
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(ListUsageResponse {
         usage_records: proto_records,
@@ -195,9 +156,6 @@ pub async fn get_usage_summary(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetUsageSummaryRequest>,
 ) -> Result<Response<GetUsageSummaryResponse>, Status> {
-    let start = Instant::now();
-    let method = "GetUsageSummary";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_USAGE_READ)
         .await?;
@@ -221,9 +179,6 @@ pub async fn get_usage_summary(
         .get_usage_summary(tenant_id, subscription_id, cycle_id)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
@@ -238,9 +193,6 @@ pub async fn get_usage_summary(
             amount: s.amount.to_string(),
         })
         .collect();
-
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(GetUsageSummaryResponse {
         component_summaries: proto_summaries,

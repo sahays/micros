@@ -163,9 +163,6 @@ impl Worker {
             "Processing job started"
         );
 
-        metrics::counter!("document_processing_total", "mime_type" => job.mime_type.clone())
-            .increment(1);
-
         // Retry logic with exponential backoff
         let backoff = ExponentialBackoff {
             max_elapsed_time: Some(Duration::from_secs(300)),
@@ -183,11 +180,6 @@ impl Worker {
             Ok(metadata) => {
                 self.update_document_success(&document_id, metadata).await;
 
-                metrics::counter!("document_processing_success", "mime_type" => job.mime_type.clone())
-                    .increment(1);
-                metrics::histogram!("document_processing_duration", "mime_type" => job.mime_type.clone())
-                    .record(start.elapsed().as_secs_f64());
-
                 tracing::info!(
                     worker_id = self.id,
                     document_id = %document_id,
@@ -198,9 +190,6 @@ impl Worker {
             Err(e) => {
                 self.update_document_failure(&document_id, e.to_string())
                     .await;
-
-                metrics::counter!("document_processing_failed", "mime_type" => job.mime_type)
-                    .increment(1);
 
                 tracing::error!(
                     worker_id = self.id,

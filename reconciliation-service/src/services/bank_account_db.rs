@@ -4,7 +4,6 @@
 
 use crate::models::{BankAccount, BankStatement, StatementStatus, TransactionStatus};
 use crate::services::database::{Database, ExtractedTransaction};
-use crate::services::metrics::DB_QUERY_DURATION;
 use chrono::{NaiveDate, Utc};
 use rust_decimal::Decimal;
 use service_core::error::AppError;
@@ -26,10 +25,6 @@ impl Database {
         account_number_masked: &str,
         currency: &str,
     ) -> Result<BankAccount, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["create_bank_account"])
-            .start_timer();
-
         let bank_account_id = Uuid::new_v4();
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
@@ -52,8 +47,6 @@ impl Database {
         .fetch_one(self.pool())
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to create bank account: {}", e)))?;
-
-        timer.observe_duration();
         info!(bank_account_id = %account.bank_account_id, "Bank account created");
 
         Ok(account)
@@ -65,10 +58,6 @@ impl Database {
         tenant_id: &str,
         bank_account_id: &str,
     ) -> Result<Option<BankAccount>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_bank_account"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let account_uuid = Uuid::from_str(bank_account_id)
@@ -87,8 +76,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get bank account: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(account)
     }
 
@@ -99,10 +86,6 @@ impl Database {
         page_size: i32,
         page_token: Option<&str>,
     ) -> Result<(Vec<BankAccount>, Option<String>), AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["list_bank_accounts"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let limit = page_size.clamp(1, 100) as i64;
@@ -141,8 +124,6 @@ impl Database {
         }
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to list bank accounts: {}", e)))?;
 
-        timer.observe_duration();
-
         let has_more = accounts.len() > limit as usize;
         let mut accounts = accounts;
         if has_more {
@@ -164,10 +145,6 @@ impl Database {
         tenant_id: &str,
         ledger_account_id: &str,
     ) -> Result<Option<BankAccount>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_bank_account_by_ledger_id"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let ledger_uuid = Uuid::from_str(ledger_account_id)
@@ -186,8 +163,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get bank account by ledger id: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(account)
     }
 
@@ -199,10 +174,6 @@ impl Database {
         bank_name: Option<&str>,
         account_number_masked: Option<&str>,
     ) -> Result<Option<BankAccount>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["update_bank_account"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let account_uuid = Uuid::from_str(bank_account_id)
@@ -225,8 +196,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to update bank account: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(account)
     }
 
@@ -241,10 +210,6 @@ impl Database {
         bank_account_id: &str,
         document_id: &str,
     ) -> Result<BankStatement, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["create_statement"])
-            .start_timer();
-
         let statement_id = Uuid::new_v4();
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
@@ -273,8 +238,6 @@ impl Database {
         .fetch_one(self.pool())
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to create statement: {}", e)))?;
-
-        timer.observe_duration();
         info!(statement_id = %statement.statement_id, "Statement created");
 
         Ok(statement)
@@ -286,10 +249,6 @@ impl Database {
         tenant_id: &str,
         statement_id: &str,
     ) -> Result<Option<BankStatement>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_statement"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let stmt_uuid = Uuid::from_str(statement_id)
@@ -308,8 +267,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get statement: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(statement)
     }
 
@@ -321,10 +278,6 @@ impl Database {
         page_size: i32,
         page_token: Option<&str>,
     ) -> Result<(Vec<BankStatement>, Option<String>), AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["list_statements"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let account_uuid = Uuid::from_str(bank_account_id)
@@ -367,8 +320,6 @@ impl Database {
         }
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to list statements: {}", e)))?;
 
-        timer.observe_duration();
-
         let has_more = statements.len() > limit as usize;
         let mut statements = statements;
         if has_more {
@@ -389,10 +340,6 @@ impl Database {
         tenant_id: &str,
         statement_id: &str,
     ) -> Result<(BankStatement, i32), AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["commit_statement"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let stmt_uuid = Uuid::from_str(statement_id)
@@ -431,8 +378,6 @@ impl Database {
             AppError::DatabaseError(anyhow::anyhow!("Failed to commit transactions: {}", e))
         })?;
 
-        timer.observe_duration();
-
         Ok((statement, result.rows_affected() as i32))
     }
 
@@ -442,10 +387,6 @@ impl Database {
         tenant_id: &str,
         statement_id: &str,
     ) -> Result<(), AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["abandon_statement"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let stmt_uuid = Uuid::from_str(statement_id)
@@ -465,8 +406,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to abandon statement: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(())
     }
 
@@ -483,10 +422,6 @@ impl Database {
         status: StatementStatus,
         error_message: Option<&str>,
     ) -> Result<BankStatement, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["update_statement_extraction"])
-            .start_timer();
-
         let stmt_uuid = Uuid::from_str(statement_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid statement_id")))?;
 
@@ -509,8 +444,6 @@ impl Database {
         .fetch_one(self.pool())
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to update statement extraction: {}", e)))?;
-
-        timer.observe_duration();
         info!(statement_id = %statement.statement_id, status = %status.as_str(), "Statement extraction updated");
 
         Ok(statement)
@@ -524,10 +457,6 @@ impl Database {
         statement_id: &str,
         transactions: &[ExtractedTransaction],
     ) -> Result<i32, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["create_extracted_transactions"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let stmt_uuid = Uuid::from_str(statement_id)
@@ -558,8 +487,6 @@ impl Database {
             .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to create transaction: {}", e)))?;
             count += 1;
         }
-
-        timer.observe_duration();
         info!(statement_id = %statement_id, count = %count, "Extracted transactions created");
 
         Ok(count)

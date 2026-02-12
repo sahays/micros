@@ -2,7 +2,7 @@
 
 use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::proto::*;
-use crate::services::{record_error, record_reconciliation_operation, Database};
+use crate::services::Database;
 use service_core::grpc::LedgerClient;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -71,12 +71,8 @@ pub async fn start_reconciliation(
         )
         .await
         .map_err(|e| {
-            record_reconciliation_operation("start", "failed");
-            record_error("database_error");
             Status::internal(format!("Failed to start reconciliation: {}", e))
         })?;
-
-    record_reconciliation_operation("start", "success");
 
     Ok(Response::new(StartReconciliationResponse {
         reconciliation: Some(reconciliation.into()),
@@ -144,12 +140,8 @@ pub async fn complete_reconciliation(
         .complete_reconciliation(&_auth.tenant_id, &req.reconciliation_id)
         .await
         .map_err(|e| {
-            record_reconciliation_operation("complete", "failed");
-            record_error("database_error");
             Status::internal(format!("Failed to complete reconciliation: {}", e))
         })?;
-
-    record_reconciliation_operation("complete", "success");
 
     Ok(Response::new(CompleteReconciliationResponse {
         reconciliation: Some(reconciliation.into()),
@@ -169,12 +161,8 @@ pub async fn abandon_reconciliation(
     db.abandon_reconciliation(&_auth.tenant_id, &req.reconciliation_id)
         .await
         .map_err(|e| {
-            record_reconciliation_operation("abandon", "failed");
-            record_error("database_error");
             Status::internal(format!("Failed to abandon reconciliation: {}", e))
         })?;
-
-    record_reconciliation_operation("abandon", "success");
 
     Ok(Response::new(AbandonReconciliationResponse {
         success: true,
@@ -232,12 +220,8 @@ pub async fn create_adjustment(
         )
         .await
         .map_err(|e| {
-            record_reconciliation_operation("adjustment", "failed");
-            record_error("database_error");
             Status::internal(format!("Failed to create adjustment: {}", e))
         })?;
-
-    record_reconciliation_operation("adjustment", "success");
 
     Ok(Response::new(CreateAdjustmentResponse {
         adjustment: Some(adjustment.into()),

@@ -6,7 +6,6 @@
 use crate::grpc::document_proto::{
     document_service_client::DocumentServiceClient, GetDocumentRequest, GetProcessingStatusRequest,
 };
-use crate::services::metrics::{record_document_fetch, record_document_fetch_error};
 use crate::services::providers::DocumentContext;
 use std::sync::Arc;
 use std::time::Instant;
@@ -79,14 +78,12 @@ impl DocumentFetcher {
         let channel = Channel::from_shared(self.endpoint.clone())
             .map_err(|e| {
                 let err = DocumentFetcherError::ConnectionError(e.to_string());
-                record_document_fetch_error(err.error_type());
                 tracing::error!(error = %e, "Invalid endpoint URL");
                 err
             })?
             .connect()
             .await
             .map_err(|e| {
-                record_document_fetch_error("connection");
                 tracing::error!(error = %e, "Failed to connect to document-service");
                 e
             })?;
@@ -94,7 +91,6 @@ impl DocumentFetcher {
         let client = DocumentServiceClient::new(channel);
         let duration = start.elapsed();
 
-        record_document_fetch("connect", duration.as_secs_f64());
         tracing::info!(
             duration_ms = duration.as_millis(),
             "Connected to document-service"
@@ -168,7 +164,6 @@ impl DocumentFetcher {
                         error_type = e.error_type(),
                         "Failed to fetch document text, using original context"
                     );
-                    record_document_fetch_error(e.error_type());
                     // Continue with original document context
                     enriched.push(doc.clone());
                     error_count += 1;
@@ -177,7 +172,6 @@ impl DocumentFetcher {
         }
 
         let duration = start.elapsed();
-        record_document_fetch("enrich_documents", duration.as_secs_f64());
 
         tracing::info!(
             duration_ms = duration.as_millis(),
@@ -197,7 +191,6 @@ impl DocumentFetcher {
         &self,
         document_id: &str,
     ) -> Result<Option<String>, DocumentFetcherError> {
-        let start = Instant::now();
         let mut client = self.get_client().await?;
 
         // First, check if document exists and is ready
@@ -209,13 +202,11 @@ impl DocumentFetcher {
             .await
             .map_err(|e| {
                 tracing::warn!(error = %e, "Failed to get document");
-                record_document_fetch_error("grpc");
                 e
             })?;
 
         let document = doc_response.into_inner().document.ok_or_else(|| {
             tracing::debug!("Document not found");
-            record_document_fetch_error("not_found");
             DocumentFetcherError::NotFound(document_id.to_string())
         })?;
 
@@ -225,8 +216,6 @@ impl DocumentFetcher {
                 status = document.status,
                 "Document not ready for text extraction"
             );
-            let duration = start.elapsed();
-            record_document_fetch("get_document", duration.as_secs_f64());
             return Ok(None);
         }
 
@@ -234,11 +223,8 @@ impl DocumentFetcher {
         if let Some(metadata) = document.processing_metadata {
             if let Some(text) = metadata.extracted_text {
                 if !text.is_empty() {
-                    let duration = start.elapsed();
-                    record_document_fetch("get_document", duration.as_secs_f64());
                     tracing::debug!(
                         text_len = text.len(),
-                        duration_ms = duration.as_millis(),
                         "Found extracted text in document metadata"
                     );
                     return Ok(Some(text));
@@ -255,7 +241,6 @@ impl DocumentFetcher {
             .await
             .map_err(|e| {
                 tracing::warn!(error = %e, "Failed to get processing status");
-                record_document_fetch_error("grpc");
                 e
             })?;
 
@@ -263,11 +248,8 @@ impl DocumentFetcher {
         if let Some(metadata) = status.metadata {
             if let Some(text) = metadata.extracted_text {
                 if !text.is_empty() {
-                    let duration = start.elapsed();
-                    record_document_fetch("get_processing_status", duration.as_secs_f64());
                     tracing::debug!(
                         text_len = text.len(),
-                        duration_ms = duration.as_millis(),
                         "Found extracted text in processing status"
                     );
                     return Ok(Some(text));
@@ -275,12 +257,7 @@ impl DocumentFetcher {
             }
         }
 
-        let duration = start.elapsed();
-        record_document_fetch("get_document", duration.as_secs_f64());
-        tracing::debug!(
-            duration_ms = duration.as_millis(),
-            "No extracted text found for document"
-        );
+        tracing::debug!("No extracted text found for document");
 
         Ok(None)
     }

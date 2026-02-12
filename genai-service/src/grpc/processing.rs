@@ -2,7 +2,7 @@
 
 use crate::config::OutputFormat;
 use crate::grpc::helpers::{
-    build_generation_params, build_stream_generation_params, finish_reason_str,
+    build_generation_params, build_stream_generation_params,
     finish_reason_to_proto, output_format_str, output_format_to_proto, proto_to_document_context,
     proto_to_output_format, provider_error_to_status,
 };
@@ -11,10 +11,6 @@ use crate::grpc::proto::{
     TokenUsage,
 };
 use crate::models::UsageRecord;
-use crate::services::metrics::{
-    dec_grpc_in_flight, inc_grpc_in_flight, record_genai_request, record_grpc_request,
-    record_tokens,
-};
 use crate::services::providers::{DocumentContext, StreamChunk};
 use crate::startup::AppState;
 use futures::StreamExt;
@@ -40,8 +36,6 @@ pub async fn process(
     request: Request<ProcessRequest>,
 ) -> Result<Response<ProcessResponse>, Status> {
     let start = Instant::now();
-    let method = "Process";
-    inc_grpc_in_flight(method);
 
     let auth = state
         .capability_checker
@@ -62,8 +56,6 @@ pub async fn process(
     span.record("doc_count", req.documents.len());
 
     if req.prompt.is_empty() {
-        dec_grpc_in_flight(method);
-        record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
         tracing::warn!(request_id = %request_id, "Empty prompt rejected");
         return Err(Status::invalid_argument("Prompt is required"));
     }
@@ -74,8 +66,6 @@ pub async fn process(
     if output_format == OutputFormat::StructuredJson {
         match &req.output_schema {
             None => {
-                dec_grpc_in_flight(method);
-                record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
                 tracing::warn!(request_id = %request_id, "Missing output_schema for STRUCTURED_JSON");
                 return Err(Status::invalid_argument(
                     "output_schema is required for STRUCTURED_JSON output format",
@@ -83,8 +73,6 @@ pub async fn process(
             }
             Some(schema) => {
                 if serde_json::from_str::<serde_json::Value>(schema).is_err() {
-                    dec_grpc_in_flight(method);
-                    record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
                     tracing::warn!(request_id = %request_id, "Invalid JSON schema");
                     return Err(Status::invalid_argument("output_schema must be valid JSON"));
                 }
@@ -100,8 +88,6 @@ pub async fn process(
 
     if let Some(ref requested_model) = model_override {
         if !state.config.is_valid_model(requested_model) {
-            dec_grpc_in_flight(method);
-            record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
             let valid = state.config.valid_models().join(", ");
             tracing::warn!(
                 request_id = %request_id,
@@ -149,13 +135,7 @@ pub async fn process(
     {
         Ok(response) => response,
         Err(e) => {
-            dec_grpc_in_flight(method);
             let status = provider_error_to_status(e);
-            record_grpc_request(
-                method,
-                status.code().description(),
-                start.elapsed().as_secs_f64(),
-            );
             return Err(status);
         }
     };
@@ -181,22 +161,7 @@ pub async fn process(
         total_tokens: provider_response.input_tokens + provider_response.output_tokens,
     };
 
-    record_tokens(
-        &auth.tenant_id,
-        &model,
-        provider_response.input_tokens,
-        provider_response.output_tokens,
-    );
-    record_genai_request(
-        &auth.tenant_id,
-        output_format_str(output_format),
-        &model,
-        finish_reason_str(provider_response.finish_reason),
-    );
-
     let duration = start.elapsed();
-    dec_grpc_in_flight(method);
-    record_grpc_request(method, "OK", duration.as_secs_f64());
 
     tracing::info!(
         request_id = %request_id,
@@ -264,8 +229,6 @@ pub async fn process_stream(
     request: Request<ProcessStreamRequest>,
 ) -> Result<Response<ProcessStreamResult>, Status> {
     let start = Instant::now();
-    let method = "ProcessStream";
-    inc_grpc_in_flight(method);
 
     let auth = state
         .capability_checker
@@ -286,8 +249,6 @@ pub async fn process_stream(
     span.record("doc_count", req.documents.len());
 
     if req.prompt.is_empty() {
-        dec_grpc_in_flight(method);
-        record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
         tracing::warn!(request_id = %request_id, "Empty prompt rejected");
         return Err(Status::invalid_argument("Prompt is required"));
     }
@@ -298,8 +259,6 @@ pub async fn process_stream(
     if output_format == OutputFormat::StructuredJson {
         match &req.output_schema {
             None => {
-                dec_grpc_in_flight(method);
-                record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
                 tracing::warn!(request_id = %request_id, "Missing output_schema for STRUCTURED_JSON");
                 return Err(Status::invalid_argument(
                     "output_schema is required for STRUCTURED_JSON output format",
@@ -307,8 +266,6 @@ pub async fn process_stream(
             }
             Some(schema) => {
                 if serde_json::from_str::<serde_json::Value>(schema).is_err() {
-                    dec_grpc_in_flight(method);
-                    record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
                     tracing::warn!(request_id = %request_id, "Invalid JSON schema");
                     return Err(Status::invalid_argument("output_schema must be valid JSON"));
                 }
@@ -324,8 +281,6 @@ pub async fn process_stream(
 
     if let Some(ref requested_model) = model_override {
         if !state.config.is_valid_model(requested_model) {
-            dec_grpc_in_flight(method);
-            record_grpc_request(method, "INVALID_ARGUMENT", start.elapsed().as_secs_f64());
             let valid = state.config.valid_models().join(", ");
             tracing::warn!(
                 request_id = %request_id,
@@ -373,13 +328,7 @@ pub async fn process_stream(
     {
         Ok(stream) => stream,
         Err(e) => {
-            dec_grpc_in_flight(method);
             let status = provider_error_to_status(e);
-            record_grpc_request(
-                method,
-                status.code().description(),
-                start.elapsed().as_secs_f64(),
-            );
             return Err(status);
         }
     };
@@ -397,7 +346,6 @@ pub async fn process_stream(
     let model_clone = model.clone();
     let request_id_clone = request_id.clone();
     let output_format_clone = output_format;
-    let tenant_id_clone = auth.tenant_id.clone();
 
     tokio::spawn(async move {
         let stream_start = Instant::now();
@@ -439,17 +387,7 @@ pub async fn process_stream(
                         output_tokens,
                         finish_reason,
                     } => {
-                        record_tokens(&tenant_id_clone, &model_clone, input_tokens, output_tokens);
-                        record_genai_request(
-                            &tenant_id_clone,
-                            output_format_str(output_format_clone),
-                            &model_clone,
-                            finish_reason_str(finish_reason),
-                        );
-
                         let stream_duration = stream_start.elapsed();
-                        dec_grpc_in_flight("ProcessStream");
-                        record_grpc_request("ProcessStream", "OK", stream_duration.as_secs_f64());
 
                         tracing::info!(
                             request_id = %request_id_clone,
@@ -484,12 +422,6 @@ pub async fn process_stream(
                     }
                 },
                 Err(e) => {
-                    dec_grpc_in_flight("ProcessStream");
-                    record_grpc_request(
-                        "ProcessStream",
-                        "INTERNAL",
-                        stream_start.elapsed().as_secs_f64(),
-                    );
                     tracing::error!(
                         request_id = %request_id_clone,
                         error = %e,
@@ -504,7 +436,6 @@ pub async fn process_stream(
                     request_id = %request_id_clone,
                     "Client disconnected, stopping stream"
                 );
-                dec_grpc_in_flight("ProcessStream");
                 break;
             }
         }

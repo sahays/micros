@@ -1,4 +1,3 @@
-pub mod metrics;
 pub mod razorpay;
 pub mod repository;
 pub mod upi;
@@ -21,6 +20,5 @@ pub mod razorpay_settlements;
 pub mod razorpay_subscriptions;
 pub mod razorpay_transfers;
 
-pub use metrics::{get_metrics, init_metrics};
 pub use razorpay::RazorpayClient;
 pub use repository::PaymentRepository;

@@ -70,11 +70,7 @@ pub use genai_client::{
     BANK_STATEMENT_PROMPT, BANK_STATEMENT_SCHEMA_V1, GenaiClient, GenaiClientConfig,
 };
 pub use health::{HealthComponents, HealthReporter, HealthStatus, create_health_service};
-pub use interceptors::{
-    TENANT_ID_KEY, extract_request_id, extract_tenant_id, extract_traceparent, inject_tenant_id,
-    inject_trace_context, inject_trace_context_with_request_id, metrics_interceptor,
-    trace_context_interceptor,
-};
+pub use interceptors::{TENANT_ID_KEY, extract_request_id, extract_tenant_id, inject_tenant_id};
 pub use ledger_client::{LedgerClient, LedgerClientConfig, TransactionEntry};
 pub use notification_client::{
     BatchNotification, BatchNotificationResult, NotificationChannelProto, NotificationClient,

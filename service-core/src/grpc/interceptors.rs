@@ -1,93 +1,16 @@
 //! gRPC interceptors for cross-cutting concerns.
 //!
 //! Provides interceptors for:
-//! - Trace context propagation (W3C traceparent/tracestate)
-//! - Request logging
-//! - Metrics collection (with tenant_id for metering)
+//! - Request ID extraction
+//! - Tenant ID injection/extraction
 
-use metrics::counter;
-use opentelemetry::trace::TraceContextExt;
-use tonic::{Request, Status};
-use tracing::Span;
-use tracing_opentelemetry::OpenTelemetrySpanExt;
-
-/// gRPC metadata key for W3C traceparent header.
-pub const TRACEPARENT_KEY: &str = "traceparent";
-
-/// gRPC metadata key for W3C tracestate header.
-pub const TRACESTATE_KEY: &str = "tracestate";
+use tonic::Request;
 
 /// gRPC metadata key for request ID.
 pub const REQUEST_ID_KEY: &str = "x-request-id";
 
 /// gRPC metadata key for tenant ID (used for metering).
 pub const TENANT_ID_KEY: &str = "x-tenant-id";
-
-/// Default tenant ID used when x-tenant-id metadata is missing.
-const UNKNOWN_TENANT: &str = "unknown";
-
-/// Interceptor that extracts trace context from incoming requests.
-///
-/// This interceptor reads the `traceparent` and `tracestate` metadata from
-/// incoming gRPC requests and sets up the current span with the extracted context.
-///
-/// # Example
-///
-/// ```ignore
-/// use service_core::grpc::interceptors::trace_context_interceptor;
-///
-/// let layer = tonic::service::interceptor(trace_context_interceptor);
-/// ```
-#[allow(clippy::result_large_err)]
-pub fn trace_context_interceptor(request: Request<()>) -> Result<Request<()>, Status> {
-    // Extract traceparent from metadata
-    if let Some(traceparent) = request.metadata().get(TRACEPARENT_KEY)
-        && let Ok(traceparent_str) = traceparent.to_str()
-    {
-        // Log the trace context for debugging
-        tracing::debug!(traceparent = %traceparent_str, "Received trace context");
-    }
-
-    // Extract request ID if present
-    if let Some(request_id) = request.metadata().get(REQUEST_ID_KEY)
-        && let Ok(request_id_str) = request_id.to_str()
-    {
-        tracing::Span::current().record("request_id", request_id_str);
-    }
-
-    Ok(request)
-}
-
-/// Interceptor that records gRPC request metrics with tenant_id for metering.
-///
-/// Extracts `x-tenant-id` from request metadata and increments the
-/// `grpc_metering_total` counter with tenant_id label.
-///
-/// Note: Service and method names are not available in tonic interceptors.
-/// Use this for tenant-level metering. For method-level metrics, use
-/// service-specific metrics in handlers.
-///
-/// # Example
-///
-/// ```ignore
-/// use service_core::grpc::interceptors::metrics_interceptor;
-///
-/// let layer = tonic::service::interceptor(metrics_interceptor);
-/// ```
-#[allow(clippy::result_large_err)]
-pub fn metrics_interceptor(request: Request<()>) -> Result<Request<()>, Status> {
-    let tenant_id = request
-        .metadata()
-        .get(TENANT_ID_KEY)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or(UNKNOWN_TENANT);
-
-    let labels = [("tenant_id", tenant_id.to_string())];
-
-    counter!("grpc_metering_total", &labels).increment(1);
-
-    Ok(request)
-}
 
 /// Extract tenant ID from incoming gRPC request metadata.
 pub fn extract_tenant_id<T>(request: &Request<T>) -> Option<String> {
@@ -105,70 +28,6 @@ pub fn inject_tenant_id<T>(request: &mut Request<T>, tenant_id: &str) {
     }
 }
 
-/// Inject current trace context into outgoing gRPC request metadata.
-///
-/// This function should be called before making a gRPC client call to propagate
-/// the current trace context to downstream services.
-///
-/// # Example
-///
-/// ```ignore
-/// use service_core::grpc::interceptors::inject_trace_context;
-///
-/// let mut request = tonic::Request::new(my_message);
-/// inject_trace_context(&mut request);
-/// client.some_rpc(request).await?;
-/// ```
-pub fn inject_trace_context<T>(request: &mut Request<T>) {
-    let span = Span::current();
-    let context = span.context();
-    let otel_span = context.span();
-    let span_context = otel_span.span_context();
-
-    if span_context.is_valid() {
-        // Format: version-trace_id-span_id-trace_flags
-        let traceparent = format!(
-            "00-{}-{}-{:02x}",
-            span_context.trace_id(),
-            span_context.span_id(),
-            span_context.trace_flags().to_u8()
-        );
-
-        if let Ok(value) = traceparent.parse() {
-            request.metadata_mut().insert(TRACEPARENT_KEY, value);
-        }
-
-        // Include tracestate if present
-        let trace_state = span_context.trace_state();
-        let tracestate_str = trace_state.header();
-        if !tracestate_str.is_empty()
-            && let Ok(value) = tracestate_str.parse()
-        {
-            request.metadata_mut().insert(TRACESTATE_KEY, value);
-        }
-    }
-}
-
-/// Inject trace context and request ID into outgoing gRPC request metadata.
-pub fn inject_trace_context_with_request_id<T>(request: &mut Request<T>, request_id: &str) {
-    inject_trace_context(request);
-
-    if let Ok(value) = request_id.parse() {
-        request.metadata_mut().insert(REQUEST_ID_KEY, value);
-    }
-}
-
-/// Extract trace context from incoming gRPC request metadata.
-///
-/// Returns the traceparent header value if present.
-pub fn extract_traceparent<T>(request: &Request<T>) -> Option<String> {
-    request
-        .metadata()
-        .get(TRACEPARENT_KEY)
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_string())
-}
-
 /// Extract request ID from incoming gRPC request metadata.
 pub fn extract_request_id<T>(request: &Request<T>) -> Option<String> {
     request
@@ -183,18 +42,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_inject_and_extract_request_id() {
+    fn test_inject_and_extract_tenant_id() {
         let mut request = Request::new(());
-        inject_trace_context_with_request_id(&mut request, "test-request-123");
+        inject_tenant_id(&mut request, "tenant-123");
 
-        let extracted = extract_request_id(&request);
-        assert_eq!(extracted, Some("test-request-123".to_string()));
+        let extracted = extract_tenant_id(&request);
+        assert_eq!(extracted, Some("tenant-123".to_string()));
     }
 
     #[test]
-    fn test_interceptor_passes_through() {
-        let request = Request::new(());
-        let result = trace_context_interceptor(request);
-        assert!(result.is_ok());
+    fn test_extract_request_id() {
+        let mut request = Request::new(());
+        if let Ok(value) = "req-456".parse() {
+            request.metadata_mut().insert(REQUEST_ID_KEY, value);
+        }
+
+        let extracted = extract_request_id(&request);
+        assert_eq!(extracted, Some("req-456".to_string()));
     }
 }

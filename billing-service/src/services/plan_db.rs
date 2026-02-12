@@ -5,7 +5,6 @@ use crate::models::{
     BillingPlan, CreatePlan, CreateUsageComponent, ListPlansFilter, UpdatePlan, UsageComponent,
 };
 use crate::services::database::Database;
-use crate::services::metrics::DB_QUERY_DURATION;
 use service_core::error::AppError;
 use tracing::{info, instrument};
 use uuid::Uuid;
@@ -18,10 +17,6 @@ impl Database {
     /// Create a new billing plan.
     #[instrument(skip(self, input), fields(tenant_id = %input.tenant_id))]
     pub async fn create_plan(&self, input: &CreatePlan) -> Result<BillingPlan, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["create_plan"])
-            .start_timer();
-
         let plan_id = Uuid::new_v4();
         let plan = sqlx::query_as::<_, BillingPlan>(
             r#"
@@ -44,7 +39,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to create plan: {}", e)))?;
 
-        timer.observe_duration();
         info!(plan_id = %plan.plan_id, name = %plan.name, "Plan created");
 
         Ok(plan)
@@ -56,10 +50,6 @@ impl Database {
         &self,
         input: &CreateUsageComponent,
     ) -> Result<UsageComponent, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["create_usage_component"])
-            .start_timer();
-
         let component_id = Uuid::new_v4();
         let component = sqlx::query_as::<_, UsageComponent>(
             r#"
@@ -78,8 +68,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to create usage component: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(component)
     }
 
@@ -90,10 +78,6 @@ impl Database {
         tenant_id: Uuid,
         plan_id: Uuid,
     ) -> Result<Option<BillingPlan>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_plan"])
-            .start_timer();
-
         let plan = sqlx::query_as::<_, BillingPlan>(
             r#"
             SELECT plan_id, tenant_id, name, description, billing_interval, interval_count, base_price, currency, tax_rate_id, is_active, is_archived, metadata, created_utc, updated_utc
@@ -107,8 +91,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get plan: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(plan)
     }
 
@@ -118,10 +100,6 @@ impl Database {
         &self,
         plan_id: Uuid,
     ) -> Result<Vec<UsageComponent>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_usage_components"])
-            .start_timer();
-
         let components = sqlx::query_as::<_, UsageComponent>(
             r#"
             SELECT component_id, plan_id, name, unit_name, unit_price, included_units, is_active, created_utc
@@ -135,8 +113,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get usage components: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(components)
     }
 
@@ -147,10 +123,6 @@ impl Database {
         tenant_id: Uuid,
         filter: &ListPlansFilter,
     ) -> Result<Vec<BillingPlan>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["list_plans"])
-            .start_timer();
-
         let limit = filter.page_size.clamp(1, 100) as i64;
 
         let plans = if let Some(cursor) = filter.page_token {
@@ -190,8 +162,6 @@ impl Database {
         }
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to list plans: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(plans)
     }
 
@@ -203,10 +173,6 @@ impl Database {
         plan_id: Uuid,
         input: &UpdatePlan,
     ) -> Result<Option<BillingPlan>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["update_plan"])
-            .start_timer();
-
         let plan = sqlx::query_as::<_, BillingPlan>(
             r#"
             UPDATE billing_plans
@@ -230,8 +196,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to update plan: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(plan)
     }
 
@@ -242,10 +206,6 @@ impl Database {
         tenant_id: Uuid,
         plan_id: Uuid,
     ) -> Result<Option<BillingPlan>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["archive_plan"])
-            .start_timer();
-
         let plan = sqlx::query_as::<_, BillingPlan>(
             r#"
             UPDATE billing_plans
@@ -259,8 +219,6 @@ impl Database {
         .fetch_optional(self.pool())
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to archive plan: {}", e)))?;
-
-        timer.observe_duration();
 
         if let Some(ref p) = plan {
             info!(plan_id = %p.plan_id, "Plan archived");

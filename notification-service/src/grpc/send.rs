@@ -6,9 +6,7 @@ use crate::grpc::proto::{
 };
 use crate::models::Notification;
 use crate::models::NotificationStatus;
-use crate::services::{
-    record_notification, record_provider_call, EmailMessage, ProviderError, PushMessage, SmsMessage,
-};
+use crate::services::{EmailMessage, ProviderError, PushMessage, SmsMessage};
 use crate::startup::AppState;
 use tonic::{Request, Response, Status};
 
@@ -83,10 +81,6 @@ pub async fn send_email(
                 )
                 .await;
 
-            // Record metering
-            record_notification(&tenant_id, "email", "sent");
-            record_provider_call("smtp", "success");
-
             tracing::info!(notification_id = %notification_id, "Email sent successfully");
         }
         Err(ProviderError::NotEnabled(msg)) => {
@@ -106,9 +100,6 @@ pub async fn send_email(
                 )
                 .await;
 
-            // Record metering (mock counts as sent)
-            record_notification(&tenant_id, "email", "sent");
-            record_provider_call("mock_email", "success");
         }
         Err(e) => {
             let error_msg = e.to_string();
@@ -122,10 +113,6 @@ pub async fn send_email(
                     Some(&error_msg),
                 )
                 .await;
-
-            // Record metering (failed)
-            record_notification(&tenant_id, "email", "failed");
-            record_provider_call("smtp", "failure");
 
             tracing::error!(
                 notification_id = %notification_id,
@@ -209,10 +196,6 @@ pub async fn send_sms(
                 )
                 .await;
 
-            // Record metering
-            record_notification(&tenant_id, "sms", "sent");
-            record_provider_call("msg91", "success");
-
             tracing::info!(notification_id = %notification_id, "SMS sent successfully");
         }
         Err(ProviderError::NotEnabled(msg)) => {
@@ -232,9 +215,6 @@ pub async fn send_sms(
                 )
                 .await;
 
-            // Record metering (mock counts as sent)
-            record_notification(&tenant_id, "sms", "sent");
-            record_provider_call("mock_sms", "success");
         }
         Err(e) => {
             let error_msg = e.to_string();
@@ -248,10 +228,6 @@ pub async fn send_sms(
                     Some(&error_msg),
                 )
                 .await;
-
-            // Record metering (failed)
-            record_notification(&tenant_id, "sms", "failed");
-            record_provider_call("msg91", "failure");
 
             tracing::error!(
                 notification_id = %notification_id,
@@ -351,10 +327,6 @@ pub async fn send_push(
                 )
                 .await;
 
-            // Record metering
-            record_notification(&tenant_id, "push", "sent");
-            record_provider_call("fcm", "success");
-
             tracing::info!(notification_id = %notification_id, "Push notification sent successfully");
         }
         Err(ProviderError::NotEnabled(msg)) => {
@@ -374,9 +346,6 @@ pub async fn send_push(
                 )
                 .await;
 
-            // Record metering (mock counts as sent)
-            record_notification(&tenant_id, "push", "sent");
-            record_provider_call("mock_push", "success");
         }
         Err(e) => {
             let error_msg = e.to_string();
@@ -390,10 +359,6 @@ pub async fn send_push(
                     Some(&error_msg),
                 )
                 .await;
-
-            // Record metering (failed)
-            record_notification(&tenant_id, "push", "failed");
-            record_provider_call("fcm", "failure");
 
             tracing::error!(
                 notification_id = %notification_id,

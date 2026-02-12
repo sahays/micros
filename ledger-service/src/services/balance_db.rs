@@ -2,7 +2,6 @@
 
 use crate::models::{AccountType, LedgerEntry};
 use crate::services::database::Database;
-use crate::services::metrics::DB_QUERY_DURATION;
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use service_core::error::AppError;
@@ -29,9 +28,6 @@ impl Database {
         account_id: Uuid,
         as_of_date: Option<NaiveDate>,
     ) -> Result<Option<(Decimal, String)>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_balance"])
-            .start_timer();
 
         // First get the account to verify it exists and get currency/type
         let account = self.get_account(tenant_id, account_id).await?;
@@ -71,7 +67,6 @@ impl Database {
         let is_debit_normal = matches!(account_type, AccountType::Asset | AccountType::Expense);
         let balance = if is_debit_normal { raw } else { -raw };
 
-        timer.observe_duration();
 
         Ok(Some((balance, account.currency)))
     }
@@ -84,9 +79,6 @@ impl Database {
         account_ids: &[Uuid],
         as_of_date: Option<NaiveDate>,
     ) -> Result<Vec<(Uuid, Decimal, String)>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_balances"])
-            .start_timer();
 
         let as_of = as_of_date.unwrap_or_else(|| chrono::Utc::now().date_naive());
 
@@ -102,7 +94,6 @@ impl Database {
             }
         }
 
-        timer.observe_duration();
 
         Ok(results)
     }
@@ -120,9 +111,6 @@ impl Database {
         start_date: NaiveDate,
         end_date: NaiveDate,
     ) -> Result<Option<StatementData>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_statement"])
-            .start_timer();
 
         // Get account
         let account = self.get_account(tenant_id, account_id).await?;
@@ -188,7 +176,6 @@ impl Database {
             }
         }
 
-        timer.observe_duration();
 
         Ok(Some((
             account.currency,

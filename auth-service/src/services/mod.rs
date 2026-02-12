@@ -11,7 +11,6 @@ mod email;
 pub mod error;
 mod invitation_db;
 mod jwt;
-pub mod metrics;
 mod notification_client;
 mod org_db;
 mod otp_db;

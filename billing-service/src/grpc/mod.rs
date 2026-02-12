@@ -8,12 +8,10 @@ pub mod helpers;
 mod plans;
 mod service;
 mod subscriptions;
-mod trace_interceptor;
 mod usage;
 
 pub use capability_check::{capabilities, CapabilityChecker};
 pub use service::BillingServiceImpl;
-pub use trace_interceptor::{extract_trace_context, trace_context_interceptor};
 
 /// Generated protobuf code.
 pub mod proto {

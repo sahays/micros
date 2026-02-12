@@ -6,7 +6,6 @@ use crate::grpc::helpers::{
 };
 use crate::grpc::proto::*;
 use crate::models;
-use crate::services::metrics::record_settlement;
 use crate::services::razorpay_settlements;
 use crate::startup::AppState;
 use mongodb::bson::DateTime;
@@ -71,8 +70,6 @@ pub async fn request_on_demand_settlement(
             tracing::error!(error = %e, "Failed to save settlement");
             Status::internal("Failed to save settlement")
         })?;
-
-    record_settlement(&tenant.app_id, "on_demand", "created");
 
     Ok(Response::new(RequestOnDemandSettlementResponse {
         settlement: Some(settlement_to_proto(settlement)),

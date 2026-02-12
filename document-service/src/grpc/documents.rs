@@ -14,7 +14,6 @@ use crate::models::{Document, DocumentStatus as ModelDocumentStatus};
 use crate::startup::AppState;
 use futures::stream::TryStreamExt;
 use futures::StreamExt;
-use metrics::{counter, histogram};
 use mongodb::bson::doc;
 use mongodb::options::FindOptions;
 use tokio::sync::mpsc;
@@ -94,9 +93,6 @@ pub async fn upload_document(
         .unwrap_or("bin");
     let storage_key = format!("{}/{}.{}", Uuid::new_v4(), Uuid::new_v4(), extension);
 
-    // Clone tenant_id for metrics before moving into Document
-    let tenant_id_for_metrics = tenant.app_id.clone();
-
     // Create document
     let mut document = Document::new(
         tenant.app_id,
@@ -137,18 +133,6 @@ pub async fn upload_document(
             tracing::error!("Failed to insert document: {}", e);
             Status::internal(format!("Database error: {}", e))
         })?;
-
-    // Record metering metrics
-    let labels = [
-        ("tenant_id", tenant_id_for_metrics.clone()),
-        ("mime_type", document.mime_type.clone()),
-    ];
-    counter!("document_uploads_total", &labels).increment(1);
-    histogram!(
-        "document_upload_bytes",
-        &[("tenant_id", tenant_id_for_metrics)]
-    )
-    .record(size as f64);
 
     tracing::info!(document_id = %document.id, "Document upload completed via gRPC");
 
@@ -193,12 +177,6 @@ pub async fn download_document(
     } else {
         None
     };
-
-    // Extract tenant_id for metrics before tenant is moved
-    let tenant_id_for_metrics = tenant
-        .as_ref()
-        .map(|t| t.app_id.clone())
-        .unwrap_or_else(|| "signed_url".to_string());
 
     // Fetch document
     let document = if is_signed {
@@ -298,15 +276,6 @@ pub async fn download_document(
     })?;
 
     let total_size = file_data.len() as i64;
-
-    // Record metering metrics
-    let labels = [("tenant_id", tenant_id_for_metrics.clone())];
-    counter!("document_downloads_total", &labels).increment(1);
-    histogram!(
-        "document_download_bytes",
-        &[("tenant_id", tenant_id_for_metrics)]
-    )
-    .record(total_size as f64);
 
     // Create streaming response
     let (tx, rx) = mpsc::channel(32);
@@ -505,10 +474,6 @@ pub async fn delete_document(
                 }
             }
         }
-
-        // Record metering metrics
-        let labels = [("tenant_id", tenant.app_id.clone())];
-        counter!("document_deletes_total", &labels).increment(1);
 
         tracing::info!(document_id = %req.document_id, "Document deleted");
         Ok(Response::new(DeleteDocumentResponse { success: true }))

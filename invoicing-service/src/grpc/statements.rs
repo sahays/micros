@@ -6,7 +6,6 @@ use crate::grpc::proto::{
     StatementLine as ProtoStatementLine,
 };
 use crate::grpc::service::InvoicingServiceImpl;
-use crate::services::metrics::{ERRORS_TOTAL, GRPC_REQUESTS_TOTAL, GRPC_REQUEST_DURATION};
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use tonic::{Request, Response, Status};
@@ -27,51 +26,28 @@ impl InvoicingServiceImpl {
         &self,
         request: Request<GenerateStatementRequest>,
     ) -> Result<Response<GenerateStatementResponse>, Status> {
-        let timer = GRPC_REQUEST_DURATION
-            .with_label_values(&["GenerateStatement"])
-            .start_timer();
         let req = request.into_inner();
 
         let tenant_id = Uuid::parse_str(&req.tenant_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GenerateStatement", "invalid_argument"])
-                .inc();
-            ERRORS_TOTAL.with_label_values(&["validation_error"]).inc();
             Status::invalid_argument("Invalid tenant_id format")
         })?;
         Span::current().record("tenant_id", tenant_id.to_string());
 
         let customer_id = Uuid::parse_str(&req.customer_id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GenerateStatement", "invalid_argument"])
-                .inc();
-            ERRORS_TOTAL.with_label_values(&["validation_error"]).inc();
             Status::invalid_argument("Invalid customer_id format")
         })?;
         Span::current().record("customer_id", customer_id.to_string());
 
         let period_start =
             NaiveDate::parse_from_str(&req.period_start, "%Y-%m-%d").map_err(|_| {
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["GenerateStatement", "invalid_argument"])
-                    .inc();
-                ERRORS_TOTAL.with_label_values(&["validation_error"]).inc();
                 Status::invalid_argument("Invalid period_start format")
             })?;
 
         let period_end = NaiveDate::parse_from_str(&req.period_end, "%Y-%m-%d").map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GenerateStatement", "invalid_argument"])
-                .inc();
-            ERRORS_TOTAL.with_label_values(&["validation_error"]).inc();
             Status::invalid_argument("Invalid period_end format")
         })?;
 
         if period_start > period_end {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GenerateStatement", "invalid_argument"])
-                .inc();
-            ERRORS_TOTAL.with_label_values(&["validation_error"]).inc();
             return Err(Status::invalid_argument(
                 "period_start must be before period_end",
             ));
@@ -80,7 +56,6 @@ impl InvoicingServiceImpl {
         // Get customer info from most recent invoice
         let customer_info = self.db.get_customer_info(tenant_id, customer_id).await.map_err(|e| {
             warn!(tenant_id = %tenant_id, customer_id = %customer_id, error = %e, "Failed to get customer info");
-            ERRORS_TOTAL.with_label_values(&["db_error"]).inc();
             Status::internal("Failed to get customer info")
         })?;
 
@@ -98,10 +73,6 @@ impl InvoicingServiceImpl {
                 inv.currency,
             ),
             None => {
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["GenerateStatement", "not_found"])
-                    .inc();
-                ERRORS_TOTAL.with_label_values(&["not_found"]).inc();
                 return Err(Status::not_found("No invoices found for customer"));
             }
         };
@@ -109,21 +80,18 @@ impl InvoicingServiceImpl {
         // Calculate opening balance
         let opening_balance = self.db.calculate_opening_balance(tenant_id, customer_id, period_start).await.map_err(|e| {
             warn!(tenant_id = %tenant_id, customer_id = %customer_id, error = %e, "Failed to calculate opening balance");
-            ERRORS_TOTAL.with_label_values(&["db_error"]).inc();
             Status::internal("Failed to calculate opening balance")
         })?;
 
         // Get invoices in period
         let invoices = self.db.get_invoices_for_statement(tenant_id, customer_id, period_start, period_end).await.map_err(|e| {
             warn!(tenant_id = %tenant_id, customer_id = %customer_id, error = %e, "Failed to get invoices for statement");
-            ERRORS_TOTAL.with_label_values(&["db_error"]).inc();
             Status::internal("Failed to get invoices")
         })?;
 
         // Get receipts in period
         let receipts = self.db.get_receipts_for_statement(tenant_id, customer_id, period_start, period_end).await.map_err(|e| {
             warn!(tenant_id = %tenant_id, customer_id = %customer_id, error = %e, "Failed to get receipts for statement");
-            ERRORS_TOTAL.with_label_values(&["db_error"]).inc();
             Status::internal("Failed to get receipts")
         })?;
 
@@ -201,11 +169,6 @@ impl InvoicingServiceImpl {
             .collect();
 
         let closing_balance = running_balance;
-
-        GRPC_REQUESTS_TOTAL
-            .with_label_values(&["GenerateStatement", "ok"])
-            .inc();
-        timer.observe_duration();
 
         info!(
             tenant_id = %tenant_id,

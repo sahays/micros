@@ -6,7 +6,6 @@ use crate::grpc::proto::{
     GetBalancesResponse, GetStatementRequest, GetStatementResponse,
 };
 use crate::grpc::service::{format_decimal, parse_tenant_id};
-use crate::services::metrics::{GRPC_REQUESTS_TOTAL, GRPC_REQUEST_DURATION};
 use crate::services::Database;
 use chrono::NaiveDate;
 use std::sync::Arc;
@@ -23,10 +22,6 @@ pub async fn get_balance(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetBalanceRequest>,
 ) -> Result<Response<GetBalanceResponse>, Status> {
-    let timer = GRPC_REQUEST_DURATION
-        .with_label_values(&["GetBalance"])
-        .start_timer();
-
     let auth = capability_checker
         .require_capability(&request, capabilities::LEDGER_BALANCE_READ)
         .await?;
@@ -35,9 +30,6 @@ pub async fn get_balance(
     let req = request.into_inner();
 
     let account_id = Uuid::parse_str(&req.account_id).map_err(|_| {
-        GRPC_REQUESTS_TOTAL
-            .with_label_values(&["GetBalance", "invalid_argument"])
-            .inc();
         Status::invalid_argument("Invalid account_id format")
     })?;
 
@@ -46,9 +38,6 @@ pub async fn get_balance(
     } else {
         Some(
             NaiveDate::parse_from_str(&req.as_of_date, "%Y-%m-%d").map_err(|_| {
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["GetBalance", "invalid_argument"])
-                    .inc();
                 Status::invalid_argument("Invalid as_of_date format (expected YYYY-MM-DD)")
             })?,
         )
@@ -59,19 +48,11 @@ pub async fn get_balance(
         .await
         .map_err(|e| {
             warn!(error = %e, "Failed to get balance");
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GetBalance", "error"])
-                .inc();
             Status::internal("Failed to get balance")
         })?;
 
-    timer.observe_duration();
-
     match result {
         Some((balance, currency)) => {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GetBalance", "ok"])
-                .inc();
             Ok(Response::new(GetBalanceResponse {
                 account_id: account_id.to_string(),
                 balance: format_decimal(&balance),
@@ -82,9 +63,6 @@ pub async fn get_balance(
             }))
         }
         None => {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GetBalance", "not_found"])
-                .inc();
             Err(Status::not_found("Account not found"))
         }
     }
@@ -99,10 +77,6 @@ pub async fn get_balances(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetBalancesRequest>,
 ) -> Result<Response<GetBalancesResponse>, Status> {
-    let timer = GRPC_REQUEST_DURATION
-        .with_label_values(&["GetBalances"])
-        .start_timer();
-
     let auth = capability_checker
         .require_capability(&request, capabilities::LEDGER_BALANCE_READ)
         .await?;
@@ -113,9 +87,6 @@ pub async fn get_balances(
     let mut account_ids = Vec::with_capacity(req.account_ids.len());
     for id in &req.account_ids {
         let account_id = Uuid::parse_str(id).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GetBalances", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid account_id format")
         })?;
         account_ids.push(account_id);
@@ -126,9 +97,6 @@ pub async fn get_balances(
     } else {
         Some(
             NaiveDate::parse_from_str(&req.as_of_date, "%Y-%m-%d").map_err(|_| {
-                GRPC_REQUESTS_TOTAL
-                    .with_label_values(&["GetBalances", "invalid_argument"])
-                    .inc();
                 Status::invalid_argument("Invalid as_of_date format (expected YYYY-MM-DD)")
             })?,
         )
@@ -139,17 +107,8 @@ pub async fn get_balances(
         .await
         .map_err(|e| {
             warn!(error = %e, "Failed to get balances");
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GetBalances", "error"])
-                .inc();
             Status::internal("Failed to get balances")
         })?;
-
-    timer.observe_duration();
-
-    GRPC_REQUESTS_TOTAL
-        .with_label_values(&["GetBalances", "ok"])
-        .inc();
 
     let as_of_str = as_of_date
         .unwrap_or_else(|| chrono::Utc::now().date_naive())
@@ -177,10 +136,6 @@ pub async fn get_statement(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetStatementRequest>,
 ) -> Result<Response<GetStatementResponse>, Status> {
-    let timer = GRPC_REQUEST_DURATION
-        .with_label_values(&["GetStatement"])
-        .start_timer();
-
     let auth = capability_checker
         .require_capability(&request, capabilities::LEDGER_STATEMENT_READ)
         .await?;
@@ -189,30 +144,18 @@ pub async fn get_statement(
     let req = request.into_inner();
 
     let account_id = Uuid::parse_str(&req.account_id).map_err(|_| {
-        GRPC_REQUESTS_TOTAL
-            .with_label_values(&["GetStatement", "invalid_argument"])
-            .inc();
         Status::invalid_argument("Invalid account_id format")
     })?;
 
     let start_date = NaiveDate::parse_from_str(&req.start_date, "%Y-%m-%d").map_err(|_| {
-        GRPC_REQUESTS_TOTAL
-            .with_label_values(&["GetStatement", "invalid_argument"])
-            .inc();
         Status::invalid_argument("Invalid start_date format (expected YYYY-MM-DD)")
     })?;
 
     let end_date = NaiveDate::parse_from_str(&req.end_date, "%Y-%m-%d").map_err(|_| {
-        GRPC_REQUESTS_TOTAL
-            .with_label_values(&["GetStatement", "invalid_argument"])
-            .inc();
         Status::invalid_argument("Invalid end_date format (expected YYYY-MM-DD)")
     })?;
 
     if end_date < start_date {
-        GRPC_REQUESTS_TOTAL
-            .with_label_values(&["GetStatement", "invalid_argument"])
-            .inc();
         return Err(Status::invalid_argument("end_date must be >= start_date"));
     }
 
@@ -221,20 +164,11 @@ pub async fn get_statement(
         .await
         .map_err(|e| {
             warn!(error = %e, "Failed to get statement");
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GetStatement", "error"])
-                .inc();
             Status::internal("Failed to get statement")
         })?;
 
-    timer.observe_duration();
-
     match result {
         Some((currency, opening_balance, closing_balance, entries)) => {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GetStatement", "ok"])
-                .inc();
-
             let mut running = opening_balance;
             let lines: Vec<_> = entries
                 .iter()
@@ -273,9 +207,6 @@ pub async fn get_statement(
             }))
         }
         None => {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GetStatement", "not_found"])
-                .inc();
             Err(Status::not_found("Account not found"))
         }
     }

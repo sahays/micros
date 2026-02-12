@@ -1,9 +1,6 @@
 //! Webhook event processing for all Razorpay event types.
 
 use crate::models;
-use crate::services::metrics::{
-    record_linked_account, record_subscription, record_subscription_charge, record_webhook_event,
-};
 use crate::services::razorpay::WebhookEvent;
 use crate::startup::AppState;
 use tonic::Status;
@@ -14,10 +11,6 @@ pub async fn process_webhook_event(
     event: &WebhookEvent,
 ) -> Result<String, Status> {
     let event_type = event.event.as_str();
-
-    // Determine domain for metrics
-    let domain = event_type.split('.').next().unwrap_or("unknown");
-    record_webhook_event(event_type, domain);
 
     match event_type {
         // --- Payment events ---
@@ -152,9 +145,6 @@ pub async fn process_webhook_event(
         }
         "subscription.active" => {
             update_subscription_status(state, event, models::SubscriptionStatus::Active).await;
-            if let Some(ref sub_entity) = event.payload.subscription {
-                record_subscription(&sub_entity.entity.id, "active");
-            }
         }
         "subscription.pending" => {
             update_subscription_status(state, event, models::SubscriptionStatus::Pending).await;
@@ -186,7 +176,6 @@ pub async fn process_webhook_event(
                 {
                     tracing::error!(error = %e, "Failed to increment subscription charge count");
                 }
-                record_subscription_charge(&sub.id, "charged");
             }
         }
 
@@ -204,9 +193,6 @@ pub async fn process_webhook_event(
         }
         "account.activated" => {
             update_account_status(state, event, models::LinkedAccountStatus::Activated).await;
-            if let Some(ref account_entity) = event.payload.account {
-                record_linked_account(&account_entity.entity.id, "activated");
-            }
         }
         "account.suspended" => {
             update_account_status(state, event, models::LinkedAccountStatus::Suspended).await;

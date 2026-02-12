@@ -6,7 +6,6 @@ use crate::grpc::helpers::{
 };
 use crate::grpc::proto::*;
 use crate::models;
-use crate::services::metrics::{record_commission_amount, record_transfer, record_transfer_amount};
 use crate::services::razorpay_transfers;
 use crate::startup::AppState;
 use mongodb::bson::DateTime;
@@ -139,12 +138,6 @@ pub async fn create_transfer_from_payment(
             Status::internal("Failed to save transfer")
         })?;
 
-    record_transfer(&tenant.app_id, "created");
-    record_transfer_amount(&tenant.app_id, &req.currency, req.amount);
-    if commission_amount > 0 {
-        record_commission_amount(&tenant.app_id, &req.currency, commission_amount);
-    }
-
     Ok(Response::new(CreateTransferFromPaymentResponse {
         transfer: Some(transfer_to_proto(transfer)),
     }))
@@ -223,9 +216,6 @@ pub async fn create_transfer_from_order(
             tracing::error!(error = %e, "Failed to save transfer");
             Status::internal("Failed to save transfer")
         })?;
-
-    record_transfer(&tenant.app_id, "created");
-    record_transfer_amount(&tenant.app_id, &req.currency, req.amount);
 
     Ok(Response::new(CreateTransferFromOrderResponse {
         transfer: Some(transfer_to_proto(transfer)),
@@ -311,9 +301,6 @@ pub async fn create_direct_transfer(
             tracing::error!(error = %e, "Failed to save transfer");
             Status::internal("Failed to save transfer")
         })?;
-
-    record_transfer(&tenant.app_id, "created");
-    record_transfer_amount(&tenant.app_id, &req.currency, req.amount);
 
     Ok(Response::new(CreateDirectTransferResponse {
         transfer: Some(transfer_to_proto(transfer)),

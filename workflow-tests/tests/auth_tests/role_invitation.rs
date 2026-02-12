@@ -3,7 +3,7 @@
 use serial_test::serial;
 use tonic::Request;
 use uuid::Uuid;
-use workflow_tests::helpers::auth::{with_admin_key, with_auth, TestApp};
+use workflow_tests::helpers::auth::{with_auth, TestApp};
 use workflow_tests::proto::auth::{
     AcceptInvitationByPhoneRequest, AssignCapabilityRequest, BootstrapRequest,
     CreateInvitationRequest, CreateRoleRequest, DeleteRoleRequest, GetRoleRequest,
@@ -15,13 +15,13 @@ async fn setup(app: &TestApp) -> (String, String, String, String, String) {
     let slug = format!("roletest-{}", &Uuid::new_v4().to_string()[..8]);
     let mut client = app.admin_client().await;
     let resp = client
-        .bootstrap(with_admin_key(Request::new(BootstrapRequest {
+        .bootstrap(Request::new(BootstrapRequest {
             tenant_slug: slug.clone(),
             tenant_label: "Role Test Tenant".to_string(),
             admin_email: format!("admin@{}.com", slug),
             admin_password: "AdminPass123!".to_string(),
             admin_display_name: None,
-        })))
+        }))
         .await
         .unwrap()
         .into_inner();

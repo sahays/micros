@@ -1,7 +1,6 @@
 //! Reconciliation Service entry point.
 
 use reconciliation_service::config::ReconciliationConfig;
-use reconciliation_service::services::init_metrics;
 use reconciliation_service::startup::Application;
 
 use service_core::observability::init_tracing;
@@ -42,20 +41,12 @@ async fn main() -> std::io::Result<()> {
     })?;
 
     // Initialize tracing
-    let otlp_endpoint = config
-        .otlp_endpoint
-        .clone()
-        .unwrap_or_else(|| "http://tempo:4317".to_string());
-    init_tracing(&config.service_name, &config.log_level, &otlp_endpoint);
+    init_tracing(&config.service_name, &config.log_level);
 
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
-        otlp_endpoint = %otlp_endpoint,
         "Starting reconciliation-service"
     );
-
-    // Initialize metrics
-    init_metrics();
 
     // Log configuration (mask sensitive values)
     tracing::info!(

@@ -7,7 +7,6 @@ use crate::grpc::proto::{
 };
 use crate::grpc::service::{account_to_proto, parse_tenant_id};
 use crate::models::{AccountType, CreateAccount};
-use crate::services::metrics::{ACCOUNTS_CREATED, GRPC_REQUESTS_TOTAL, GRPC_REQUEST_DURATION};
 use crate::services::Database;
 use rust_decimal::Decimal;
 use std::sync::Arc;
@@ -24,10 +23,6 @@ pub async fn create_account(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<CreateAccountRequest>,
 ) -> Result<Response<CreateAccountResponse>, Status> {
-    let timer = GRPC_REQUEST_DURATION
-        .with_label_values(&["CreateAccount"])
-        .start_timer();
-
     let auth = capability_checker
         .require_capability(&request, capabilities::LEDGER_ACCOUNT_CREATE)
         .await?;
@@ -36,25 +31,16 @@ pub async fn create_account(
     let req = request.into_inner();
 
     let account_type = AccountType::from_proto(req.account_type).ok_or_else(|| {
-        GRPC_REQUESTS_TOTAL
-            .with_label_values(&["CreateAccount", "invalid_argument"])
-            .inc();
         Status::invalid_argument("Invalid account_type")
     })?;
 
     if req.currency.len() != 3 {
-        GRPC_REQUESTS_TOTAL
-            .with_label_values(&["CreateAccount", "invalid_argument"])
-            .inc();
         return Err(Status::invalid_argument(
             "Currency must be a 3-letter ISO 4217 code",
         ));
     }
 
     if req.account_code.is_empty() || req.account_code.len() > 100 {
-        GRPC_REQUESTS_TOTAL
-            .with_label_values(&["CreateAccount", "invalid_argument"])
-            .inc();
         return Err(Status::invalid_argument(
             "account_code must be between 1 and 100 characters",
         ));
@@ -64,9 +50,6 @@ pub async fn create_account(
         None
     } else {
         Some(serde_json::from_str(&req.metadata).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["CreateAccount", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid metadata JSON")
         })?)
     };
@@ -82,23 +65,11 @@ pub async fn create_account(
 
     let account = db.create_account(&input).await.map_err(|e| {
         warn!(error = %e, "Failed to create account");
-        GRPC_REQUESTS_TOTAL
-            .with_label_values(&["CreateAccount", "error"])
-            .inc();
         match e {
             service_core::error::AppError::Conflict(err) => Status::already_exists(err.to_string()),
             _ => Status::internal("Failed to create account"),
         }
     })?;
-
-    GRPC_REQUESTS_TOTAL
-        .with_label_values(&["CreateAccount", "ok"])
-        .inc();
-    ACCOUNTS_CREATED
-        .with_label_values(&[account.account_type.as_str()])
-        .inc();
-
-    timer.observe_duration();
 
     info!(
         account_id = %account.account_id,
@@ -120,10 +91,6 @@ pub async fn get_account(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetAccountRequest>,
 ) -> Result<Response<GetAccountResponse>, Status> {
-    let timer = GRPC_REQUEST_DURATION
-        .with_label_values(&["GetAccount"])
-        .start_timer();
-
     let auth = capability_checker
         .require_capability(&request, capabilities::LEDGER_ACCOUNT_READ)
         .await?;
@@ -132,9 +99,6 @@ pub async fn get_account(
     let req = request.into_inner();
 
     let account_id = Uuid::parse_str(&req.account_id).map_err(|_| {
-        GRPC_REQUESTS_TOTAL
-            .with_label_values(&["GetAccount", "invalid_argument"])
-            .inc();
         Status::invalid_argument("Invalid account_id format")
     })?;
 
@@ -143,27 +107,16 @@ pub async fn get_account(
         .await
         .map_err(|e| {
             warn!(error = %e, "Failed to get account");
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GetAccount", "error"])
-                .inc();
             Status::internal("Failed to get account")
         })?;
 
-    timer.observe_duration();
-
     match result {
         Some((acc, balance)) => {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GetAccount", "ok"])
-                .inc();
             Ok(Response::new(GetAccountResponse {
                 account: Some(account_to_proto(&acc, Some(balance))),
             }))
         }
         None => {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["GetAccount", "not_found"])
-                .inc();
             Err(Status::not_found("Account not found"))
         }
     }
@@ -178,10 +131,6 @@ pub async fn list_accounts(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListAccountsRequest>,
 ) -> Result<Response<ListAccountsResponse>, Status> {
-    let timer = GRPC_REQUEST_DURATION
-        .with_label_values(&["ListAccounts"])
-        .start_timer();
-
     let auth = capability_checker
         .require_capability(&request, capabilities::LEDGER_ACCOUNT_READ)
         .await?;
@@ -205,9 +154,6 @@ pub async fn list_accounts(
         None
     } else {
         Some(Uuid::parse_str(&req.page_token).map_err(|_| {
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["ListAccounts", "invalid_argument"])
-                .inc();
             Status::invalid_argument("Invalid page_token format")
         })?)
     };
@@ -223,17 +169,8 @@ pub async fn list_accounts(
         .await
         .map_err(|e| {
             warn!(error = %e, "Failed to list accounts");
-            GRPC_REQUESTS_TOTAL
-                .with_label_values(&["ListAccounts", "error"])
-                .inc();
             Status::internal("Failed to list accounts")
         })?;
-
-    timer.observe_duration();
-
-    GRPC_REQUESTS_TOTAL
-        .with_label_values(&["ListAccounts", "ok"])
-        .inc();
 
     let next_page_token = if accounts.len() == page_size as usize {
         accounts.last().map(|a| a.account_id.to_string())

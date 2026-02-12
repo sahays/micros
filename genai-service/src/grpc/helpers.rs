@@ -54,16 +54,6 @@ pub fn finish_reason_to_proto(reason: ProviderFinishReason) -> i32 {
     }
 }
 
-/// Convert finish reason to string for metrics.
-pub fn finish_reason_str(reason: ProviderFinishReason) -> &'static str {
-    match reason {
-        ProviderFinishReason::Complete => "complete",
-        ProviderFinishReason::Length => "length",
-        ProviderFinishReason::ContentFilter => "content_filter",
-        ProviderFinishReason::Error => "error",
-    }
-}
-
 /// Convert provider error to gRPC status with error classification.
 pub fn provider_error_to_status(error: ProviderError) -> Status {
     let (code, message, error_type) = match &error {

@@ -82,14 +82,3 @@ pub fn with_auth<T>(mut request: tonic::Request<T>, token: &str) -> tonic::Reque
     );
     request
 }
-
-/// Add admin API key header to a request.
-pub fn with_admin_key<T>(mut request: tonic::Request<T>) -> tonic::Request<T> {
-    let api_key = std::env::var("ADMIN_API_KEY").unwrap_or_else(|_| {
-        panic!("ADMIN_API_KEY must be set. Run tests via: ./scripts/integ-tests.sh")
-    });
-    request
-        .metadata_mut()
-        .insert("x-admin-api-key", api_key.parse().unwrap());
-    request
-}

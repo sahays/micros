@@ -41,7 +41,6 @@ use crate::grpc::proto::{
 };
 use crate::models::Transaction;
 use crate::models::TransactionStatus;
-use crate::services::metrics::{record_amount, record_transaction};
 use crate::services::razorpay::PaymentVerification;
 use crate::startup::AppState;
 use mongodb::bson::DateTime;
@@ -124,13 +123,6 @@ impl PaymentService for PaymentGrpcService {
                 tracing::error!(error = %e, "Failed to create transaction");
                 Status::internal("Failed to create transaction")
             })?;
-
-        record_transaction(&tenant.app_id, "created");
-        record_amount(
-            &tenant.app_id,
-            &transaction.currency,
-            transaction.amount_paise,
-        );
 
         Ok(Response::new(CreateTransactionResponse {
             transaction: Some(transaction_to_proto(transaction)),
@@ -217,16 +209,6 @@ impl PaymentService for PaymentGrpcService {
                 tracing::error!(error = %e, "Failed to update transaction status");
                 Status::internal("Failed to update transaction status")
             })?;
-
-        let status_str = match new_status {
-            TransactionStatus::Created => "created",
-            TransactionStatus::Pending => "pending",
-            TransactionStatus::Completed => "completed",
-            TransactionStatus::Failed => "failed",
-            TransactionStatus::Refunded => "refunded",
-            TransactionStatus::PartiallyRefunded => "partially_refunded",
-        };
-        record_transaction(&tenant.app_id, status_str);
 
         Ok(Response::new(UpdateTransactionStatusResponse {}))
     }

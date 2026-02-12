@@ -5,7 +5,7 @@ use genai_service::grpc::{
 };
 use genai_service::services::providers::gemini::{GeminiConfig, GeminiTextProvider};
 use genai_service::services::providers::TextProvider;
-use genai_service::services::{get_metrics, init_metrics, DocumentFetcher, GenaiDb};
+use genai_service::services::{DocumentFetcher, GenaiDb};
 use genai_service::startup::AppState;
 
 use axum::{
@@ -13,11 +13,8 @@ use axum::{
     Router,
 };
 use serde_json::json;
-use service_core::grpc::interceptors::{metrics_interceptor, trace_context_interceptor};
-use service_core::middleware::metrics::metrics_middleware;
 use service_core::middleware::tracing::request_id_middleware;
 use service_core::observability::init_tracing;
-use service_core::tower::ServiceBuilder;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -70,15 +67,6 @@ async fn readiness_check(State(state): State<HealthState>) -> impl IntoResponse 
     }
 }
 
-async fn metrics_handler() -> impl IntoResponse {
-    let metrics = get_metrics();
-    (
-        StatusCode::OK,
-        [("content-type", "text/plain; charset=utf-8")],
-        metrics,
-    )
-}
-
 async fn shutdown_signal() {
     let ctrl_c = async {
         signal::ctrl_c()
@@ -108,18 +96,12 @@ async fn shutdown_signal() {
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     // Initialize tracing
-    let otlp_endpoint =
-        std::env::var("OTLP_ENDPOINT").unwrap_or_else(|_| "http://tempo:4317".to_string());
-    init_tracing("genai-service", "info", &otlp_endpoint);
+    init_tracing("genai-service", "info");
 
     tracing::info!(
         version = env!("CARGO_PKG_VERSION"),
-        otlp_endpoint = %otlp_endpoint,
         "Starting genai-service"
     );
-
-    // Initialize metrics
-    init_metrics();
 
     let config = GenaiConfig::load().map_err(|e| {
         tracing::error!(error = %e, "Failed to load configuration");
@@ -194,9 +176,7 @@ async fn main() -> std::io::Result<()> {
     let health_router = Router::new()
         .route("/health", get(health_check))
         .route("/ready", get(readiness_check))
-        .route("/metrics", get(metrics_handler))
         .layer(TraceLayer::new_for_http())
-        .layer(middleware::from_fn(metrics_middleware))
         .layer(middleware::from_fn(request_id_middleware))
         .with_state(health_state);
 
@@ -229,15 +209,8 @@ async fn main() -> std::io::Result<()> {
 
     tracing::info!(port = %grpc_port, "gRPC server listening");
 
-    // Apply metering and tracing interceptors
-    let layer = ServiceBuilder::new()
-        .layer(tonic::service::interceptor(trace_context_interceptor))
-        .layer(tonic::service::interceptor(metrics_interceptor))
-        .into_inner();
-
     // Build gRPC server
     let grpc_server = GrpcServer::builder()
-        .layer(layer)
         .add_service(grpc_health_service)
         .add_service(reflection_service)
         .add_service(GenAiServiceServer::new(genai_service))

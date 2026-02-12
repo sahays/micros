@@ -6,11 +6,9 @@ mod matching;
 mod reconciliation;
 mod service;
 mod statements;
-mod trace_interceptor;
 
 pub use capability_check::{capabilities, CapabilityChecker};
 pub use service::ReconciliationServiceImpl;
-pub use trace_interceptor::{extract_trace_context, trace_context_interceptor};
 
 /// Generated protobuf code.
 pub mod proto {

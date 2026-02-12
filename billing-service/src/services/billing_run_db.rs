@@ -6,7 +6,6 @@ use crate::models::{
     ListUsageFilter, RecordUsage, Subscription, UsageComponentSummary, UsageRecord,
 };
 use crate::services::database::Database;
-use crate::services::metrics::DB_QUERY_DURATION;
 use chrono::Utc;
 use rust_decimal::Decimal;
 use service_core::error::AppError;
@@ -21,10 +20,6 @@ impl Database {
     /// Record usage with idempotency.
     #[instrument(skip(self, input), fields(subscription_id = %input.subscription_id))]
     pub async fn record_usage(&self, input: &RecordUsage) -> Result<UsageRecord, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["record_usage"])
-            .start_timer();
-
         // Check for existing record with same idempotency key
         let existing = sqlx::query_as::<_, UsageRecord>(
             r#"
@@ -39,7 +34,6 @@ impl Database {
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to check idempotency: {}", e)))?;
 
         if let Some(record) = existing {
-            timer.observe_duration();
             return Ok(record);
         }
 
@@ -74,8 +68,6 @@ impl Database {
             _ => AppError::DatabaseError(anyhow::anyhow!("Failed to record usage: {}", e)),
         })?;
 
-        timer.observe_duration();
-
         Ok(record)
     }
 
@@ -86,10 +78,6 @@ impl Database {
         tenant_id: Uuid,
         record_id: Uuid,
     ) -> Result<Option<UsageRecord>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_usage_record"])
-            .start_timer();
-
         let record = sqlx::query_as::<_, UsageRecord>(
             r#"
             SELECT ur.record_id, ur.subscription_id, ur.component_id, ur.idempotency_key, ur.quantity, ur.timestamp, ur.cycle_id, ur.is_invoiced, ur.metadata, ur.created_utc
@@ -104,8 +92,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get usage record: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(record)
     }
 
@@ -117,10 +103,6 @@ impl Database {
         subscription_id: Uuid,
         filter: &ListUsageFilter,
     ) -> Result<Vec<UsageRecord>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["list_usage_records"])
-            .start_timer();
-
         let limit = filter.page_size.clamp(1, 100) as i64;
 
         let records = if let Some(cursor) = filter.page_token {
@@ -172,8 +154,6 @@ impl Database {
         }
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to list usage records: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(records)
     }
 
@@ -185,10 +165,6 @@ impl Database {
         subscription_id: Uuid,
         cycle_id: Option<Uuid>,
     ) -> Result<Vec<UsageComponentSummary>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_usage_summary"])
-            .start_timer();
-
         // Get actual cycle_id
         let actual_cycle_id = if let Some(id) = cycle_id {
             id
@@ -242,18 +218,12 @@ impl Database {
             });
         }
 
-        timer.observe_duration();
-
         Ok(summaries)
     }
 
     /// Mark usage records as invoiced.
     #[instrument(skip(self), fields(cycle_id = %cycle_id))]
     pub async fn mark_usage_invoiced(&self, cycle_id: Uuid) -> Result<u64, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["mark_usage_invoiced"])
-            .start_timer();
-
         let result = sqlx::query(
             r#"
             UPDATE usage_records
@@ -267,8 +237,6 @@ impl Database {
         .map_err(|e| {
             AppError::DatabaseError(anyhow::anyhow!("Failed to mark usage invoiced: {}", e))
         })?;
-
-        timer.observe_duration();
 
         Ok(result.rows_affected())
     }
@@ -284,10 +252,6 @@ impl Database {
         tenant_id: Uuid,
         run_type: BillingRunType,
     ) -> Result<BillingRun, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["create_billing_run"])
-            .start_timer();
-
         let run_id = Uuid::new_v4();
         let run = sqlx::query_as::<_, BillingRun>(
             r#"
@@ -303,8 +267,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to create billing run: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(run)
     }
 
@@ -315,10 +277,6 @@ impl Database {
         tenant_id: Uuid,
         run_id: Uuid,
     ) -> Result<Option<BillingRun>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_billing_run"])
-            .start_timer();
-
         let run = sqlx::query_as::<_, BillingRun>(
             r#"
             SELECT run_id, tenant_id, run_type, status, started_utc, completed_utc, subscriptions_processed, subscriptions_succeeded, subscriptions_failed, error_message
@@ -332,8 +290,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get billing run: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(run)
     }
 
@@ -344,10 +300,6 @@ impl Database {
         tenant_id: Uuid,
         filter: &ListBillingRunsFilter,
     ) -> Result<Vec<BillingRun>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["list_billing_runs"])
-            .start_timer();
-
         let limit = filter.page_size.clamp(1, 100) as i64;
         let status_str = filter.status.map(|s| s.as_str().to_string());
         let run_type_str = filter.run_type.map(|r| r.as_str().to_string());
@@ -393,8 +345,6 @@ impl Database {
         }
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to list billing runs: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(runs)
     }
 
@@ -409,10 +359,6 @@ impl Database {
         failed: i32,
         error_message: Option<String>,
     ) -> Result<Option<BillingRun>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["update_billing_run"])
-            .start_timer();
-
         let completed_utc = if status != BillingRunStatus::Running {
             Some(Utc::now())
         } else {
@@ -438,8 +384,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to update billing run: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(run)
     }
 
@@ -453,10 +397,6 @@ impl Database {
         invoice_id: Option<Uuid>,
         error_message: Option<String>,
     ) -> Result<BillingRunResult, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["create_billing_run_result"])
-            .start_timer();
-
         let result_id = Uuid::new_v4();
         let result = sqlx::query_as::<_, BillingRunResult>(
             r#"
@@ -475,8 +415,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to create billing run result: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(result)
     }
 
@@ -486,10 +424,6 @@ impl Database {
         &self,
         run_id: Uuid,
     ) -> Result<Vec<BillingRunResult>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_billing_run_results"])
-            .start_timer();
-
         let results = sqlx::query_as::<_, BillingRunResult>(
             r#"
             SELECT result_id, run_id, subscription_id, status, invoice_id, error_message, created_utc
@@ -503,8 +437,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get billing run results: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(results)
     }
 
@@ -514,10 +446,6 @@ impl Database {
         &self,
         tenant_id: Uuid,
     ) -> Result<Vec<Subscription>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["find_subscriptions_due_for_billing"])
-            .start_timer();
-
         let today = Utc::now().date_naive();
 
         let subscriptions = sqlx::query_as::<_, Subscription>(
@@ -534,8 +462,6 @@ impl Database {
         .fetch_all(self.pool())
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to find subscriptions due for billing: {}", e)))?;
-
-        timer.observe_duration();
 
         Ok(subscriptions)
     }

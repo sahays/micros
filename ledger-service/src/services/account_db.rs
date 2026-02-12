@@ -2,7 +2,6 @@
 
 use crate::models::{Account, AccountType, CreateAccount};
 use crate::services::database::Database;
-use crate::services::metrics::DB_QUERY_DURATION;
 use rust_decimal::Decimal;
 use service_core::error::AppError;
 use tracing::{info, instrument};
@@ -16,9 +15,6 @@ impl Database {
     /// Create a new account.
     #[instrument(skip(self, input), fields(tenant_id = %input.tenant_id, account_code = %input.account_code))]
     pub async fn create_account(&self, input: &CreateAccount) -> Result<Account, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["create_account"])
-            .start_timer();
 
         let account_id = Uuid::new_v4();
         let account = sqlx::query_as::<_, Account>(
@@ -47,7 +43,6 @@ impl Database {
             _ => AppError::DatabaseError(anyhow::anyhow!("Failed to create account: {}", e)),
         })?;
 
-        timer.observe_duration();
 
         info!(
             account_id = %account.account_id,
@@ -65,9 +60,6 @@ impl Database {
         tenant_id: Uuid,
         account_id: Uuid,
     ) -> Result<Option<Account>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_account"])
-            .start_timer();
 
         let account = sqlx::query_as::<_, Account>(
             r#"
@@ -82,7 +74,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get account: {}", e)))?;
 
-        timer.observe_duration();
 
         Ok(account)
     }
@@ -117,9 +108,6 @@ impl Database {
         page_size: i32,
         page_token: Option<Uuid>,
     ) -> Result<Vec<Account>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["list_accounts"])
-            .start_timer();
 
         let limit = page_size.clamp(1, 100) as i64;
 
@@ -165,7 +153,6 @@ impl Database {
         }
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to list accounts: {}", e)))?;
 
-        timer.observe_duration();
 
         Ok(accounts)
     }

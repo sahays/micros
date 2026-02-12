@@ -3,9 +3,9 @@
 use crate::config::ReconciliationConfig;
 use crate::grpc::{
     proto::{reconciliation_service_server::ReconciliationServiceServer, FILE_DESCRIPTOR_SET},
-    trace_context_interceptor, CapabilityChecker, ReconciliationServiceImpl,
+    CapabilityChecker, ReconciliationServiceImpl,
 };
-use crate::services::{get_metrics, init_metrics, Database};
+use crate::services::Database;
 use axum::{
     extract::State, http::StatusCode, middleware, response::IntoResponse, routing::get, Json,
     Router,
@@ -13,14 +13,12 @@ use axum::{
 use serde_json::json;
 use service_core::error::AppError;
 use service_core::grpc::LedgerClient;
-use service_core::middleware::metrics::metrics_middleware;
 use service_core::middleware::tracing::request_id_middleware;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tonic::transport::Server as GrpcServer;
-use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
-use tracing::Level;
+use tower_http::trace::TraceLayer;
 
 /// Shared application state.
 #[derive(Clone)]
@@ -79,16 +77,6 @@ async fn readiness_check(State(state): State<HealthState>) -> impl IntoResponse 
     }
 }
 
-/// Metrics endpoint for Prometheus scraping.
-async fn metrics_handler() -> impl IntoResponse {
-    let metrics = get_metrics();
-    (
-        StatusCode::OK,
-        [("content-type", "text/plain; charset=utf-8")],
-        metrics,
-    )
-}
-
 /// Application container for managing server lifecycle.
 pub struct Application {
     http_port: u16,
@@ -114,9 +102,6 @@ impl Application {
         config: ReconciliationConfig,
         run_migrations: bool,
     ) -> Result<Self, AppError> {
-        // Initialize metrics
-        init_metrics();
-
         // Connect to database
         let db = Database::new(
             &config.database.url,
@@ -226,7 +211,7 @@ impl Application {
 
     /// Run the application until stopped.
     pub async fn run_until_stopped(self) -> std::io::Result<()> {
-        // Build minimal HTTP router (health + metrics)
+        // Build minimal HTTP router (health checks)
         let health_state = HealthState {
             db: self.state.db.clone(),
         };
@@ -234,9 +219,7 @@ impl Application {
         let http_router = Router::new()
             .route("/health", get(health_check))
             .route("/ready", get(readiness_check))
-            .route("/metrics", get(metrics_handler))
             .layer(TraceLayer::new_for_http())
-            .layer(middleware::from_fn(metrics_middleware))
             .layer(middleware::from_fn(request_id_middleware))
             .with_state(health_state);
 
@@ -261,23 +244,11 @@ impl Application {
                 std::io::Error::other(format!("Failed to build reflection service: {}", e))
             })?;
 
-        // gRPC trace layer for observability
-        let grpc_trace_layer = TraceLayer::new_for_grpc()
-            .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
-            .on_response(DefaultOnResponse::new().level(Level::DEBUG));
-
-        // Create reconciliation service with trace context interceptor for W3C trace propagation
-        let reconciliation_service_with_interceptor = ReconciliationServiceServer::with_interceptor(
-            reconciliation_service,
-            trace_context_interceptor,
-        );
-
         let incoming = tokio_stream::wrappers::TcpListenerStream::new(self.grpc_listener);
         let grpc_server = GrpcServer::builder()
-            .layer(grpc_trace_layer)
             .add_service(grpc_health_service)
             .add_service(reflection_service)
-            .add_service(reconciliation_service_with_interceptor)
+            .add_service(ReconciliationServiceServer::new(reconciliation_service))
             .serve_with_incoming(incoming);
 
         tracing::info!(

@@ -7,14 +7,10 @@ use crate::models::{
     ChargeType, CreateCharge, CreateSubscription, ListChargesFilter, ListSubscriptionsFilter,
     ProrationMode, SubscriptionStatus,
 };
-use crate::services::{
-    record_error, record_grpc_request, record_grpc_request_duration, record_subscription_operation,
-    Database,
-};
+use crate::services::Database;
 use chrono::{Datelike, Utc};
 use rust_decimal::Decimal;
 use std::sync::Arc;
-use std::time::Instant;
 use tonic::{Request, Response, Status};
 
 pub async fn create_subscription(
@@ -22,9 +18,6 @@ pub async fn create_subscription(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<CreateSubscriptionRequest>,
 ) -> Result<Response<CreateSubscriptionResponse>, Status> {
-    let start = Instant::now();
-    let method = "CreateSubscription";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_SUBSCRIPTION_CREATE)
         .await?;
@@ -69,9 +62,6 @@ pub async fn create_subscription(
 
     let subscription = db.create_subscription(&input).await.map_err(|e| {
         tracing::error!(error = %e, "Failed to create subscription");
-        record_error("database", method);
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         match e {
             service_core::error::AppError::NotFound(_) => Status::not_found("Plan not found"),
             _ => Status::internal(e.to_string()),
@@ -88,15 +78,8 @@ pub async fn create_subscription(
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to create initial billing cycle");
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
-
-    record_subscription_operation(&tenant_id.to_string(), "created");
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(CreateSubscriptionResponse {
         subscription: Some(subscription_to_proto(subscription)),
@@ -109,9 +92,6 @@ pub async fn get_subscription(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetSubscriptionRequest>,
 ) -> Result<Response<GetSubscriptionResponse>, Status> {
-    let start = Instant::now();
-    let method = "GetSubscription";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_SUBSCRIPTION_READ)
         .await?;
@@ -126,15 +106,10 @@ pub async fn get_subscription(
         .get_subscription(tenant_id, subscription_id)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let subscription = subscription.ok_or_else(|| {
-        record_grpc_request(method, "not_found");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::not_found("Subscription not found")
     })?;
 
@@ -142,9 +117,6 @@ pub async fn get_subscription(
         .get_current_billing_cycle(subscription.subscription_id)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
@@ -153,9 +125,6 @@ pub async fn get_subscription(
             .list_charges(tenant_id, cycle.cycle_id, &ListChargesFilter::default())
             .await
             .map_err(|e| {
-                record_error("database", method);
-                record_grpc_request(method, "error");
-                record_grpc_request_duration(method, start.elapsed().as_secs_f64());
                 Status::internal(e.to_string())
             })?;
         Some(cycle_to_proto(
@@ -165,9 +134,6 @@ pub async fn get_subscription(
     } else {
         None
     };
-
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(GetSubscriptionResponse {
         subscription: Some(subscription_to_proto(subscription)),
@@ -180,9 +146,6 @@ pub async fn list_subscriptions(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListSubscriptionsRequest>,
 ) -> Result<Response<ListSubscriptionsResponse>, Status> {
-    let start = Instant::now();
-    let method = "ListSubscriptions";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_SUBSCRIPTION_READ)
         .await?;
@@ -219,9 +182,6 @@ pub async fn list_subscriptions(
         .list_subscriptions(tenant_id, &filter)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
@@ -234,9 +194,6 @@ pub async fn list_subscriptions(
         .map(|s| s.subscription_id.clone())
         .unwrap_or_default();
 
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
-
     Ok(Response::new(ListSubscriptionsResponse {
         subscriptions: proto_subscriptions,
         next_page_token,
@@ -248,9 +205,6 @@ pub async fn activate_subscription(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<ActivateSubscriptionRequest>,
 ) -> Result<Response<ActivateSubscriptionResponse>, Status> {
-    let start = Instant::now();
-    let method = "ActivateSubscription";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_SUBSCRIPTION_MANAGE)
         .await?;
@@ -266,21 +220,14 @@ pub async fn activate_subscription(
         .get_subscription(tenant_id, subscription_id)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let existing = existing.ok_or_else(|| {
-        record_grpc_request(method, "not_found");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::not_found("Subscription not found")
     })?;
 
     if existing.status != SubscriptionStatus::Trial.as_str() {
-        record_grpc_request(method, "failed_precondition");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         return Err(Status::failed_precondition(
             "Subscription must be in trial status to activate",
         ));
@@ -290,21 +237,12 @@ pub async fn activate_subscription(
         .update_subscription_status(tenant_id, subscription_id, SubscriptionStatus::Active, None)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let subscription = subscription.ok_or_else(|| {
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal("Failed to update subscription")
     })?;
-
-    record_subscription_operation(&tenant_id.to_string(), "activated");
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(ActivateSubscriptionResponse {
         subscription: Some(subscription_to_proto(subscription)),
@@ -316,9 +254,6 @@ pub async fn pause_subscription(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<PauseSubscriptionRequest>,
 ) -> Result<Response<PauseSubscriptionResponse>, Status> {
-    let start = Instant::now();
-    let method = "PauseSubscription";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_SUBSCRIPTION_MANAGE)
         .await?;
@@ -334,21 +269,14 @@ pub async fn pause_subscription(
         .get_subscription(tenant_id, subscription_id)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let existing = existing.ok_or_else(|| {
-        record_grpc_request(method, "not_found");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::not_found("Subscription not found")
     })?;
 
     if existing.status != SubscriptionStatus::Active.as_str() {
-        record_grpc_request(method, "failed_precondition");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         return Err(Status::failed_precondition(
             "Subscription must be active to pause",
         ));
@@ -358,21 +286,12 @@ pub async fn pause_subscription(
         .update_subscription_status(tenant_id, subscription_id, SubscriptionStatus::Paused, None)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let subscription = subscription.ok_or_else(|| {
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal("Failed to update subscription")
     })?;
-
-    record_subscription_operation(&tenant_id.to_string(), "paused");
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(PauseSubscriptionResponse {
         subscription: Some(subscription_to_proto(subscription)),
@@ -384,9 +303,6 @@ pub async fn resume_subscription(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<ResumeSubscriptionRequest>,
 ) -> Result<Response<ResumeSubscriptionResponse>, Status> {
-    let start = Instant::now();
-    let method = "ResumeSubscription";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_SUBSCRIPTION_MANAGE)
         .await?;
@@ -402,21 +318,14 @@ pub async fn resume_subscription(
         .get_subscription(tenant_id, subscription_id)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let existing = existing.ok_or_else(|| {
-        record_grpc_request(method, "not_found");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::not_found("Subscription not found")
     })?;
 
     if existing.status != SubscriptionStatus::Paused.as_str() {
-        record_grpc_request(method, "failed_precondition");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         return Err(Status::failed_precondition(
             "Subscription must be paused to resume",
         ));
@@ -426,21 +335,12 @@ pub async fn resume_subscription(
         .update_subscription_status(tenant_id, subscription_id, SubscriptionStatus::Active, None)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let subscription = subscription.ok_or_else(|| {
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal("Failed to update subscription")
     })?;
-
-    record_subscription_operation(&tenant_id.to_string(), "resumed");
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(ResumeSubscriptionResponse {
         subscription: Some(subscription_to_proto(subscription)),
@@ -452,9 +352,6 @@ pub async fn cancel_subscription(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<CancelSubscriptionRequest>,
 ) -> Result<Response<CancelSubscriptionResponse>, Status> {
-    let start = Instant::now();
-    let method = "CancelSubscription";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_SUBSCRIPTION_MANAGE)
         .await?;
@@ -475,21 +372,14 @@ pub async fn cancel_subscription(
         .get_subscription(tenant_id, subscription_id)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let existing = existing.ok_or_else(|| {
-        record_grpc_request(method, "not_found");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::not_found("Subscription not found")
     })?;
 
     if existing.status == SubscriptionStatus::Cancelled.as_str() {
-        record_grpc_request(method, "failed_precondition");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         return Err(Status::failed_precondition(
             "Subscription is already cancelled",
         ));
@@ -512,21 +402,12 @@ pub async fn cancel_subscription(
         .update_subscription_status(tenant_id, subscription_id, status, end_date)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let subscription = subscription.ok_or_else(|| {
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal("Failed to update subscription")
     })?;
-
-    record_subscription_operation(&tenant_id.to_string(), "cancelled");
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(CancelSubscriptionResponse {
         subscription: Some(subscription_to_proto(subscription)),
@@ -539,9 +420,6 @@ pub async fn change_plan(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<ChangePlanRequest>,
 ) -> Result<Response<ChangePlanResponse>, Status> {
-    let start = Instant::now();
-    let method = "ChangePlan";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_SUBSCRIPTION_CHANGE)
         .await?;
@@ -560,21 +438,14 @@ pub async fn change_plan(
 
     // Validate new plan exists and is not archived
     let new_plan = db.get_plan(tenant_id, new_plan_id).await.map_err(|e| {
-        record_error("database", method);
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal(e.to_string())
     })?;
 
     let new_plan = new_plan.ok_or_else(|| {
-        record_grpc_request(method, "not_found");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::not_found("New plan not found")
     })?;
 
     if new_plan.is_archived {
-        record_grpc_request(method, "failed_precondition");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         return Err(Status::failed_precondition(
             "Cannot change to archived plan",
         ));
@@ -585,21 +456,14 @@ pub async fn change_plan(
         .get_subscription(tenant_id, subscription_id)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let existing = existing.ok_or_else(|| {
-        record_grpc_request(method, "not_found");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::not_found("Subscription not found")
     })?;
 
     if existing.status != SubscriptionStatus::Active.as_str() {
-        record_grpc_request(method, "failed_precondition");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         return Err(Status::failed_precondition(
             "Subscription must be active to change plan",
         ));
@@ -610,21 +474,14 @@ pub async fn change_plan(
         .get_plan(tenant_id, existing.plan_id)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let old_plan = old_plan.ok_or_else(|| {
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal("Current plan not found")
     })?;
 
     if old_plan.currency != new_plan.currency {
-        record_grpc_request(method, "invalid_argument");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         return Err(Status::invalid_argument(
             "Cannot change to plan with different currency",
         ));
@@ -644,9 +501,6 @@ pub async fn change_plan(
             .get_current_billing_cycle(subscription_id)
             .await
             .map_err(|e| {
-                record_error("database", method);
-                record_grpc_request(method, "error");
-                record_grpc_request_duration(method, start.elapsed().as_secs_f64());
                 Status::internal(e.to_string())
             })?;
 
@@ -676,9 +530,6 @@ pub async fn change_plan(
                     metadata: None,
                 };
                 db.create_charge(&credit_input).await.map_err(|e| {
-                    record_error("database", method);
-                    record_grpc_request(method, "error");
-                    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
                     Status::internal(e.to_string())
                 })?;
                 proration_charges.push(ProrationCharge {
@@ -701,9 +552,6 @@ pub async fn change_plan(
                     metadata: None,
                 };
                 db.create_charge(&charge_input).await.map_err(|e| {
-                    record_error("database", method);
-                    record_grpc_request(method, "error");
-                    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
                     Status::internal(e.to_string())
                 })?;
                 proration_charges.push(ProrationCharge {
@@ -718,21 +566,12 @@ pub async fn change_plan(
         .change_subscription_plan(tenant_id, subscription_id, new_plan_id, mode)
         .await
         .map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let subscription = subscription.ok_or_else(|| {
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal("Failed to change plan")
     })?;
-
-    record_subscription_operation(&tenant_id.to_string(), "plan_changed");
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(ChangePlanResponse {
         subscription: Some(subscription_to_proto(subscription)),

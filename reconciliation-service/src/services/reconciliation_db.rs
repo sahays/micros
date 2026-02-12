@@ -5,7 +5,6 @@
 use crate::grpc::proto;
 use crate::models::{Adjustment, AdjustmentType, Reconciliation};
 use crate::services::database::Database;
-use crate::services::metrics::DB_QUERY_DURATION;
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use service_core::error::AppError;
@@ -27,10 +26,6 @@ impl Database {
         period_end: &str,
         expected_balance_str: Option<&str>,
     ) -> Result<Reconciliation, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["start_reconciliation"])
-            .start_timer();
-
         let reconciliation_id = Uuid::new_v4();
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
@@ -68,8 +63,6 @@ impl Database {
         .fetch_one(self.pool())
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to start reconciliation: {}", e)))?;
-
-        timer.observe_duration();
         info!(reconciliation_id = %reconciliation.reconciliation_id, "Reconciliation started");
 
         Ok(reconciliation)
@@ -81,10 +74,6 @@ impl Database {
         tenant_id: &str,
         reconciliation_id: &str,
     ) -> Result<Option<Reconciliation>, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["get_reconciliation"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let recon_uuid = Uuid::from_str(reconciliation_id)
@@ -103,8 +92,6 @@ impl Database {
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to get reconciliation: {}", e)))?;
 
-        timer.observe_duration();
-
         Ok(reconciliation)
     }
 
@@ -116,10 +103,6 @@ impl Database {
         page_size: i32,
         page_token: Option<&str>,
     ) -> Result<(Vec<Reconciliation>, Option<String>), AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["list_reconciliations"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let account_uuid = Uuid::from_str(bank_account_id)
@@ -162,8 +145,6 @@ impl Database {
         }
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to list reconciliations: {}", e)))?;
 
-        timer.observe_duration();
-
         let has_more = reconciliations.len() > limit as usize;
         let mut reconciliations = reconciliations;
         if has_more {
@@ -186,10 +167,6 @@ impl Database {
         tenant_id: &str,
         reconciliation_id: &str,
     ) -> Result<Reconciliation, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["complete_reconciliation"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let recon_uuid = Uuid::from_str(reconciliation_id)
@@ -229,8 +206,6 @@ impl Database {
         .map_err(|e| {
             AppError::DatabaseError(anyhow::anyhow!("Failed to update bank account: {}", e))
         })?;
-
-        timer.observe_duration();
         info!(
             reconciliation_id = %reconciliation.reconciliation_id,
             bank_account_id = %reconciliation.bank_account_id,
@@ -247,10 +222,6 @@ impl Database {
         tenant_id: &str,
         reconciliation_id: &str,
     ) -> Result<(), AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["abandon_reconciliation"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let recon_uuid = Uuid::from_str(reconciliation_id)
@@ -271,8 +242,6 @@ impl Database {
             AppError::DatabaseError(anyhow::anyhow!("Failed to abandon reconciliation: {}", e))
         })?;
 
-        timer.observe_duration();
-
         Ok(())
     }
 
@@ -289,10 +258,6 @@ impl Database {
         description: &str,
         amount: &str,
     ) -> Result<Adjustment, AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["create_adjustment"])
-            .start_timer();
-
         let adjustment_id = Uuid::new_v4();
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
@@ -317,8 +282,6 @@ impl Database {
         .fetch_one(self.pool())
         .await
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to create adjustment: {}", e)))?;
-
-        timer.observe_duration();
         info!(adjustment_id = %adjustment.adjustment_id, "Adjustment created");
 
         Ok(adjustment)
@@ -332,10 +295,6 @@ impl Database {
         page_size: i32,
         page_token: Option<&str>,
     ) -> Result<(Vec<Adjustment>, Option<String>), AppError> {
-        let timer = DB_QUERY_DURATION
-            .with_label_values(&["list_adjustments"])
-            .start_timer();
-
         let tenant_uuid = Uuid::from_str(tenant_id)
             .map_err(|_| AppError::BadRequest(anyhow::anyhow!("Invalid tenant_id")))?;
         let recon_uuid = Uuid::from_str(reconciliation_id)
@@ -377,8 +336,6 @@ impl Database {
             .await
         }
         .map_err(|e| AppError::DatabaseError(anyhow::anyhow!("Failed to list adjustments: {}", e)))?;
-
-        timer.observe_duration();
 
         let has_more = adjustments.len() > limit as usize;
         let mut adjustments = adjustments;

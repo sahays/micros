@@ -1,6 +1,6 @@
 # Micros - Microservices Monorepo
 
-Production-ready Rust microservices with gRPC interfaces and full observability stack.
+Production-ready Rust microservices with gRPC interfaces and structured JSON logging.
 
 ## Architecture
 
@@ -48,7 +48,6 @@ cp .env.example .env.dev
 ./scripts/dev-up.sh
 
 # Access points (dev):
-# - Grafana: http://localhost:9002 (admin/admin)
 # - Auth gRPC: localhost:50051
 # - Document gRPC: localhost:50052
 # - Notification gRPC: localhost:50053
@@ -80,12 +79,9 @@ cargo clippy             # Lint
 cargo run -p auth-service  # Run specific service
 ```
 
-## Observability
+## Logging
 
-- **Prometheus**: Metrics (port 9000/10000)
-- **Loki**: Logs (port 9001/10001)
-- **Grafana**: Dashboards (port 9002/10002)
-- **Tempo**: Traces (port 9003/10003)
+Services emit structured JSON logs to stdout via the `tracing` crate. Configure log levels with `RUST_LOG` or `LOG_LEVEL` environment variables.
 
 ## Documentation
 

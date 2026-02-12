@@ -7,7 +7,6 @@ use super::{
     Content, ContentPart, GeminiConfig, GenerateContentRequest, GenerateContentResponse,
     GenerationConfig, GEMINI_API_BASE, PROVIDER_NAME,
 };
-use crate::services::metrics::{record_provider_error, record_provider_latency};
 use crate::services::providers::{
     DocumentContext, FinishReason, GenerationParams, ProviderError, ProviderResponse,
     ProviderStream, StreamChunk, TextProvider,
@@ -110,17 +109,6 @@ impl GeminiTextProvider {
         }
     }
 
-    /// Map provider error to error type for metrics.
-    fn error_type(error: &ProviderError) -> &'static str {
-        match error {
-            ProviderError::NotConfigured(_) => "not_configured",
-            ProviderError::ApiError(_) => "api_error",
-            ProviderError::InvalidRequest(_) => "invalid_request",
-            ProviderError::RateLimited => "rate_limited",
-            ProviderError::ContentFiltered => "content_filtered",
-            ProviderError::NetworkError(_) => "network_error",
-        }
-    }
 }
 
 #[async_trait]
@@ -171,7 +159,6 @@ impl TextProvider for GeminiTextProvider {
             .await
             .map_err(|e| {
                 let err = ProviderError::NetworkError(e.to_string());
-                record_provider_error(PROVIDER_NAME, Self::error_type(&err));
                 tracing::error!(error = %e, "Network error calling Gemini API");
                 err
             })?;
@@ -181,14 +168,12 @@ impl TextProvider for GeminiTextProvider {
             let error_text = response.text().await.unwrap_or_default();
 
             if status.as_u16() == 429 {
-                record_provider_error(PROVIDER_NAME, "rate_limited");
                 tracing::warn!("Rate limited by Gemini API");
                 return Err(ProviderError::RateLimited);
             }
 
             let err =
                 ProviderError::ApiError(format!("Gemini API error {}: {}", status, error_text));
-            record_provider_error(PROVIDER_NAME, Self::error_type(&err));
             tracing::error!(
                 status = %status,
                 error = %error_text,
@@ -199,7 +184,6 @@ impl TextProvider for GeminiTextProvider {
 
         let api_response: GenerateContentResponse = response.json().await.map_err(|e| {
             let err = ProviderError::ApiError(format!("Failed to parse response: {}", e));
-            record_provider_error(PROVIDER_NAME, Self::error_type(&err));
             tracing::error!(error = %e, "Failed to parse Gemini API response");
             err
         })?;
@@ -230,7 +214,6 @@ impl TextProvider for GeminiTextProvider {
             .unwrap_or(FinishReason::Complete);
 
         if finish_reason == FinishReason::ContentFilter {
-            record_provider_error(PROVIDER_NAME, "content_filtered");
             tracing::warn!("Content filtered by Gemini safety settings");
             return Err(ProviderError::ContentFiltered);
         }
@@ -238,8 +221,6 @@ impl TextProvider for GeminiTextProvider {
         let duration = start.elapsed();
         let input_tokens = usage.prompt_token_count.unwrap_or(0);
         let output_tokens = usage.candidates_token_count.unwrap_or(0);
-
-        record_provider_latency(PROVIDER_NAME, &model, duration.as_secs_f64());
 
         tracing::info!(
             duration_ms = duration.as_millis(),
@@ -306,7 +287,6 @@ impl TextProvider for GeminiTextProvider {
             .await
             .map_err(|e| {
                 let err = ProviderError::NetworkError(e.to_string());
-                record_provider_error(PROVIDER_NAME, Self::error_type(&err));
                 tracing::error!(error = %e, "Network error starting Gemini stream");
                 err
             })?;
@@ -316,14 +296,12 @@ impl TextProvider for GeminiTextProvider {
             let error_text = response.text().await.unwrap_or_default();
 
             if status.as_u16() == 429 {
-                record_provider_error(PROVIDER_NAME, "rate_limited");
                 tracing::warn!("Rate limited by Gemini API");
                 return Err(ProviderError::RateLimited);
             }
 
             let err =
                 ProviderError::ApiError(format!("Gemini API error {}: {}", status, error_text));
-            record_provider_error(PROVIDER_NAME, Self::error_type(&err));
             tracing::error!(
                 status = %status,
                 error = %error_text,
@@ -402,7 +380,6 @@ impl TextProvider for GeminiTextProvider {
                         }
                     }
                     Err(e) => {
-                        record_provider_error(PROVIDER_NAME, "network_error");
                         tracing::error!(error = %e, "Error in Gemini stream");
                         let _ = tx
                             .send(Err(ProviderError::NetworkError(e.to_string())))
@@ -413,7 +390,6 @@ impl TextProvider for GeminiTextProvider {
             }
 
             let stream_duration = stream_start.elapsed();
-            record_provider_latency(PROVIDER_NAME, &model, stream_duration.as_secs_f64());
 
             tracing::info!(
                 duration_ms = stream_duration.as_millis(),
@@ -453,7 +429,6 @@ impl TextProvider for GeminiTextProvider {
         let url = format!("{}/models?key={}", GEMINI_API_BASE, self.config.api_key);
 
         let response = self.client.get(&url).send().await.map_err(|e| {
-            record_provider_error(PROVIDER_NAME, "network_error");
             tracing::error!(error = %e, "Health check network error");
             ProviderError::NetworkError(e.to_string())
         })?;
@@ -468,7 +443,6 @@ impl TextProvider for GeminiTextProvider {
             Ok(())
         } else {
             let status = response.status();
-            record_provider_error(PROVIDER_NAME, "api_error");
             tracing::error!(
                 status = %status,
                 duration_ms = duration.as_millis(),

@@ -5,12 +5,8 @@ use crate::grpc::helpers::*;
 use crate::grpc::proto::*;
 use crate::models::BillingInterval;
 use crate::models::{CreatePlan, CreateUsageComponent, ListPlansFilter, UpdatePlan};
-use crate::services::{
-    record_error, record_grpc_request, record_grpc_request_duration, record_plan_operation,
-    Database,
-};
+use crate::services::Database;
 use std::sync::Arc;
-use std::time::Instant;
 use tonic::{Request, Response, Status};
 
 pub async fn create_plan(
@@ -18,9 +14,6 @@ pub async fn create_plan(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<CreatePlanRequest>,
 ) -> Result<Response<CreatePlanResponse>, Status> {
-    let start = Instant::now();
-    let method = "CreatePlan";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_PLAN_CREATE)
         .await?;
@@ -63,9 +56,6 @@ pub async fn create_plan(
 
     let plan = db.create_plan(&input).await.map_err(|e| {
         tracing::error!(error = %e, "Failed to create plan");
-        record_error("database", method);
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal(e.to_string())
     })?;
 
@@ -81,17 +71,10 @@ pub async fn create_plan(
         };
         let component = db.create_usage_component(&comp_input).await.map_err(|e| {
             tracing::error!(error = %e, "Failed to create usage component");
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
         components.push(component);
     }
-
-    record_plan_operation(&tenant_id.to_string(), "created");
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(CreatePlanResponse {
         plan: Some(plan_to_proto(plan, components)),
@@ -103,9 +86,6 @@ pub async fn get_plan(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetPlanRequest>,
 ) -> Result<Response<GetPlanResponse>, Status> {
-    let start = Instant::now();
-    let method = "GetPlan";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_PLAN_READ)
         .await?;
@@ -118,27 +98,16 @@ pub async fn get_plan(
 
     let plan = db.get_plan(tenant_id, plan_id).await.map_err(|e| {
         tracing::error!(error = %e, "Failed to get plan");
-        record_error("database", method);
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal(e.to_string())
     })?;
 
     let plan = plan.ok_or_else(|| {
-        record_grpc_request(method, "not_found");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::not_found("Plan not found")
     })?;
     let components = db.get_usage_components(plan.plan_id).await.map_err(|e| {
         tracing::error!(error = %e, "Failed to get usage components");
-        record_error("database", method);
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal(e.to_string())
     })?;
-
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(GetPlanResponse {
         plan: Some(plan_to_proto(plan, components)),
@@ -150,9 +119,6 @@ pub async fn update_plan(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<UpdatePlanRequest>,
 ) -> Result<Response<UpdatePlanResponse>, Status> {
-    let start = Instant::now();
-    let method = "UpdatePlan";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_PLAN_UPDATE)
         .await?;
@@ -196,27 +162,15 @@ pub async fn update_plan(
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to update plan");
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
 
     let plan = plan.ok_or_else(|| {
-        record_grpc_request(method, "not_found");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::not_found("Plan not found or archived")
     })?;
     let components = db.get_usage_components(plan.plan_id).await.map_err(|e| {
-        record_error("database", method);
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal(e.to_string())
     })?;
-
-    record_plan_operation(&tenant_id.to_string(), "updated");
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(UpdatePlanResponse {
         plan: Some(plan_to_proto(plan, components)),
@@ -228,9 +182,6 @@ pub async fn list_plans(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListPlansRequest>,
 ) -> Result<Response<ListPlansResponse>, Status> {
-    let start = Instant::now();
-    let method = "ListPlans";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_PLAN_READ)
         .await?;
@@ -251,18 +202,12 @@ pub async fn list_plans(
 
     let plans = db.list_plans(tenant_id, &filter).await.map_err(|e| {
         tracing::error!(error = %e, "Failed to list plans");
-        record_error("database", method);
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal(e.to_string())
     })?;
 
     let mut proto_plans = Vec::new();
     for plan in plans {
         let components = db.get_usage_components(plan.plan_id).await.map_err(|e| {
-            record_error("database", method);
-            record_grpc_request(method, "error");
-            record_grpc_request_duration(method, start.elapsed().as_secs_f64());
             Status::internal(e.to_string())
         })?;
         proto_plans.push(plan_to_proto(plan, components));
@@ -272,9 +217,6 @@ pub async fn list_plans(
         .last()
         .map(|p| p.plan_id.clone())
         .unwrap_or_default();
-
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(ListPlansResponse {
         plans: proto_plans,
@@ -287,9 +229,6 @@ pub async fn archive_plan(
     capability_checker: &Arc<CapabilityChecker>,
     request: Request<ArchivePlanRequest>,
 ) -> Result<Response<ArchivePlanResponse>, Status> {
-    let start = Instant::now();
-    let method = "ArchivePlan";
-
     let auth = capability_checker
         .require_capability(&request, capabilities::BILLING_PLAN_UPDATE)
         .await?;
@@ -302,27 +241,15 @@ pub async fn archive_plan(
 
     let plan = db.archive_plan(tenant_id, plan_id).await.map_err(|e| {
         tracing::error!(error = %e, "Failed to archive plan");
-        record_error("database", method);
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal(e.to_string())
     })?;
 
     let plan = plan.ok_or_else(|| {
-        record_grpc_request(method, "not_found");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::not_found("Plan not found or already archived")
     })?;
     let components = db.get_usage_components(plan.plan_id).await.map_err(|e| {
-        record_error("database", method);
-        record_grpc_request(method, "error");
-        record_grpc_request_duration(method, start.elapsed().as_secs_f64());
         Status::internal(e.to_string())
     })?;
-
-    record_plan_operation(&tenant_id.to_string(), "archived");
-    record_grpc_request(method, "ok");
-    record_grpc_request_duration(method, start.elapsed().as_secs_f64());
 
     Ok(Response::new(ArchivePlanResponse {
         plan: Some(plan_to_proto(plan, components)),

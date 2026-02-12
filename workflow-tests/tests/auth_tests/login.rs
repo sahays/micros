@@ -4,7 +4,7 @@
 
 use serial_test::serial;
 use tonic::Request;
-use workflow_tests::helpers::auth::{with_admin_key, TestApp};
+use workflow_tests::helpers::auth::TestApp;
 use workflow_tests::proto::auth::{
     BootstrapRequest, LoginRequest, LogoutRequest, RefreshRequest, RegisterRequest,
     ValidateTokenRequest,
@@ -16,13 +16,13 @@ async fn setup_tenant(app: &TestApp) -> String {
     let id = uuid::Uuid::new_v4().to_string();
     let slug = format!("authtest-{}", &id[..8]);
     let mut client = app.admin_client().await;
-    let request = with_admin_key(Request::new(BootstrapRequest {
+    let request = Request::new(BootstrapRequest {
         tenant_slug: slug.clone(),
         tenant_label: "Auth Test Tenant".to_string(),
         admin_email: format!("admin@{}.com", slug),
         admin_password: "AdminPass123!".to_string(),
         admin_display_name: None,
-    }));
+    });
     client.bootstrap(request).await.unwrap();
     slug
 }
