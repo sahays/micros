@@ -2,11 +2,11 @@
 //!
 //! Tests the first-time system setup flow.
 
-use workflow_tests::helpers::auth::{with_admin_key, with_auth, TestApp};
-use workflow_tests::proto::auth::{BootstrapRequest, ListTenantOrgNodesRequest};
 use serial_test::serial;
 use tonic::Request;
 use uuid::Uuid;
+use workflow_tests::helpers::auth::{with_admin_key, with_auth, TestApp};
+use workflow_tests::proto::auth::{BootstrapRequest, ListTenantOrgNodesRequest};
 
 fn unique_slug(prefix: &str) -> String {
     format!("{}-{}", prefix, &Uuid::new_v4().to_string()[..8])
@@ -45,7 +45,6 @@ async fn bootstrap_creates_tenant_and_superadmin() {
     // Verify tokens are returned
     assert!(!response.access_token.is_empty());
     assert!(!response.refresh_token.is_empty());
-
 }
 
 #[tokio::test]
@@ -70,8 +69,6 @@ async fn bootstrap_fails_without_admin_api_key() {
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::Unauthenticated);
     assert!(status.message().contains("X-Admin-Api-Key"));
-
-
 }
 
 #[tokio::test]
@@ -98,8 +95,6 @@ async fn bootstrap_fails_with_invalid_admin_api_key() {
 
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::Unauthenticated);
-
-
 }
 
 #[tokio::test]
@@ -135,8 +130,6 @@ async fn bootstrap_fails_on_second_call() {
 
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::AlreadyExists);
-
-
 }
 
 #[tokio::test]
@@ -161,8 +154,6 @@ async fn bootstrap_validates_password_requirements() {
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
     assert!(status.message().contains("admin_password"));
-
-
 }
 
 #[tokio::test]
@@ -201,8 +192,6 @@ async fn bootstrap_validates_required_fields() {
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
     assert!(status.message().contains("admin_email"));
-
-
 }
 
 #[tokio::test]
@@ -239,6 +228,4 @@ async fn bootstrap_returns_valid_access_token() {
         "Superadmin should be able to list org nodes: {:?}",
         list_response.err()
     );
-
-
 }

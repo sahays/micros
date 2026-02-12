@@ -1,7 +1,7 @@
-use workflow_tests::helpers::notification::TestApp;
 use reqwest::Client;
 use service_core::grpc::{NotificationChannelProto, PushPlatformProto};
 use std::collections::HashMap;
+use workflow_tests::helpers::notification::TestApp;
 
 // =============================================================================
 // Health Check (HTTP)

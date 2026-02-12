@@ -2,6 +2,7 @@
 //!
 //! Run with: ./scripts/integ-tests.sh -p workflow-tests
 
+use uuid::Uuid;
 use workflow_tests::helpers::ledger::{
     create_test_account, get_balance, post_test_transaction, spawn_app, with_tenant,
 };
@@ -9,7 +10,6 @@ use workflow_tests::proto::ledger::{
     AccountType as ProtoAccountType, Direction as ProtoDirection, GetBalanceRequest,
     GetBalancesRequest, PostTransactionEntry, PostTransactionRequest,
 };
-use uuid::Uuid;
 
 /// Story 004, Task 1: Get balance for asset account (debit-normal)
 #[tokio::test]

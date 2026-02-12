@@ -1,7 +1,10 @@
 //! gRPC module for ledger-service.
 
+mod accounts;
 pub mod capability_check;
+mod reporting;
 mod service;
+mod transactions;
 
 pub use capability_check::CapabilityChecker;
 pub use service::LedgerServiceImpl;

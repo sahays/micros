@@ -347,10 +347,7 @@ pub async fn verify_otp_impl(
 
             let reset_token = state
                 .jwt
-                .generate_reset_token(
-                    &user.user_id.to_string(),
-                    &tenant_id.to_string(),
-                )
+                .generate_reset_token(&user.user_id.to_string(), &tenant_id.to_string())
                 .map_err(|e| {
                     AppError::InternalError(anyhow::anyhow!("Reset token generation failed: {}", e))
                 })?;

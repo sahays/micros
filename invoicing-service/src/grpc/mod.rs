@@ -1,7 +1,15 @@
 //! gRPC module for invoicing-service.
 
 pub mod capability_check;
+pub mod helpers;
+mod invoice_lifecycle;
+mod invoices;
+mod line_items;
+mod pdf;
+mod receipts;
 mod service;
+mod statements;
+mod tax_rates;
 
 pub use service::InvoicingServiceImpl;
 

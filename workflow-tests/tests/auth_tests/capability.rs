@@ -2,16 +2,16 @@
 //!
 //! Tests that protected endpoints require appropriate capabilities.
 
+use serial_test::serial;
+use tonic::transport::Channel;
+use tonic::Request;
+use uuid::Uuid;
 use workflow_tests::helpers::auth::{with_admin_key, with_auth, TestApp};
 use workflow_tests::proto::auth::{
     assignment_service_client::AssignmentServiceClient, BootstrapRequest, CreateAssignmentRequest,
     CreateOrgNodeRequest, CreateRoleRequest, ListTenantOrgNodesRequest, ListTenantRolesRequest,
     LoginRequest, RegisterRequest,
 };
-use serial_test::serial;
-use tonic::transport::Channel;
-use tonic::Request;
-use uuid::Uuid;
 
 fn unique_slug(prefix: &str) -> String {
     format!("{}-{}", prefix, &Uuid::new_v4().to_string()[..8])
@@ -81,8 +81,6 @@ async fn protected_endpoint_rejects_unauthenticated_request() {
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::Unauthenticated);
     assert!(status.message().contains("authorization"));
-
-
 }
 
 // ============================================================================
@@ -156,8 +154,6 @@ async fn superadmin_can_access_all_protected_endpoints() {
         "Superadmin should create role: {:?}",
         response.err()
     );
-
-
 }
 
 // ============================================================================
@@ -190,8 +186,6 @@ async fn regular_user_cannot_create_org_node() {
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::PermissionDenied);
     assert!(status.message().contains("capability"));
-
-
 }
 
 #[tokio::test]
@@ -215,8 +209,6 @@ async fn regular_user_cannot_list_org_nodes() {
 
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::PermissionDenied);
-
-
 }
 
 #[tokio::test]
@@ -241,8 +233,6 @@ async fn regular_user_cannot_create_role() {
 
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::PermissionDenied);
-
-
 }
 
 // ============================================================================
@@ -354,8 +344,6 @@ async fn user_with_specific_capability_can_access_endpoint() {
     let response = org_client.create_org_node(request).await;
     assert!(response.is_err());
     assert_eq!(response.unwrap_err().code(), tonic::Code::PermissionDenied);
-
-
 }
 
 // ============================================================================
@@ -395,6 +383,4 @@ async fn auth_endpoints_are_public() {
         "Login should be public: {:?}",
         response.err()
     );
-
-
 }

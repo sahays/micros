@@ -2,11 +2,11 @@
 //!
 //! Run with: ./scripts/integ-tests.sh -p workflow-tests
 
+use uuid::Uuid;
 use workflow_tests::helpers::ledger::{create_test_account, spawn_app, with_tenant};
 use workflow_tests::proto::ledger::{
     AccountType as ProtoAccountType, CreateAccountRequest, GetAccountRequest, ListAccountsRequest,
 };
-use uuid::Uuid;
 
 /// Story 002, Task 1: Create account with valid parameters
 #[tokio::test]

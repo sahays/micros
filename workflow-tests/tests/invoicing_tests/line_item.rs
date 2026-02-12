@@ -1,6 +1,6 @@
 //! Line item integration tests for invoicing-service.
 
-use workflow_tests::helpers::invoicing::{TestApp, with_tenant};
+use workflow_tests::helpers::invoicing::{with_tenant, TestApp};
 use workflow_tests::proto::invoicing::{
     AddLineItemRequest, Address, CreateInvoiceRequest, GetInvoiceRequest, InvoiceType,
     IssueInvoiceRequest, RemoveLineItemRequest, UpdateLineItemRequest,

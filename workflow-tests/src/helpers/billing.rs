@@ -5,13 +5,11 @@ use tonic::transport::Channel;
 use uuid::Uuid;
 
 fn grpc_endpoint() -> String {
-    std::env::var("BILLING_GRPC_ENDPOINT")
-        .unwrap_or_else(|_| "http://localhost:50057".to_string())
+    std::env::var("BILLING_GRPC_ENDPOINT").unwrap_or_else(|_| "http://localhost:50057".to_string())
 }
 
 fn http_base_url() -> String {
-    std::env::var("BILLING_HTTP_URL")
-        .unwrap_or_else(|_| "http://localhost:9012".to_string())
+    std::env::var("BILLING_HTTP_URL").unwrap_or_else(|_| "http://localhost:9012".to_string())
 }
 
 /// Test application wrapper for integration tests.

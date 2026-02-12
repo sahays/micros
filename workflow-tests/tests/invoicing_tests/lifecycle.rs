@@ -1,7 +1,7 @@
 //! Invoice lifecycle integration tests for invoicing-service.
 //! Tests for IssueInvoice and VoidInvoice operations.
 
-use workflow_tests::helpers::invoicing::{TestApp, with_tenant};
+use workflow_tests::helpers::invoicing::{with_tenant, TestApp};
 use workflow_tests::proto::invoicing::{
     AddLineItemRequest, Address, CreateInvoiceRequest, InvoiceStatus, InvoiceType,
     IssueInvoiceRequest, UpdateInvoiceRequest, VoidInvoiceRequest,
@@ -92,9 +92,13 @@ async fn issue_invoice_transitions_to_issued() {
     let mut client = app.grpc_client().await;
 
     // Create draft invoice with line item
-    let invoice_id =
-        create_draft_invoice(&mut client, app.tenant_id(), app.customer_id(), "Issue Test Customer")
-            .await;
+    let invoice_id = create_draft_invoice(
+        &mut client,
+        app.tenant_id(),
+        app.customer_id(),
+        "Issue Test Customer",
+    )
+    .await;
     add_line_item(
         &mut client,
         app.tenant_id(),
@@ -138,9 +142,13 @@ async fn issue_invoice_assigns_sequential_number() {
     let mut client = app.grpc_client().await;
 
     // Create and issue two invoices
-    let invoice_id1 =
-        create_draft_invoice(&mut client, app.tenant_id(), app.customer_id(), "Sequential Test 1")
-            .await;
+    let invoice_id1 = create_draft_invoice(
+        &mut client,
+        app.tenant_id(),
+        app.customer_id(),
+        "Sequential Test 1",
+    )
+    .await;
     add_line_item(
         &mut client,
         app.tenant_id(),
@@ -151,9 +159,13 @@ async fn issue_invoice_assigns_sequential_number() {
     )
     .await;
 
-    let invoice_id2 =
-        create_draft_invoice(&mut client, app.tenant_id(), app.customer_id(), "Sequential Test 2")
-            .await;
+    let invoice_id2 = create_draft_invoice(
+        &mut client,
+        app.tenant_id(),
+        app.customer_id(),
+        "Sequential Test 2",
+    )
+    .await;
     add_line_item(
         &mut client,
         app.tenant_id(),
@@ -206,9 +218,13 @@ async fn issue_empty_invoice_fails() {
     let mut client = app.grpc_client().await;
 
     // Create draft invoice WITHOUT line items
-    let invoice_id =
-        create_draft_invoice(&mut client, app.tenant_id(), app.customer_id(), "Empty Invoice Customer")
-            .await;
+    let invoice_id = create_draft_invoice(
+        &mut client,
+        app.tenant_id(),
+        app.customer_id(),
+        "Empty Invoice Customer",
+    )
+    .await;
 
     // Try to issue the invoice
     let issue_request = with_tenant(
@@ -233,9 +249,13 @@ async fn issue_already_issued_invoice_fails() {
     let mut client = app.grpc_client().await;
 
     // Create and issue an invoice
-    let invoice_id =
-        create_draft_invoice(&mut client, app.tenant_id(), app.customer_id(), "Double Issue Customer")
-            .await;
+    let invoice_id = create_draft_invoice(
+        &mut client,
+        app.tenant_id(),
+        app.customer_id(),
+        "Double Issue Customer",
+    )
+    .await;
     add_line_item(
         &mut client,
         app.tenant_id(),
@@ -283,9 +303,13 @@ async fn void_issued_invoice_succeeds() {
     let mut client = app.grpc_client().await;
 
     // Create, add line item, and issue an invoice
-    let invoice_id =
-        create_draft_invoice(&mut client, app.tenant_id(), app.customer_id(), "Void Test Customer")
-            .await;
+    let invoice_id = create_draft_invoice(
+        &mut client,
+        app.tenant_id(),
+        app.customer_id(),
+        "Void Test Customer",
+    )
+    .await;
     add_line_item(
         &mut client,
         app.tenant_id(),
@@ -335,9 +359,13 @@ async fn void_draft_invoice_fails() {
     let mut client = app.grpc_client().await;
 
     // Create draft invoice (don't issue it)
-    let invoice_id =
-        create_draft_invoice(&mut client, app.tenant_id(), app.customer_id(), "Void Draft Customer")
-            .await;
+    let invoice_id = create_draft_invoice(
+        &mut client,
+        app.tenant_id(),
+        app.customer_id(),
+        "Void Draft Customer",
+    )
+    .await;
 
     // Try to void it
     let void_request = with_tenant(
@@ -362,9 +390,13 @@ async fn void_already_voided_invoice_fails() {
     let mut client = app.grpc_client().await;
 
     // Create, issue, and void an invoice
-    let invoice_id =
-        create_draft_invoice(&mut client, app.tenant_id(), app.customer_id(), "Double Void Customer")
-            .await;
+    let invoice_id = create_draft_invoice(
+        &mut client,
+        app.tenant_id(),
+        app.customer_id(),
+        "Double Void Customer",
+    )
+    .await;
     add_line_item(
         &mut client,
         app.tenant_id(),

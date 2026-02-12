@@ -1,6 +1,6 @@
 //! Payment and receipt integration tests for invoicing-service.
 
-use workflow_tests::helpers::invoicing::{TestApp, with_tenant};
+use workflow_tests::helpers::invoicing::{with_tenant, TestApp};
 use workflow_tests::proto::invoicing::{
     AddLineItemRequest, Address, CreateInvoiceRequest, GetReceiptRequest, InvoiceStatus,
     InvoiceType, IssueInvoiceRequest, ListReceiptsRequest, RecordPaymentRequest,

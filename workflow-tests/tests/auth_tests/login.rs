@@ -2,13 +2,13 @@
 //!
 //! Tests registration, login, token refresh, and logout.
 
+use serial_test::serial;
+use tonic::Request;
 use workflow_tests::helpers::auth::{with_admin_key, TestApp};
 use workflow_tests::proto::auth::{
     BootstrapRequest, LoginRequest, LogoutRequest, RefreshRequest, RegisterRequest,
     ValidateTokenRequest,
 };
-use serial_test::serial;
-use tonic::Request;
 
 /// Helper to bootstrap and get a tenant for auth tests.
 /// Uses a unique slug per invocation to avoid collisions in parallel test runs.
@@ -61,8 +61,6 @@ async fn register_creates_new_user() {
     let user = response.user.unwrap();
     assert_eq!(user.email, "newuser@example.com");
     assert_eq!(user.display_name, Some("New User".to_string()));
-
-
 }
 
 #[tokio::test]
@@ -93,8 +91,6 @@ async fn register_fails_for_duplicate_email() {
     assert!(response.is_err());
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::AlreadyExists);
-
-
 }
 
 #[tokio::test]
@@ -115,8 +111,6 @@ async fn register_fails_for_invalid_tenant() {
 
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::NotFound);
-
-
 }
 
 #[tokio::test]
@@ -139,8 +133,6 @@ async fn register_validates_password_length() {
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
     assert!(status.message().contains("Password"));
-
-
 }
 
 #[tokio::test]
@@ -163,8 +155,6 @@ async fn register_validates_email_format() {
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::InvalidArgument);
     assert!(status.message().to_lowercase().contains("email"));
-
-
 }
 
 // ============================================================================
@@ -205,8 +195,6 @@ async fn login_succeeds_with_valid_credentials() {
     assert!(!response.access_token.is_empty());
     assert!(!response.refresh_token.is_empty());
     assert_eq!(response.token_type, "Bearer");
-
-
 }
 
 #[tokio::test]
@@ -237,8 +225,6 @@ async fn login_fails_with_wrong_password() {
 
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::Unauthenticated);
-
-
 }
 
 #[tokio::test]
@@ -259,8 +245,6 @@ async fn login_fails_for_nonexistent_user() {
 
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::Unauthenticated);
-
-
 }
 
 // ============================================================================
@@ -301,8 +285,6 @@ async fn refresh_returns_new_tokens() {
     assert!(!response.refresh_token.is_empty());
     // New refresh token should be different (rotation)
     assert_ne!(response.refresh_token, original_refresh_token);
-
-
 }
 
 #[tokio::test]
@@ -320,8 +302,6 @@ async fn refresh_fails_with_invalid_token() {
 
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::Unauthenticated);
-
-
 }
 
 #[tokio::test]
@@ -357,8 +337,6 @@ async fn refresh_fails_after_logout() {
 
     let status = response.unwrap_err();
     assert_eq!(status.code(), tonic::Code::Unauthenticated);
-
-
 }
 
 // ============================================================================
@@ -400,8 +378,6 @@ async fn validate_token_returns_claims_for_valid_token() {
     let claims = response.claims.unwrap();
     assert!(!claims.sub.is_empty()); // User ID
     assert_eq!(claims.email, "validate@example.com");
-
-
 }
 
 #[tokio::test]
@@ -420,8 +396,6 @@ async fn validate_token_returns_invalid_for_bad_token() {
     let response = response.unwrap().into_inner();
     assert!(!response.valid);
     assert!(response.claims.is_none());
-
-
 }
 
 // ============================================================================
@@ -455,8 +429,6 @@ async fn logout_succeeds() {
         "Logout should succeed: {:?}",
         response.err()
     );
-
-
 }
 
 #[tokio::test]
@@ -473,6 +445,4 @@ async fn logout_succeeds_with_invalid_token() {
     let response = client.logout(request).await;
     // Should not fail even with invalid token
     assert!(response.is_ok());
-
-
 }

@@ -1,5 +1,8 @@
 pub mod capability_check;
 pub mod genai_service;
+mod helpers;
+mod processing;
+mod sessions;
 
 pub use capability_check::{capabilities, CapabilityChecker};
 pub use genai_service::GenaiGrpcService;

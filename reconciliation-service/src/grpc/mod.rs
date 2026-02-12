@@ -1,7 +1,11 @@
 //! gRPC module for reconciliation-service.
 
+mod bank_accounts;
 pub mod capability_check;
+mod matching;
+mod reconciliation;
 mod service;
+mod statements;
 mod trace_interceptor;
 
 pub use capability_check::{capabilities, CapabilityChecker};

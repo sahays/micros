@@ -1,6 +1,6 @@
 //! Statement generation integration tests for invoicing-service.
 
-use workflow_tests::helpers::invoicing::{TestApp, with_tenant};
+use workflow_tests::helpers::invoicing::{with_tenant, TestApp};
 use workflow_tests::proto::invoicing::{
     AddLineItemRequest, Address, CreateInvoiceRequest, GenerateStatementRequest, InvoiceType,
     IssueInvoiceRequest, RecordPaymentRequest,
@@ -329,14 +329,7 @@ async fn generate_statement_running_balance() {
         "2026-01-10",
     )
     .await;
-    record_payment(
-        &mut client,
-        app.tenant_id(),
-        &inv1,
-        "100.00",
-        "2026-01-15",
-    )
-    .await;
+    record_payment(&mut client, app.tenant_id(), &inv1, "100.00", "2026-01-15").await;
     let _inv3 = create_and_issue_invoice(
         &mut client,
         app.tenant_id(),
@@ -346,14 +339,7 @@ async fn generate_statement_running_balance() {
         "2026-01-20",
     )
     .await;
-    record_payment(
-        &mut client,
-        app.tenant_id(),
-        &inv2,
-        "100.00",
-        "2026-01-25",
-    )
-    .await;
+    record_payment(&mut client, app.tenant_id(), &inv2, "100.00", "2026-01-25").await;
 
     // Generate statement
     let statement_request = with_tenant(

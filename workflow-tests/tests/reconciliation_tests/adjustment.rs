@@ -1,10 +1,10 @@
 //! Integration tests for adjustment operations.
 
-use workflow_tests::helpers::reconciliation::{spawn_app, with_tenant};
-use workflow_tests::proto::reconciliation::*;
 use rust_decimal::Decimal;
 use std::str::FromStr;
 use uuid::Uuid;
+use workflow_tests::helpers::reconciliation::{spawn_app, with_tenant};
+use workflow_tests::proto::reconciliation::*;
 
 /// Helper to create a bank account and get back the ID.
 async fn create_bank_account(

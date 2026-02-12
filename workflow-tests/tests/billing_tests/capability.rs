@@ -6,9 +6,9 @@
 //! - BFF trust model works correctly (x-tenant-id header provides access)
 //! - Capability checker infrastructure is properly integrated
 
+use tonic::Request;
 use workflow_tests::helpers::billing::{with_tenant, TestApp};
 use workflow_tests::proto::billing::*;
-use tonic::Request;
 
 #[allow(dead_code)]
 fn with_bff_headers<T>(mut request: Request<T>, tenant_id: &str, user_id: &str) -> Request<T> {
@@ -70,8 +70,7 @@ async fn bff_request_without_tenant_header_fails() {
         let status = response.unwrap_err();
         // Should be either Unauthenticated or Internal due to missing tenant
         assert!(
-            status.code() == tonic::Code::Unauthenticated
-                || status.code() == tonic::Code::Internal,
+            status.code() == tonic::Code::Unauthenticated || status.code() == tonic::Code::Internal,
             "Expected Unauthenticated or Internal, got: {:?}",
             status
         );

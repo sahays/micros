@@ -1,14 +1,14 @@
 //! Integration tests for delete_role, revoke_capability, and phone invitation flows.
 
+use serial_test::serial;
+use tonic::Request;
+use uuid::Uuid;
 use workflow_tests::helpers::auth::{with_admin_key, with_auth, TestApp};
 use workflow_tests::proto::auth::{
     AcceptInvitationByPhoneRequest, AssignCapabilityRequest, BootstrapRequest,
     CreateInvitationRequest, CreateRoleRequest, DeleteRoleRequest, GetRoleRequest,
     RevokeCapabilityRequest,
 };
-use serial_test::serial;
-use tonic::Request;
-use uuid::Uuid;
 
 /// Bootstrap and return (tenant_id, root_org_node_id, superadmin_role_id, admin_user_id, access_token).
 async fn setup(app: &TestApp) -> (String, String, String, String, String) {
@@ -83,8 +83,6 @@ async fn delete_role_happy_path() {
         .await;
     assert!(get_resp.is_err());
     assert_eq!(get_resp.unwrap_err().code(), tonic::Code::NotFound);
-
-
 }
 
 #[tokio::test]
@@ -105,8 +103,6 @@ async fn delete_role_not_found() {
         .await;
     assert!(resp.is_err());
     assert_eq!(resp.unwrap_err().code(), tonic::Code::NotFound);
-
-
 }
 
 // ============================================================================
@@ -162,8 +158,6 @@ async fn revoke_capability_happy_path() {
         "Revoke capability should succeed: {:?}",
         resp.err()
     );
-
-
 }
 
 #[tokio::test]
@@ -185,8 +179,6 @@ async fn revoke_capability_not_found_role() {
         .await;
     assert!(resp.is_err());
     assert_eq!(resp.unwrap_err().code(), tonic::Code::NotFound);
-
-
 }
 
 // ============================================================================
@@ -258,8 +250,6 @@ async fn phone_invitation_create_and_accept() {
             .display_name,
         Some("Phone User".to_string())
     );
-
-
 }
 
 #[tokio::test]
@@ -304,6 +294,4 @@ async fn phone_invitation_rejects_weak_password() {
         accept_resp.unwrap_err().code(),
         tonic::Code::InvalidArgument
     );
-
-
 }

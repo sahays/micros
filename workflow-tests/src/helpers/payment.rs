@@ -9,13 +9,11 @@ pub const TEST_ORG_ID: &str = "test-org";
 pub const TEST_USER_ID: &str = "test-user";
 
 fn grpc_endpoint() -> String {
-    std::env::var("PAYMENT_GRPC_ENDPOINT")
-        .unwrap_or_else(|_| "http://localhost:50054".to_string())
+    std::env::var("PAYMENT_GRPC_ENDPOINT").unwrap_or_else(|_| "http://localhost:50054".to_string())
 }
 
 fn http_base_url() -> String {
-    std::env::var("PAYMENT_HTTP_URL")
-        .unwrap_or_else(|_| "http://localhost:9009".to_string())
+    std::env::var("PAYMENT_HTTP_URL").unwrap_or_else(|_| "http://localhost:9009".to_string())
 }
 
 /// Thin client TestApp that connects to a deployed payment-service.

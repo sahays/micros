@@ -2,15 +2,13 @@
 
 use crate::proto::auth::{
     admin_service_client::AdminServiceClient, auth_service_client::AuthServiceClient,
-    authz_service_client::AuthzServiceClient,
-    invitation_service_client::InvitationServiceClient, org_service_client::OrgServiceClient,
-    role_service_client::RoleServiceClient,
+    authz_service_client::AuthzServiceClient, invitation_service_client::InvitationServiceClient,
+    org_service_client::OrgServiceClient, role_service_client::RoleServiceClient,
 };
 use tonic::transport::Channel;
 
 fn grpc_endpoint() -> String {
-    std::env::var("AUTH_GRPC_ENDPOINT")
-        .unwrap_or_else(|_| "http://localhost:50051".to_string())
+    std::env::var("AUTH_GRPC_ENDPOINT").unwrap_or_else(|_| "http://localhost:50051".to_string())
 }
 
 async fn connect(addr: &str) -> Channel {

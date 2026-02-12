@@ -1,5 +1,8 @@
 pub mod capability_check;
 pub mod document_service;
+mod documents;
+mod processing;
+mod streaming;
 
 pub use capability_check::{capabilities, CapabilityChecker};
 pub use document_service::DocumentGrpcService;

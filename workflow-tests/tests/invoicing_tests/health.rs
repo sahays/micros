@@ -1,7 +1,7 @@
 //! Health check integration tests for invoicing-service.
 
-use workflow_tests::helpers::invoicing::TestApp;
 use reqwest::Client;
+use workflow_tests::helpers::invoicing::TestApp;
 
 #[tokio::test]
 async fn health_check_works() {

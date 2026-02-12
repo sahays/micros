@@ -1,7 +1,7 @@
 use workflow_tests::helpers::genai;
 use workflow_tests::proto::genai::{
-    CreateSessionRequest, DeleteSessionRequest, GetSessionRequest, ListModelsRequest,
-    OutputFormat, ProcessRequest, RequestMetadata,
+    CreateSessionRequest, DeleteSessionRequest, GetSessionRequest, ListModelsRequest, OutputFormat,
+    ProcessRequest, RequestMetadata,
 };
 use workflow_tests::GenAiServiceClient;
 

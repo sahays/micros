@@ -1,33 +1,23 @@
-//! Gemini AI provider implementation.
+//! Gemini text generation provider.
 //!
-//! Implements text generation using Google's Gemini API.
-//! Supports both streaming and non-streaming responses.
+//! Implements the `TextProvider` trait for Google's Gemini API,
+//! supporting both streaming and non-streaming text generation.
 
 use super::{
-    AudioProvider, DocumentContext, FinishReason, GenerationParams, ProviderError,
-    ProviderResponse, ProviderStream, StreamChunk, TextProvider,
+    Content, ContentPart, GeminiConfig, GenerateContentRequest, GenerateContentResponse,
+    GenerationConfig, GEMINI_API_BASE, PROVIDER_NAME,
 };
 use crate::services::metrics::{record_provider_error, record_provider_latency};
+use crate::services::providers::{
+    DocumentContext, FinishReason, GenerationParams, ProviderError, ProviderResponse,
+    ProviderStream, StreamChunk, TextProvider,
+};
 use async_trait::async_trait;
 use futures::StreamExt;
 use reqwest::Client;
-use serde::{Deserialize, Serialize};
 use std::time::Instant;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
-
-/// Gemini API base URL.
-const GEMINI_API_BASE: &str = "https://generativelanguage.googleapis.com/v1beta";
-
-/// Provider name for metrics.
-const PROVIDER_NAME: &str = "gemini";
-
-/// Gemini provider configuration.
-#[derive(Debug, Clone)]
-pub struct GeminiConfig {
-    pub api_key: String,
-    pub model: String,
-}
 
 /// Gemini text provider.
 pub struct GeminiTextProvider {
@@ -490,152 +480,4 @@ impl TextProvider for GeminiTextProvider {
             )))
         }
     }
-}
-
-/// Gemini audio provider (TTS) - placeholder for future implementation.
-#[allow(dead_code)]
-pub struct GeminiAudioProvider {
-    config: GeminiConfig,
-    client: Client,
-}
-
-impl GeminiAudioProvider {
-    pub fn new(config: GeminiConfig) -> Self {
-        let client = Client::builder()
-            .timeout(std::time::Duration::from_secs(120))
-            .build()
-            .expect("Failed to create HTTP client");
-
-        Self { config, client }
-    }
-}
-
-#[async_trait]
-impl AudioProvider for GeminiAudioProvider {
-    async fn generate(
-        &self,
-        _prompt: &str,
-        _params: &GenerationParams,
-    ) -> Result<ProviderResponse, ProviderError> {
-        Err(ProviderError::NotConfigured(
-            "Audio generation not yet implemented".to_string(),
-        ))
-    }
-
-    async fn generate_stream(
-        &self,
-        _prompt: &str,
-        _params: &GenerationParams,
-    ) -> Result<ProviderStream, ProviderError> {
-        Err(ProviderError::NotConfigured(
-            "Audio streaming not yet implemented".to_string(),
-        ))
-    }
-
-    async fn health_check(&self) -> Result<(), ProviderError> {
-        if self.config.api_key.is_empty() {
-            Err(ProviderError::NotConfigured(
-                "Gemini API key not configured".to_string(),
-            ))
-        } else {
-            Ok(())
-        }
-    }
-}
-
-// ============================================================================
-// Gemini API Request/Response Types
-// ============================================================================
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct GenerateContentRequest {
-    contents: Vec<Content>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    generation_config: Option<GenerationConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    safety_settings: Option<Vec<SafetySetting>>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Content {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    role: Option<String>,
-    parts: Vec<ContentPart>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged)]
-enum ContentPart {
-    Text { text: String },
-    InlineData { inline_data: InlineData },
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct InlineData {
-    mime_type: String,
-    data: String,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct GenerationConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    temperature: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    top_p: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    max_output_tokens: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    stop_sequences: Option<Vec<String>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    response_mime_type: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    response_schema: Option<serde_json::Value>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct SafetySetting {
-    category: String,
-    threshold: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct GenerateContentResponse {
-    #[serde(default)]
-    candidates: Vec<Candidate>,
-    #[serde(default)]
-    usage_metadata: Option<UsageMetadata>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Candidate {
-    content: Content,
-    #[serde(default)]
-    finish_reason: Option<String>,
-    #[serde(default)]
-    #[allow(dead_code)]
-    safety_ratings: Option<Vec<SafetyRating>>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-#[serde(rename_all = "camelCase")]
-struct UsageMetadata {
-    prompt_token_count: Option<i32>,
-    candidates_token_count: Option<i32>,
-    #[allow(dead_code)]
-    total_token_count: Option<i32>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
-struct SafetyRating {
-    category: String,
-    probability: String,
 }

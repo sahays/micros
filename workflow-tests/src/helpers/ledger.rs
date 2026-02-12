@@ -24,8 +24,7 @@ pub fn init_tracing() {
 }
 
 fn grpc_endpoint() -> String {
-    std::env::var("LEDGER_GRPC_ENDPOINT")
-        .unwrap_or_else(|_| "http://localhost:50056".to_string())
+    std::env::var("LEDGER_GRPC_ENDPOINT").unwrap_or_else(|_| "http://localhost:50056".to_string())
 }
 
 /// Connect to the deployed ledger-service and return the gRPC client with a unique tenant ID.

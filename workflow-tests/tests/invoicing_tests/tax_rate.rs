@@ -1,6 +1,6 @@
 //! Tax rate integration tests for invoicing-service.
 
-use workflow_tests::helpers::invoicing::{TestApp, with_tenant};
+use workflow_tests::helpers::invoicing::{with_tenant, TestApp};
 use workflow_tests::proto::invoicing::{
     CreateTaxRateRequest, GetTaxRateRequest, ListTaxRatesRequest, TaxCalculation,
     UpdateTaxRateRequest,

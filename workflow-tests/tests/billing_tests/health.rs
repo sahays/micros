@@ -1,7 +1,7 @@
 //! Health check integration tests for billing-service.
 
-use workflow_tests::helpers::billing::TestApp;
 use reqwest::Client;
+use workflow_tests::helpers::billing::TestApp;
 
 #[tokio::test]
 async fn health_check_works() {

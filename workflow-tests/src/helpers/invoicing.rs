@@ -10,8 +10,7 @@ fn grpc_endpoint() -> String {
 }
 
 fn http_base_url() -> String {
-    std::env::var("INVOICING_HTTP_URL")
-        .unwrap_or_else(|_| "http://localhost:9014".to_string())
+    std::env::var("INVOICING_HTTP_URL").unwrap_or_else(|_| "http://localhost:9014".to_string())
 }
 
 /// Test application wrapper for integration tests.

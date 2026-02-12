@@ -1,8 +1,8 @@
 //! Integration tests for matching rule operations.
 
+use uuid::Uuid;
 use workflow_tests::helpers::reconciliation::{spawn_app, with_tenant};
 use workflow_tests::proto::reconciliation::*;
-use uuid::Uuid;
 
 #[tokio::test]
 async fn create_matching_rule_with_contains_pattern() {

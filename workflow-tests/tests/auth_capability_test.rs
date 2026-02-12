@@ -198,11 +198,7 @@ async fn list_respects_tenant_boundary() {
         let mut request = Request::new(CreateAccountRequest {
             tenant_id: tenant_a_id.clone(),
             account_type: AccountType::Asset as i32,
-            account_code: format!(
-                "ACCOUNT-A-{}-{}",
-                i,
-                &Uuid::new_v4().to_string()[..4]
-            ),
+            account_code: format!("ACCOUNT-A-{}-{}", i, &Uuid::new_v4().to_string()[..4]),
             currency: "USD".to_string(),
             allow_negative: false,
             metadata: "{}".to_string(),
@@ -229,11 +225,7 @@ async fn list_respects_tenant_boundary() {
         let mut request = Request::new(CreateAccountRequest {
             tenant_id: tenant_b_id.clone(),
             account_type: AccountType::Asset as i32,
-            account_code: format!(
-                "ACCOUNT-B-{}-{}",
-                i,
-                &Uuid::new_v4().to_string()[..4]
-            ),
+            account_code: format!("ACCOUNT-B-{}-{}", i, &Uuid::new_v4().to_string()[..4]),
             currency: "USD".to_string(),
             allow_negative: false,
             metadata: "{}".to_string(),

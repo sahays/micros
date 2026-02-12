@@ -90,8 +90,7 @@ async fn run_billing_batch_works() {
     let mut client = app.grpc_client().await;
 
     // Create a subscription (may not be due, but tests the batch logic)
-    let _subscription =
-        create_test_subscription(&mut client, app.tenant_id(), "Batch Plan").await;
+    let _subscription = create_test_subscription(&mut client, app.tenant_id(), "Batch Plan").await;
 
     // Run batch billing
     let request = with_tenant(

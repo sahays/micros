@@ -1,8 +1,8 @@
 //! Integration tests for bank account operations.
 
+use uuid::Uuid;
 use workflow_tests::helpers::reconciliation::{spawn_app, with_tenant};
 use workflow_tests::proto::reconciliation::*;
-use uuid::Uuid;
 
 #[tokio::test]
 async fn register_bank_account_creates_account() {

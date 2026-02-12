@@ -1,8 +1,8 @@
 //! Integration tests for transaction matching operations.
 
+use uuid::Uuid;
 use workflow_tests::helpers::reconciliation::{spawn_app, with_tenant};
 use workflow_tests::proto::reconciliation::*;
-use uuid::Uuid;
 
 /// Helper to create a bank account and get back the ID.
 async fn create_bank_account(

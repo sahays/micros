@@ -1,5 +1,5 @@
-use workflow_tests::helpers::document::{TestApp, TEST_APP_ID, TEST_ORG_ID};
 use service_core::grpc::DocumentStatusProto;
+use workflow_tests::helpers::document::{TestApp, TEST_APP_ID, TEST_ORG_ID};
 
 #[tokio::test]
 async fn upload_document_works() {
@@ -75,12 +75,12 @@ async fn upload_document_requires_tenant_context() {
     // The gRPC client requires tenant context in metadata
     // This test verifies the server rejects requests without proper metadata
 
+    use std::collections::HashMap;
+    use tonic::transport::Channel;
     use workflow_tests::proto::document::{
         document_service_client::DocumentServiceClient, upload_document_request::Data,
         UploadDocumentRequest, UploadMetadata,
     };
-    use std::collections::HashMap;
-    use tonic::transport::Channel;
 
     let channel = Channel::from_shared(app.grpc_address.clone())
         .unwrap()
