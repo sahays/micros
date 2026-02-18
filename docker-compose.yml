@@ -24,8 +24,10 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
-      - GMAIL_USER=${GMAIL_USER}
-      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
+      - GMAIL_API_SERVICE_ACCOUNT_KEY_PATH=${GMAIL_API_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-emailsender-key.json}
+      - GMAIL_API_SENDER_EMAIL=${GMAIL_API_SENDER_EMAIL:-support@bharatsc.com}
+      - GMAIL_API_SENDER_NAME=${GMAIL_API_SENDER_NAME:-BharatSC}
+      - GMAIL_API_ENABLED=${GMAIL_API_ENABLED:-false}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
       - REQUIRE_SIGNATURES=${REQUIRE_SIGNATURES:-false}
       - ENABLE_SWAGGER=${ENABLE_SWAGGER:-public}
@@ -42,6 +44,7 @@ services:
         tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
     volumes:
       - ./auth-service/keys:/app/keys
+      - ./${GMAIL_API_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-emailsender-key.json}:/app/bharatsc-emailsender-key.json:ro
     networks:
       - micros-net
 

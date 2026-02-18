@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 
-pub use email::{MockEmailProvider, SmtpProvider};
+pub use email::{GmailApiProvider, MockEmailProvider};
 pub use push::{FcmProvider, MockPushProvider};
 pub use sms::{MockSmsProvider, Msg91Provider};
 

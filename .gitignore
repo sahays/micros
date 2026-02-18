@@ -24,6 +24,8 @@ workspace_build.log
 *.key
 keys/
 secrets/
+*-google-oauth2-credential.json
+*-emailsender-key.json
 
 # IDEs
 .vscode/

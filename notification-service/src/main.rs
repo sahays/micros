@@ -5,8 +5,8 @@ use notification_service::grpc::{
     CapabilityChecker, NotificationGrpcService,
 };
 use notification_service::services::{
-    EmailProvider, FcmProvider, MockEmailProvider, MockPushProvider, MockSmsProvider,
-    Msg91Provider, NotificationDb, PushProvider, SmsProvider, SmtpProvider,
+    EmailProvider, FcmProvider, GmailApiProvider, MockEmailProvider, MockPushProvider,
+    MockSmsProvider, Msg91Provider, NotificationDb, PushProvider, SmsProvider,
 };
 use notification_service::startup::AppState;
 use serde_json::json;
@@ -101,19 +101,22 @@ async fn main() -> std::io::Result<()> {
     })?;
 
     // Initialize providers
-    let email_provider: Arc<dyn EmailProvider> = if config.smtp.enabled {
-        match SmtpProvider::new(config.smtp.clone()) {
+    let email_provider: Arc<dyn EmailProvider> = if config.gmail.enabled {
+        match GmailApiProvider::new(config.gmail.clone()) {
             Ok(provider) => {
-                tracing::info!("SMTP email provider initialized");
+                tracing::info!("Gmail API email provider initialized");
                 Arc::new(provider)
             }
             Err(e) => {
-                tracing::warn!("Failed to initialize SMTP provider: {}. Using mock.", e);
+                tracing::warn!(
+                    "Failed to initialize Gmail API provider: {}. Using mock.",
+                    e
+                );
                 Arc::new(MockEmailProvider::new(true))
             }
         }
     } else {
-        tracing::info!("SMTP provider disabled, using mock email provider");
+        tracing::info!("Gmail API provider disabled, using mock email provider");
         Arc::new(MockEmailProvider::new(true))
     };
 

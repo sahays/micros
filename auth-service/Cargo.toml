@@ -21,7 +21,7 @@ governor = { workspace = true }
 hex = { workspace = true }
 hmac = { workspace = true }
 jsonwebtoken = { workspace = true }
-lettre = { workspace = true, features = ["tokio1-native-tls", "smtp-transport"] }
+lettre = { workspace = true }
 sqlx = { workspace = true }
 rand = { workspace = true }
 redis = { workspace = true, features = ["tokio-comp", "connection-manager"] }

@@ -3,7 +3,7 @@ pub mod providers;
 
 pub use database::NotificationDb;
 pub use providers::{
-    EmailMessage, EmailProvider, FcmProvider, MockEmailProvider, MockPushProvider, MockSmsProvider,
-    Msg91Provider, ProviderError, ProviderResponse, PushMessage, PushProvider, SmsMessage,
-    SmsProvider, SmtpProvider,
+    EmailMessage, EmailProvider, FcmProvider, GmailApiProvider, MockEmailProvider,
+    MockPushProvider, MockSmsProvider, Msg91Provider, ProviderError, ProviderResponse, PushMessage,
+    PushProvider, SmsMessage, SmsProvider,
 };

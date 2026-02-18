@@ -91,8 +91,11 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-}
-      - GMAIL_USER=${GMAIL_USER:-}
-      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD:-}
+      # Gmail API Configuration
+      - GMAIL_API_SERVICE_ACCOUNT_KEY_PATH=${GMAIL_API_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-emailsender-key.json}
+      - GMAIL_API_SENDER_EMAIL=${GMAIL_API_SENDER_EMAIL:-support@bharatsc.com}
+      - GMAIL_API_SENDER_NAME=${GMAIL_API_SENDER_NAME:-BharatSC}
+      - GMAIL_API_ENABLED=${GMAIL_API_ENABLED:-false}
       # Notification Service Integration (gRPC)
       - NOTIFICATION_SERVICE_URL=${NOTIFICATION_SERVICE_URL:-http://notification-service:3001}
       - NOTIFICATION_SERVICE_ENABLED=${NOTIFICATION_SERVICE_ENABLED:-true}
@@ -105,6 +108,7 @@ services:
         tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
     volumes:
       - ./auth-service/keys:/app/keys
+      - ./${GMAIL_API_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-emailsender-key.json}:/app/bharatsc-emailsender-key.json:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -170,14 +174,11 @@ services:
       - MONGODB_URI=${NOTIFICATION_MONGODB_URI:-mongodb://mongo:27017}
       - MONGODB_DATABASE=${NOTIFICATION_MONGODB_DATABASE:-notification_db}
       - RUST_LOG=${RUST_LOG:-notification_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
-      # SMTP Configuration
-      - SMTP_HOST=${NOTIFICATION_SMTP_HOST:-smtp.gmail.com}
-      - SMTP_PORT=${NOTIFICATION_SMTP_PORT:-587}
-      - SMTP_USER=${NOTIFICATION_SMTP_USER:-}
-      - SMTP_PASSWORD=${NOTIFICATION_SMTP_PASSWORD:-}
-      - SMTP_FROM_EMAIL=${NOTIFICATION_SMTP_FROM_EMAIL:-noreply@example.com}
-      - SMTP_FROM_NAME=${NOTIFICATION_SMTP_FROM_NAME:-Notification Service}
-      - SMTP_ENABLED=${NOTIFICATION_SMTP_ENABLED:-true}
+      # Gmail API Configuration
+      - GMAIL_API_SERVICE_ACCOUNT_KEY_PATH=${NOTIFICATION_GMAIL_API_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-emailsender-key.json}
+      - GMAIL_API_SENDER_EMAIL=${NOTIFICATION_GMAIL_API_SENDER_EMAIL:-support@bharatsc.com}
+      - GMAIL_API_SENDER_NAME=${NOTIFICATION_GMAIL_API_SENDER_NAME:-Notification Service}
+      - GMAIL_API_ENABLED=${NOTIFICATION_GMAIL_API_ENABLED:-false}
       # Msg91 SMS Configuration
       - MSG91_AUTH_KEY=${NOTIFICATION_MSG91_AUTH_KEY:-}
       - MSG91_SENDER_ID=${NOTIFICATION_MSG91_SENDER_ID:-}
@@ -192,6 +193,8 @@ services:
         max-size: "10m"
         max-file: "3"
         tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
+    volumes:
+      - ./${NOTIFICATION_GMAIL_API_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-emailsender-key.json}:/app/bharatsc-emailsender-key.json:ro
     depends_on:
       mongo:
         condition: service_healthy

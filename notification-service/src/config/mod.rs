@@ -8,7 +8,7 @@ pub struct NotificationConfig {
     #[serde(flatten)]
     pub common: core_config::Config,
     pub mongodb: MongoConfig,
-    pub smtp: SmtpConfig,
+    pub gmail: GmailApiConfig,
     pub msg91: Msg91Config,
     pub fcm: FcmConfig,
     pub auth: AuthConfig,
@@ -28,13 +28,10 @@ pub struct MongoConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct SmtpConfig {
-    pub host: String,
-    pub port: u16,
-    pub user: String,
-    pub password: String,
-    pub from_email: String,
-    pub from_name: String,
+pub struct GmailApiConfig {
+    pub service_account_key_path: String,
+    pub sender_email: String,
+    pub sender_name: String,
     pub enabled: bool,
 }
 
@@ -63,16 +60,19 @@ impl NotificationConfig {
                 uri: get_env("MONGODB_URI", None, is_prod)?,
                 database: get_env("MONGODB_DATABASE", Some("notification_db"), is_prod)?,
             },
-            smtp: SmtpConfig {
-                host: get_env("SMTP_HOST", Some("smtp.gmail.com"), is_prod)?,
-                port: get_env("SMTP_PORT", Some("587"), is_prod)?
-                    .parse()
-                    .unwrap_or(587),
-                user: get_env("SMTP_USER", Some(""), is_prod)?,
-                password: get_env("SMTP_PASSWORD", Some(""), is_prod)?,
-                from_email: get_env("SMTP_FROM_EMAIL", Some("noreply@example.com"), is_prod)?,
-                from_name: get_env("SMTP_FROM_NAME", Some("Notification Service"), is_prod)?,
-                enabled: env::var("SMTP_ENABLED")
+            gmail: GmailApiConfig {
+                service_account_key_path: get_env(
+                    "GMAIL_API_SERVICE_ACCOUNT_KEY_PATH",
+                    Some(""),
+                    is_prod,
+                )?,
+                sender_email: get_env("GMAIL_API_SENDER_EMAIL", Some(""), is_prod)?,
+                sender_name: get_env(
+                    "GMAIL_API_SENDER_NAME",
+                    Some("Notification Service"),
+                    is_prod,
+                )?,
+                enabled: env::var("GMAIL_API_ENABLED")
                     .unwrap_or_else(|_| "false".to_string())
                     .parse()
                     .unwrap_or(false),

@@ -1,10 +1,6 @@
-use lettre::{
-    message::header::ContentType, transport::smtp::authentication::Credentials, Message,
-    SmtpTransport, Transport,
-};
 use service_core::axum::async_trait;
 use service_core::error::AppError;
-use std::time::Duration;
+use service_core::gmail::{GmailApiClient, GmailApiConfig};
 
 #[async_trait]
 pub trait EmailProvider: Send + Sync {
@@ -23,29 +19,25 @@ pub trait EmailProvider: Send + Sync {
     ) -> Result<(), AppError>;
 }
 
-#[derive(Clone)]
 pub struct EmailService {
-    mailer: SmtpTransport,
-    from_email: String,
+    gmail_client: GmailApiClient,
 }
 
 impl EmailService {
-    pub fn new(config: &crate::config::GmailConfig) -> Result<Self, AppError> {
-        let creds = Credentials::new(config.user.clone(), config.app_password.clone());
+    pub fn new(config: &crate::config::GmailApiConfig) -> Result<Self, AppError> {
+        let gmail_config = GmailApiConfig {
+            service_account_key_path: config.service_account_key_path.clone(),
+            sender_email: config.sender_email.clone(),
+            sender_name: config.sender_name.clone(),
+            enabled: config.enabled,
+        };
 
-        let mailer = SmtpTransport::relay("smtp.gmail.com")
-            .map_err(|e| AppError::InternalError(anyhow::anyhow!(e.to_string())))?
-            .credentials(creds)
-            .port(587)
-            .timeout(Some(Duration::from_secs(10)))
-            .build();
+        let gmail_client = GmailApiClient::new(&gmail_config)
+            .map_err(AppError::InternalError)?;
 
-        tracing::info!("Email service initialized with Gmail SMTP");
+        tracing::info!("Email service initialized with Gmail API");
 
-        Ok(Self {
-            mailer,
-            from_email: config.user.clone(),
-        })
+        Ok(Self { gmail_client })
     }
 
     async fn send_email(
@@ -55,57 +47,25 @@ impl EmailService {
         plain_body: &str,
         html_body: &str,
     ) -> Result<(), AppError> {
-        let email = Message::builder()
-            .from(
-                self.from_email
-                    .parse()
-                    .map_err(|e: lettre::address::AddressError| {
-                        AppError::InternalError(e.into())
-                    })?,
-            )
-            .to(to_email
-                .parse()
-                .map_err(|e: lettre::address::AddressError| AppError::InternalError(e.into()))?)
-            .subject(subject)
-            .multipart(
-                lettre::message::MultiPart::alternative()
-                    .singlepart(
-                        lettre::message::SinglePart::builder()
-                            .header(ContentType::TEXT_PLAIN)
-                            .body(plain_body.to_string()),
-                    )
-                    .singlepart(
-                        lettre::message::SinglePart::builder()
-                            .header(ContentType::TEXT_HTML)
-                            .body(html_body.to_string()),
-                    ),
-            )
-            .map_err(|e| AppError::InternalError(e.into()))?;
-
-        // Send email in blocking thread pool to avoid blocking async runtime
-        let mailer = self.mailer.clone();
-        let result = tokio::task::spawn_blocking(move || mailer.send(&email))
+        self.gmail_client
+            .send_email(to_email, subject, plain_body, html_body, None, None)
             .await
-            .map_err(|e| AppError::InternalError(e.into()))?;
-
-        match result {
-            Ok(_) => {
-                tracing::info!(
-                    to = %to_email,
-                    subject = %subject,
-                    "Email sent successfully"
-                );
-                Ok(())
-            }
-            Err(e) => {
+            .map_err(|e| {
                 tracing::error!(
-                    error = %e.to_string(),
+                    error = %e,
                     to = %to_email,
-                    "Failed to send email"
+                    "Failed to send email via Gmail API"
                 );
-                Err(AppError::EmailError(e.to_string()))
-            }
-        }
+                AppError::EmailError(e.to_string())
+            })?;
+
+        tracing::info!(
+            to = %to_email,
+            subject = %subject,
+            "Email sent successfully"
+        );
+
+        Ok(())
     }
 }
 
@@ -225,13 +185,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_email_service_creation() {
-        let config = crate::config::GmailConfig {
-            user: "test@gmail.com".to_string(),
-            app_password: "test_password".to_string(),
+    fn test_email_service_creation_fails_without_key_file() {
+        let config = crate::config::GmailApiConfig {
+            service_account_key_path: "/nonexistent/key.json".to_string(),
+            sender_email: "test@example.com".to_string(),
+            sender_name: "Test".to_string(),
+            enabled: true,
         };
 
         let service = EmailService::new(&config);
-        assert!(service.is_ok());
+        assert!(service.is_err());
     }
 }

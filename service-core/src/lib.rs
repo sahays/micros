@@ -1,6 +1,7 @@
 //! service-core: Shared infrastructure for micros microservices.
 pub mod config;
 pub mod error;
+pub mod gmail;
 pub mod grpc;
 pub mod middleware;
 pub mod observability;

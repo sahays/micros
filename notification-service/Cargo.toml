@@ -15,7 +15,7 @@ chrono = { workspace = true, features = ["serde"] }
 config = { workspace = true }
 dotenvy = { workspace = true }
 futures = { workspace = true }
-lettre = { workspace = true, features = ["tokio1-native-tls", "smtp-transport"] }
+lettre = { workspace = true }
 mongodb = { workspace = true, features = ["bson-chrono-0_4"] }
 reqwest = { workspace = true, features = ["json"] }
 serde = { workspace = true, features = ["derive"] }

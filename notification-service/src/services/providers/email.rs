@@ -1,59 +1,61 @@
 use super::{EmailMessage, EmailProvider, ProviderError, ProviderResponse};
-use crate::config::SmtpConfig;
+use crate::config::GmailApiConfig;
 use async_trait::async_trait;
-use lettre::{
-    message::{header::ContentType, Mailbox, MultiPart, SinglePart},
-    transport::smtp::authentication::Credentials,
-    AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
-};
+use lettre::message::{header::ContentType, Mailbox, MultiPart, SinglePart};
+use lettre::Message;
+use service_core::gmail;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-pub struct SmtpProvider {
-    config: SmtpConfig,
-    transport: Option<AsyncSmtpTransport<Tokio1Executor>>,
+pub struct GmailApiProvider {
+    config: GmailApiConfig,
+    client: Option<gmail::GmailApiClient>,
 }
 
-impl SmtpProvider {
-    pub fn new(config: SmtpConfig) -> Result<Self, ProviderError> {
+impl GmailApiProvider {
+    pub fn new(config: GmailApiConfig) -> Result<Self, ProviderError> {
         if !config.enabled {
             return Ok(Self {
                 config,
-                transport: None,
+                client: None,
             });
         }
 
-        let creds = Credentials::new(config.user.clone(), config.password.clone());
+        let gmail_config = gmail::GmailApiConfig {
+            service_account_key_path: config.service_account_key_path.clone(),
+            sender_email: config.sender_email.clone(),
+            sender_name: config.sender_name.clone(),
+            enabled: config.enabled,
+        };
 
-        let transport = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&config.host)
-            .map_err(|e| {
-                ProviderError::Configuration(format!("Failed to create SMTP relay: {}", e))
-            })?
-            .port(config.port)
-            .credentials(creds)
-            .build();
+        let client = gmail::GmailApiClient::new(&gmail_config).map_err(|e| {
+            ProviderError::Configuration(format!("Failed to create Gmail API client: {}", e))
+        })?;
 
         Ok(Self {
             config,
-            transport: Some(transport),
+            client: Some(client),
         })
     }
 }
 
 #[async_trait]
-impl EmailProvider for SmtpProvider {
+impl EmailProvider for GmailApiProvider {
     async fn send(&self, email: &EmailMessage) -> Result<ProviderResponse, ProviderError> {
         if !self.config.enabled {
             return Err(ProviderError::NotEnabled(
-                "SMTP email provider is not enabled".to_string(),
+                "Gmail API email provider is not enabled".to_string(),
             ));
         }
 
-        let transport = self.transport.as_ref().ok_or_else(|| {
-            ProviderError::Configuration("SMTP transport not initialized".to_string())
+        let client = self.client.as_ref().ok_or_else(|| {
+            ProviderError::Configuration("Gmail API client not initialized".to_string())
         })?;
 
-        let from_name = email.from_name.as_ref().unwrap_or(&self.config.from_name);
-        let from_mailbox: Mailbox = format!("{} <{}>", from_name, self.config.from_email)
+        let from_name = email
+            .from_name
+            .as_ref()
+            .unwrap_or(&self.config.sender_name);
+        let from_mailbox: Mailbox = format!("{} <{}>", from_name, self.config.sender_email)
             .parse()
             .map_err(|e| ProviderError::Configuration(format!("Invalid from address: {}", e)))?;
 
@@ -111,20 +113,17 @@ impl EmailProvider for SmtpProvider {
             }
         };
 
-        let response = transport
-            .send(message)
-            .await
-            .map_err(|e| ProviderError::SendFailed(format!("Failed to send email: {}", e)))?;
-
-        let provider_id = response.message().next().map(|s| s.to_string());
+        client.send_raw_email(&message).await.map_err(|e| {
+            ProviderError::SendFailed(format!("Failed to send email via Gmail API: {}", e))
+        })?;
 
         tracing::info!(
             to = %email.to,
             subject = %email.subject,
-            "Email sent successfully"
+            "Email sent successfully via Gmail API"
         );
 
-        Ok(ProviderResponse::success(provider_id))
+        Ok(ProviderResponse::success(None))
     }
 
     async fn health_check(&self) -> Result<(), ProviderError> {
@@ -132,13 +131,12 @@ impl EmailProvider for SmtpProvider {
             return Ok(());
         }
 
-        let transport = self.transport.as_ref().ok_or_else(|| {
-            ProviderError::Configuration("SMTP transport not initialized".to_string())
-        })?;
-
-        transport.test_connection().await.map_err(|e| {
-            ProviderError::Connection(format!("SMTP connection test failed: {}", e))
-        })?;
+        // Gmail API client is initialized — that's our health check
+        if self.client.is_none() {
+            return Err(ProviderError::Configuration(
+                "Gmail API client not initialized".to_string(),
+            ));
+        }
 
         Ok(())
     }

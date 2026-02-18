@@ -15,7 +15,7 @@ pub struct AuthConfig {
     pub redis: RedisConfig,
     pub jwt: JwtConfig,
     pub google: GoogleOAuthConfig,
-    pub gmail: GmailConfig,
+    pub gmail: GmailApiConfig,
     pub notification: NotificationServiceConfig,
     pub security: SecurityConfig,
     pub swagger: SwaggerConfig,
@@ -66,9 +66,11 @@ pub struct GoogleOAuthConfig {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct GmailConfig {
-    pub user: String,
-    pub app_password: String,
+pub struct GmailApiConfig {
+    pub service_account_key_path: String,
+    pub sender_email: String,
+    pub sender_name: String,
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -179,9 +181,17 @@ impl AuthConfig {
                     is_prod,
                 )?,
             },
-            gmail: GmailConfig {
-                user: get_env("GMAIL_USER", None, is_prod)?,
-                app_password: get_env("GMAIL_APP_PASSWORD", None, is_prod)?,
+            gmail: GmailApiConfig {
+                service_account_key_path: get_env(
+                    "GMAIL_API_SERVICE_ACCOUNT_KEY_PATH",
+                    Some(""),
+                    is_prod,
+                )?,
+                sender_email: get_env("GMAIL_API_SENDER_EMAIL", Some(""), is_prod)?,
+                sender_name: get_env("GMAIL_API_SENDER_NAME", Some("BharatSC"), is_prod)?,
+                enabled: get_env("GMAIL_API_ENABLED", Some("false"), is_prod)?
+                    .parse()
+                    .unwrap_or(false),
             },
             notification: NotificationServiceConfig {
                 url: get_env(
