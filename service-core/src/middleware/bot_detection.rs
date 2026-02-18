@@ -13,7 +13,7 @@ pub async fn bot_detection_middleware(
         return Ok(next.run(request).await);
     }
 
-    if request.uri().path() == "/health" || request.uri().path() == "/metrics" {
+    if request.uri().path() == "/health" {
         return Ok(next.run(request).await);
     }
 

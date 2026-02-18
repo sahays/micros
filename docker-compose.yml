@@ -1,89 +1,4 @@
 services:
-  # Observability Stack
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    volumes:
-      - ./config/prometheus:/etc/prometheus
-      - prometheus_data:/prometheus
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--storage.tsdb.retention.time=15d"
-    ports:
-      - "${PROMETHEUS_PORT:-9090}:9090"
-    restart: unless-stopped
-    networks:
-      - micros-net
-
-  loki:
-    image: grafana/loki:latest
-    container_name: loki
-    volumes:
-      - ./config/loki:/etc/loki
-      - loki_data:/loki
-    command: -config.file=/etc/loki/loki.yaml
-    ports:
-      - "${LOKI_PORT:-3100}:3100"
-    restart: unless-stopped
-    networks:
-      - micros-net
-
-  tempo:
-    image: grafana/tempo:latest
-    container_name: tempo
-    command: [ "-config.file=/etc/tempo.yaml" ]
-    user: "10001:10001"
-    volumes:
-      - ./config/tempo/tempo.yaml:/etc/tempo.yaml:ro
-      - tempo_data:/var/tempo
-    ports:
-      - "14268:14268"  # jaeger ingest
-      - "${TEMPO_PORT:-3200}:3200"    # tempo
-      - "4317:4317"    # otlp grpc
-      - "4318:4318"    # otlp http
-      - "9411:9411"    # zipkin
-    restart: unless-stopped
-    networks:
-      - micros-net
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./config/grafana/provisioning:/etc/grafana/provisioning
-      - ./config/grafana/dashboards:/var/lib/grafana/dashboards
-    environment:
-      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
-    ports:
-      - "${GRAFANA_PORT:-3000}:3000"
-    restart: unless-stopped
-    depends_on:
-      - prometheus
-      - loki
-    networks:
-      - micros-net
-
-  promtail:
-    image: grafana/promtail:latest
-    container_name: promtail
-    volumes:
-      - ./config/promtail:/etc/promtail
-      - /var/log:/var/log
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    command: -config.file=/etc/promtail/promtail.yaml
-    ports:
-      - "${PROMTAIL_PORT:-9080}:9080"
-    restart: unless-stopped
-    depends_on:
-      - loki
-    networks:
-      - micros-net
-
   # Application Stack
   auth-service:
     build:
@@ -114,10 +29,6 @@ services:
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3000}
       - REQUIRE_SIGNATURES=${REQUIRE_SIGNATURES:-false}
       - ENABLE_SWAGGER=${ENABLE_SWAGGER:-public}
-    labels:
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=3000"
-      - "prometheus.io/path=/metrics"
     depends_on:
       mongo:
         condition: service_healthy
@@ -149,10 +60,6 @@ services:
       - APP_AUTH_SERVICE__SIGNING_SECRET=${APP_AUTH_SERVICE__SIGNING_SECRET}
       - APP_SERVER__SESSION_SECRET=${APP_SERVER__SESSION_SECRET}
       - RUST_LOG=${LOG_LEVEL:-info}
-    labels:
-      - "prometheus.io/scrape=true"
-      - "prometheus.io/port=8080"
-      - "prometheus.io/path=/metrics"
     depends_on:
       - auth-service
     logging:
@@ -174,7 +81,6 @@ services:
     environment:
       - APP__PORT=8080
       - RUST_LOG=${LOG_LEVEL:-info}
-      - OTLP_ENDPOINT=http://tempo:4317
     logging:
       driver: "json-file"
       options:
@@ -220,9 +126,5 @@ networks:
     driver: bridge
 
 volumes:
-  prometheus_data:
-  loki_data:
-  tempo_data:
-  grafana_data:
   mongo_data:
   redis_data:
