@@ -46,6 +46,10 @@ pub struct ModelConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct GoogleConfig {
     pub api_key: String,
+    /// Region for Gemini text/audio models (e.g., "global", "us-central1").
+    pub gemini_region: String,
+    /// Region for Veo video models (e.g., "us-central1").
+    pub veo_region: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -65,9 +69,9 @@ impl GenaiConfig {
                 database: get_env("MONGODB_DATABASE", Some("genai_db"), is_prod)?,
             },
             models: ModelConfig {
-                text_model: get_env("GENAI_TEXT_MODEL", Some("gemini-2.0-flash"), is_prod)?,
-                audio_model: get_env("GENAI_AUDIO_MODEL", Some("gemini-2.0-flash"), is_prod)?,
-                video_model: get_env("GENAI_VIDEO_MODEL", Some("veo-2"), is_prod)?,
+                text_model: get_env("GENAI_TEXT_MODEL", Some("gemini-3-flash-preview"), is_prod)?,
+                audio_model: get_env("GENAI_AUDIO_MODEL", Some("gemini-3-flash-preview"), is_prod)?,
+                video_model: get_env("GENAI_VIDEO_MODEL", Some("veo-3.1-generate-preview"), is_prod)?,
                 default_content_threshold_bytes: get_env(
                     "GENAI_DEFAULT_CONTENT_THRESHOLD_BYTES",
                     Some(&DEFAULT_CONTENT_THRESHOLD_BYTES.to_string()),
@@ -78,6 +82,8 @@ impl GenaiConfig {
             },
             google: GoogleConfig {
                 api_key: get_env("GOOGLE_API_KEY", None, is_prod)?,
+                gemini_region: get_env("GEMINI_REGION", Some("global"), is_prod)?,
+                veo_region: get_env("VEO_REGION", Some("us-central1"), is_prod)?,
             },
             document_service: DocumentServiceConfig {
                 grpc_url: get_env(

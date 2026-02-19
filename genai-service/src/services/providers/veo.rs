@@ -15,6 +15,8 @@ use async_trait::async_trait;
 pub struct VeoConfig {
     pub api_key: String,
     pub model: String,
+    /// Region for the Veo API (e.g., "us-central1").
+    pub region: String,
 }
 
 /// Veo video provider.

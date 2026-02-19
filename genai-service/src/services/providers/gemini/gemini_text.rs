@@ -5,7 +5,7 @@
 
 use super::{
     Content, ContentPart, GeminiConfig, GenerateContentRequest, GenerateContentResponse,
-    GenerationConfig, GEMINI_API_BASE, PROVIDER_NAME,
+    GenerationConfig, gemini_api_base, PROVIDER_NAME,
 };
 use crate::services::providers::{
     DocumentContext, FinishReason, GenerationParams, ProviderError, ProviderResponse,
@@ -36,9 +36,10 @@ impl GeminiTextProvider {
 
     /// Build the API URL for the given model and method.
     fn api_url(&self, model: &str, method: &str) -> String {
+        let base = gemini_api_base(&self.config.region);
         format!(
             "{}/models/{}:{}?key={}",
-            GEMINI_API_BASE, model, method, self.config.api_key
+            base, model, method, self.config.api_key
         )
     }
 
@@ -426,7 +427,8 @@ impl TextProvider for GeminiTextProvider {
         let start = Instant::now();
 
         // Try to list models to verify API key works
-        let url = format!("{}/models?key={}", GEMINI_API_BASE, self.config.api_key);
+        let base = gemini_api_base(&self.config.region);
+        let url = format!("{}/models?key={}", base, self.config.api_key);
 
         let response = self.client.get(&url).send().await.map_err(|e| {
             tracing::error!(error = %e, "Health check network error");

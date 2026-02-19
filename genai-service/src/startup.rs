@@ -94,11 +94,13 @@ impl Application {
         let gemini_config = GeminiConfig {
             api_key: config.google.api_key.clone(),
             model: config.models.text_model.clone(),
+            region: config.google.gemini_region.clone(),
         };
         let text_provider: Arc<dyn TextProvider> = Arc::new(GeminiTextProvider::new(gemini_config));
 
         tracing::info!(
             model = %config.models.text_model,
+            region = %config.google.gemini_region,
             "Initialized Gemini text provider"
         );
 

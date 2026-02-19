@@ -11,8 +11,16 @@ pub use gemini_text::GeminiTextProvider;
 
 use serde::{Deserialize, Serialize};
 
-/// Gemini API base URL.
-pub(crate) const GEMINI_API_BASE: &str = "https://generativelanguage.googleapis.com/v1beta";
+/// Build the Gemini API base URL for the given region.
+/// - "global" or empty → `https://generativelanguage.googleapis.com/v1beta`
+/// - other region      → `https://{region}-aiplatform.googleapis.com/v1beta`
+pub(crate) fn gemini_api_base(region: &str) -> String {
+    if region.is_empty() || region == "global" {
+        "https://generativelanguage.googleapis.com/v1beta".to_string()
+    } else {
+        format!("https://{region}-aiplatform.googleapis.com/v1beta")
+    }
+}
 
 /// Provider name for metrics.
 pub(crate) const PROVIDER_NAME: &str = "gemini";
@@ -22,6 +30,8 @@ pub(crate) const PROVIDER_NAME: &str = "gemini";
 pub struct GeminiConfig {
     pub api_key: String,
     pub model: String,
+    /// Region for the Gemini API (e.g., "global", "us-central1").
+    pub region: String,
 }
 
 // ============================================================================
