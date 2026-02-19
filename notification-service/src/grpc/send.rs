@@ -99,7 +99,6 @@ pub async fn send_email(
                     None,
                 )
                 .await;
-
         }
         Err(e) => {
             let error_msg = e.to_string();
@@ -214,7 +213,6 @@ pub async fn send_sms(
                     None,
                 )
                 .await;
-
         }
         Err(e) => {
             let error_msg = e.to_string();
@@ -345,7 +343,6 @@ pub async fn send_push(
                     None,
                 )
                 .await;
-
         }
         Err(e) => {
             let error_msg = e.to_string();

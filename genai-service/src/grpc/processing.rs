@@ -2,9 +2,9 @@
 
 use crate::config::OutputFormat;
 use crate::grpc::helpers::{
-    build_generation_params, build_stream_generation_params,
-    finish_reason_to_proto, output_format_str, output_format_to_proto, proto_to_document_context,
-    proto_to_output_format, provider_error_to_status,
+    build_generation_params, build_stream_generation_params, finish_reason_to_proto,
+    output_format_str, output_format_to_proto, proto_to_document_context, proto_to_output_format,
+    provider_error_to_status,
 };
 use crate::grpc::proto::{
     ProcessRequest, ProcessResponse, ProcessStreamRequest, ProcessStreamResponse, StreamComplete,

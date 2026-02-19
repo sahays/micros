@@ -13,7 +13,6 @@ use async_trait::async_trait;
 /// Veo provider configuration.
 #[derive(Debug, Clone)]
 pub struct VeoConfig {
-    pub api_key: String,
     pub model: String,
     /// Region for the Veo API (e.g., "us-central1").
     pub region: String,
@@ -52,12 +51,7 @@ impl VideoProvider for VeoProvider {
     }
 
     async fn health_check(&self) -> Result<(), ProviderError> {
-        if self.config.api_key.is_empty() {
-            Err(ProviderError::NotConfigured(
-                "Veo API key not configured".to_string(),
-            ))
-        } else {
-            Ok(())
-        }
+        // TODO: Implement proper health check with service account auth
+        Ok(())
     }
 }

@@ -51,10 +51,7 @@ impl EmailProvider for GmailApiProvider {
             ProviderError::Configuration("Gmail API client not initialized".to_string())
         })?;
 
-        let from_name = email
-            .from_name
-            .as_ref()
-            .unwrap_or(&self.config.sender_name);
+        let from_name = email.from_name.as_ref().unwrap_or(&self.config.sender_name);
         let from_mailbox: Mailbox = format!("{} <{}>", from_name, self.config.sender_email)
             .parse()
             .map_err(|e| ProviderError::Configuration(format!("Invalid from address: {}", e)))?;

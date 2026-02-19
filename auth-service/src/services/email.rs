@@ -32,8 +32,7 @@ impl EmailService {
             enabled: config.enabled,
         };
 
-        let gmail_client = GmailApiClient::new(&gmail_config)
-            .map_err(AppError::InternalError)?;
+        let gmail_client = GmailApiClient::new(&gmail_config).map_err(AppError::InternalError)?;
 
         tracing::info!("Email service initialized with Gmail API");
 

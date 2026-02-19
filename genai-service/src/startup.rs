@@ -90,18 +90,21 @@ impl Application {
             e
         })?;
 
-        // Initialize Gemini text provider
-        let gemini_config = GeminiConfig {
-            api_key: config.google.api_key.clone(),
-            model: config.models.text_model.clone(),
-            region: config.google.gemini_region.clone(),
-        };
+        // Initialize Gemini text provider (Vertex AI + service account)
+        let gemini_config = GeminiConfig::from_service_account(
+            &config.google.service_account_key_path,
+            &config.models.text_model,
+            &config.google.gemini_region,
+        )
+        .map_err(|e| {
+            tracing::error!("Failed to initialize Gemini config: {}", e);
+            AppError::ConfigError(anyhow::anyhow!("Gemini config error: {}", e))
+        })?;
         let text_provider: Arc<dyn TextProvider> = Arc::new(GeminiTextProvider::new(gemini_config));
 
         tracing::info!(
             model = %config.models.text_model,
-            region = %config.google.gemini_region,
-            "Initialized Gemini text provider"
+            "Initialized Gemini text provider (Vertex AI)"
         );
 
         // Initialize document fetcher

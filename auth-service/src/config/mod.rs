@@ -183,7 +183,7 @@ impl AuthConfig {
             },
             gmail: GmailApiConfig {
                 service_account_key_path: get_env(
-                    "GMAIL_API_SERVICE_ACCOUNT_KEY_PATH",
+                    "GOOGLE_SERVICE_ACCOUNT_KEY_PATH",
                     Some(""),
                     is_prod,
                 )?,

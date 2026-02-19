@@ -134,12 +134,16 @@ async fn main() -> std::io::Result<()> {
         std::io::Error::other(format!("Database initialization error: {}", e))
     })?;
 
-    // Initialize Gemini text provider
-    let gemini_config = GeminiConfig {
-        api_key: config.google.api_key.clone(),
-        model: config.models.text_model.clone(),
-        region: config.google.gemini_region.clone(),
-    };
+    // Initialize Gemini text provider (Vertex AI + service account)
+    let gemini_config = GeminiConfig::from_service_account(
+        &config.google.service_account_key_path,
+        &config.models.text_model,
+        &config.google.gemini_region,
+    )
+    .map_err(|e| {
+        tracing::error!(error = %e, "Failed to initialize Gemini config");
+        std::io::Error::other(format!("Gemini config error: {}", e))
+    })?;
     let text_provider: Arc<dyn TextProvider> = Arc::new(GeminiTextProvider::new(gemini_config));
 
     tracing::info!(

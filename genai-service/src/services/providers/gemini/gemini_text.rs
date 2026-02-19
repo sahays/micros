@@ -1,11 +1,12 @@
-//! Gemini text generation provider.
+//! Gemini text generation provider via Vertex AI.
 //!
-//! Implements the `TextProvider` trait for Google's Gemini API,
-//! supporting both streaming and non-streaming text generation.
+//! Implements the `TextProvider` trait for Google's Gemini models,
+//! supporting both streaming and non-streaming text generation
+//! through the Vertex AI endpoint with service account auth.
 
 use super::{
     Content, ContentPart, GeminiConfig, GenerateContentRequest, GenerateContentResponse,
-    GenerationConfig, gemini_api_base, PROVIDER_NAME,
+    GenerationConfig, PROVIDER_NAME,
 };
 use crate::services::providers::{
     DocumentContext, FinishReason, GenerationParams, ProviderError, ProviderResponse,
@@ -32,15 +33,6 @@ impl GeminiTextProvider {
             .expect("Failed to create HTTP client");
 
         Self { config, client }
-    }
-
-    /// Build the API URL for the given model and method.
-    fn api_url(&self, model: &str, method: &str) -> String {
-        let base = gemini_api_base(&self.config.region);
-        format!(
-            "{}/models/{}:{}?key={}",
-            base, model, method, self.config.api_key
-        )
     }
 
     /// Resolve the effective model: use the override from params if present,
@@ -109,7 +101,6 @@ impl GeminiTextProvider {
                 .and_then(|s| serde_json::from_str(s).ok()),
         }
     }
-
 }
 
 #[async_trait]
@@ -133,6 +124,16 @@ impl TextProvider for GeminiTextProvider {
         let model = self.resolve_model(params);
         tracing::Span::current().record("model", &model);
 
+        // Get bearer token
+        let access_token = self
+            .config
+            .get_access_token(&self.client)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to get access token");
+                ProviderError::ApiError(format!("Authentication failed: {}", e))
+            })?;
+
         // Build content parts
         let mut parts: Vec<ContentPart> = self.documents_to_parts(documents);
         parts.push(ContentPart::Text {
@@ -148,19 +149,20 @@ impl TextProvider for GeminiTextProvider {
             safety_settings: None,
         };
 
-        let url = self.api_url(&model, "generateContent");
+        let url = self.config.vertex_url(&model, "generateContent");
 
-        tracing::debug!("Sending request to Gemini API");
+        tracing::debug!("Sending request to Vertex AI");
 
         let response = self
             .client
             .post(&url)
+            .bearer_auth(&access_token)
             .json(&request)
             .send()
             .await
             .map_err(|e| {
                 let err = ProviderError::NetworkError(e.to_string());
-                tracing::error!(error = %e, "Network error calling Gemini API");
+                tracing::error!(error = %e, "Network error calling Vertex AI");
                 err
             })?;
 
@@ -169,23 +171,23 @@ impl TextProvider for GeminiTextProvider {
             let error_text = response.text().await.unwrap_or_default();
 
             if status.as_u16() == 429 {
-                tracing::warn!("Rate limited by Gemini API");
+                tracing::warn!("Rate limited by Vertex AI");
                 return Err(ProviderError::RateLimited);
             }
 
             let err =
-                ProviderError::ApiError(format!("Gemini API error {}: {}", status, error_text));
+                ProviderError::ApiError(format!("Vertex AI error {}: {}", status, error_text));
             tracing::error!(
                 status = %status,
                 error = %error_text,
-                "Gemini API returned error"
+                "Vertex AI returned error"
             );
             return Err(err);
         }
 
         let api_response: GenerateContentResponse = response.json().await.map_err(|e| {
             let err = ProviderError::ApiError(format!("Failed to parse response: {}", e));
-            tracing::error!(error = %e, "Failed to parse Gemini API response");
+            tracing::error!(error = %e, "Failed to parse Vertex AI response");
             err
         })?;
 
@@ -260,6 +262,16 @@ impl TextProvider for GeminiTextProvider {
         let model = self.resolve_model(params);
         tracing::Span::current().record("model", &model);
 
+        // Get bearer token
+        let access_token = self
+            .config
+            .get_access_token(&self.client)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to get access token");
+                ProviderError::ApiError(format!("Authentication failed: {}", e))
+            })?;
+
         // Build content parts
         let mut parts: Vec<ContentPart> = self.documents_to_parts(documents);
         parts.push(ContentPart::Text {
@@ -275,20 +287,22 @@ impl TextProvider for GeminiTextProvider {
             safety_settings: None,
         };
 
-        let url = self.api_url(&model, "streamGenerateContent");
-        let url = format!("{}&alt=sse", url);
+        let url = self
+            .config
+            .vertex_url(&model, "streamGenerateContent?alt=sse");
 
-        tracing::debug!("Starting streaming request to Gemini API");
+        tracing::debug!("Starting streaming request to Vertex AI");
 
         let response = self
             .client
             .post(&url)
+            .bearer_auth(&access_token)
             .json(&request)
             .send()
             .await
             .map_err(|e| {
                 let err = ProviderError::NetworkError(e.to_string());
-                tracing::error!(error = %e, "Network error starting Gemini stream");
+                tracing::error!(error = %e, "Network error starting Vertex AI stream");
                 err
             })?;
 
@@ -297,16 +311,16 @@ impl TextProvider for GeminiTextProvider {
             let error_text = response.text().await.unwrap_or_default();
 
             if status.as_u16() == 429 {
-                tracing::warn!("Rate limited by Gemini API");
+                tracing::warn!("Rate limited by Vertex AI");
                 return Err(ProviderError::RateLimited);
             }
 
             let err =
-                ProviderError::ApiError(format!("Gemini API error {}: {}", status, error_text));
+                ProviderError::ApiError(format!("Vertex AI error {}: {}", status, error_text));
             tracing::error!(
                 status = %status,
                 error = %error_text,
-                "Gemini API returned error"
+                "Vertex AI returned error"
             );
             return Err(err);
         }
@@ -314,7 +328,7 @@ impl TextProvider for GeminiTextProvider {
         let connect_duration = start.elapsed();
         tracing::debug!(
             duration_ms = connect_duration.as_millis(),
-            "Gemini stream connection established"
+            "Vertex AI stream connection established"
         );
 
         // Create channel for streaming
@@ -381,7 +395,7 @@ impl TextProvider for GeminiTextProvider {
                         }
                     }
                     Err(e) => {
-                        tracing::error!(error = %e, "Error in Gemini stream");
+                        tracing::error!(error = %e, "Error in Vertex AI stream");
                         let _ = tx
                             .send(Err(ProviderError::NetworkError(e.to_string())))
                             .await;
@@ -398,7 +412,7 @@ impl TextProvider for GeminiTextProvider {
                 output_tokens = total_output_tokens,
                 chunk_count = chunk_count,
                 finish_reason = ?last_finish_reason,
-                "Gemini stream completed"
+                "Vertex AI stream completed"
             );
 
             // Send completion
@@ -417,30 +431,44 @@ impl TextProvider for GeminiTextProvider {
 
     #[tracing::instrument(skip(self), fields(provider = PROVIDER_NAME))]
     async fn health_check(&self) -> Result<(), ProviderError> {
-        if self.config.api_key.is_empty() {
-            tracing::warn!("Gemini API key not configured");
-            return Err(ProviderError::NotConfigured(
-                "Gemini API key not configured".to_string(),
-            ));
-        }
-
         let start = Instant::now();
 
-        // Try to list models to verify API key works
-        let base = gemini_api_base(&self.config.region);
-        let url = format!("{}/models?key={}", base, self.config.api_key);
+        // Verify we can acquire an access token
+        let access_token = self
+            .config
+            .get_access_token(&self.client)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Health check: failed to get access token");
+                ProviderError::NotConfigured(format!(
+                    "Service account authentication failed: {}",
+                    e
+                ))
+            })?;
 
-        let response = self.client.get(&url).send().await.map_err(|e| {
-            tracing::error!(error = %e, "Health check network error");
-            ProviderError::NetworkError(e.to_string())
-        })?;
+        // Verify Vertex AI is reachable by listing models
+        let url = format!(
+            "https://aiplatform.googleapis.com/v1/projects/{}/locations/global/publishers/google/models",
+            self.config.project_id
+        );
+
+        let response = self
+            .client
+            .get(&url)
+            .bearer_auth(&access_token)
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Health check network error");
+                ProviderError::NetworkError(e.to_string())
+            })?;
 
         let duration = start.elapsed();
 
         if response.status().is_success() {
             tracing::debug!(
                 duration_ms = duration.as_millis(),
-                "Gemini health check passed"
+                "Gemini health check passed (Vertex AI)"
             );
             Ok(())
         } else {
@@ -448,7 +476,7 @@ impl TextProvider for GeminiTextProvider {
             tracing::error!(
                 status = %status,
                 duration_ms = duration.as_millis(),
-                "Gemini health check failed"
+                "Gemini health check failed (Vertex AI)"
             );
             Err(ProviderError::ApiError(format!(
                 "Health check failed: {}",

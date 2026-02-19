@@ -11,7 +11,6 @@ use async_trait::async_trait;
 use reqwest::Client;
 
 /// Gemini audio provider (TTS) - placeholder for future implementation.
-#[allow(dead_code)]
 pub struct GeminiAudioProvider {
     config: GeminiConfig,
     client: Client,
@@ -51,12 +50,15 @@ impl AudioProvider for GeminiAudioProvider {
     }
 
     async fn health_check(&self) -> Result<(), ProviderError> {
-        if self.config.api_key.is_empty() {
-            Err(ProviderError::NotConfigured(
-                "Gemini API key not configured".to_string(),
-            ))
-        } else {
-            Ok(())
-        }
+        self.config
+            .get_access_token(&self.client)
+            .await
+            .map_err(|e| {
+                ProviderError::NotConfigured(format!(
+                    "Service account authentication failed: {}",
+                    e
+                ))
+            })?;
+        Ok(())
     }
 }
