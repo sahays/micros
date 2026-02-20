@@ -93,6 +93,8 @@ impl Application {
         })?;
 
         // Initialize providers
+        let is_prod =
+            std::env::var("ENVIRONMENT").unwrap_or_else(|_| "dev".to_string()) == "prod";
         let email_provider: Arc<dyn EmailProvider> = if config.gmail.enabled {
             match GmailApiProvider::new(config.gmail.clone()) {
                 Ok(provider) => {
@@ -100,15 +102,29 @@ impl Application {
                     Arc::new(provider)
                 }
                 Err(e) => {
+                    if is_prod {
+                        tracing::error!(
+                            "Failed to initialize Gmail API provider in production: {}",
+                            e
+                        );
+                        return Err(AppError::ConfigError(anyhow::anyhow!(
+                            "Gmail API is enabled but failed to initialize: {}. Refusing to start in production with mock provider.",
+                            e
+                        )));
+                    }
                     tracing::warn!(
-                        "Failed to initialize Gmail API provider: {}. Using mock.",
+                        "Failed to initialize Gmail API provider: {}. Using mock in dev.",
                         e
                     );
                     Arc::new(MockEmailProvider::new(true))
                 }
             }
         } else {
-            tracing::info!("Gmail API provider disabled, using mock email provider");
+            if is_prod {
+                tracing::warn!("Gmail API provider is DISABLED in production — emails will not be sent");
+            } else {
+                tracing::info!("Gmail API provider disabled, using mock email provider");
+            }
             Arc::new(MockEmailProvider::new(true))
         };
 

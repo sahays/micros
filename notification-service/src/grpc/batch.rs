@@ -127,60 +127,81 @@ async fn process_batch_email(
         reply_to: email.reply_to.clone(),
     };
 
-    match state.email_provider.send(&email_message).await {
-        Ok(response) => {
-            notification.mark_sent(response.provider_id.clone());
-            let _ = state
-                .db
-                .update_status(
-                    &notification_id,
-                    NotificationStatus::Sent,
-                    response.provider_id.as_deref(),
-                    None,
-                )
-                .await;
+    // Send with retry (up to 2 retries for transient failures)
+    let max_attempts = 3;
+    let mut last_error = None;
+    for attempt in 1..=max_attempts {
+        match state.email_provider.send(&email_message).await {
+            Ok(response) => {
+                notification.mark_sent(response.provider_id.clone());
+                let _ = state
+                    .db
+                    .update_status(
+                        &notification_id,
+                        NotificationStatus::Sent,
+                        response.provider_id.as_deref(),
+                        None,
+                    )
+                    .await;
 
-            BatchNotificationResult {
-                notification_id,
-                status: ProtoNotificationStatus::Sent as i32,
-                error: None,
+                return BatchNotificationResult {
+                    notification_id,
+                    status: ProtoNotificationStatus::Sent as i32,
+                    error: None,
+                };
+            }
+            Err(ProviderError::NotEnabled(msg)) => {
+                let error_msg = format!("Email provider not enabled: {}", msg);
+                let _ = state
+                    .db
+                    .update_status(
+                        &notification_id,
+                        NotificationStatus::Failed,
+                        None,
+                        Some(&error_msg),
+                    )
+                    .await;
+
+                return BatchNotificationResult {
+                    notification_id,
+                    status: ProtoNotificationStatus::Failed as i32,
+                    error: Some(error_msg),
+                };
+            }
+            Err(ref e)
+                if matches!(e, ProviderError::SendFailed(_)) && attempt < max_attempts =>
+            {
+                tracing::warn!(
+                    notification_id = %notification_id,
+                    attempt = attempt,
+                    error = %e,
+                    "Batch email send failed, retrying"
+                );
+                last_error = Some(e.to_string());
+                tokio::time::sleep(std::time::Duration::from_millis(500 * attempt as u64)).await;
+            }
+            Err(e) => {
+                last_error = Some(e.to_string());
+                break;
             }
         }
-        Err(ProviderError::NotEnabled(_)) => {
-            let _ = state
-                .db
-                .update_status(
-                    &notification_id,
-                    NotificationStatus::Sent,
-                    Some("mock"),
-                    None,
-                )
-                .await;
+    }
 
-            BatchNotificationResult {
-                notification_id,
-                status: ProtoNotificationStatus::Sent as i32,
-                error: None,
-            }
-        }
-        Err(e) => {
-            let error_msg = e.to_string();
-            let _ = state
-                .db
-                .update_status(
-                    &notification_id,
-                    NotificationStatus::Failed,
-                    None,
-                    Some(&error_msg),
-                )
-                .await;
+    let error_msg = last_error.unwrap_or_else(|| "Unknown error".to_string());
+    let _ = state
+        .db
+        .update_status(
+            &notification_id,
+            NotificationStatus::Failed,
+            None,
+            Some(&error_msg),
+        )
+        .await;
 
-            BatchNotificationResult {
-                notification_id,
-                status: ProtoNotificationStatus::Failed as i32,
-                error: Some(error_msg),
-            }
-        }
+    BatchNotificationResult {
+        notification_id,
+        status: ProtoNotificationStatus::Failed as i32,
+        error: Some(error_msg),
     }
 }
 
@@ -249,21 +270,22 @@ async fn process_batch_sms(
                 error: None,
             }
         }
-        Err(ProviderError::NotEnabled(_)) => {
+        Err(ProviderError::NotEnabled(msg)) => {
+            let error_msg = format!("SMS provider not enabled: {}", msg);
             let _ = state
                 .db
                 .update_status(
                     &notification_id,
-                    NotificationStatus::Sent,
-                    Some("mock"),
+                    NotificationStatus::Failed,
                     None,
+                    Some(&error_msg),
                 )
                 .await;
 
             BatchNotificationResult {
                 notification_id,
-                status: ProtoNotificationStatus::Sent as i32,
-                error: None,
+                status: ProtoNotificationStatus::Failed as i32,
+                error: Some(error_msg),
             }
         }
         Err(e) => {
@@ -393,21 +415,22 @@ async fn process_batch_push(
                 error: None,
             }
         }
-        Err(ProviderError::NotEnabled(_)) => {
+        Err(ProviderError::NotEnabled(msg)) => {
+            let error_msg = format!("Push provider not enabled: {}", msg);
             let _ = state
                 .db
                 .update_status(
                     &notification_id,
-                    NotificationStatus::Sent,
-                    Some("mock"),
+                    NotificationStatus::Failed,
                     None,
+                    Some(&error_msg),
                 )
                 .await;
 
             BatchNotificationResult {
                 notification_id,
-                status: ProtoNotificationStatus::Sent as i32,
-                error: None,
+                status: ProtoNotificationStatus::Failed as i32,
+                error: Some(error_msg),
             }
         }
         Err(e) => {

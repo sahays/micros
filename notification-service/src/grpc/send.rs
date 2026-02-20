@@ -68,62 +68,90 @@ pub async fn send_email(
         reply_to: req.reply_to,
     };
 
-    match state.email_provider.send(&email_message).await {
-        Ok(response) => {
-            notification.mark_sent(response.provider_id.clone());
-            let _ = state
-                .db
-                .update_status(
-                    &notification_id,
-                    NotificationStatus::Sent,
-                    response.provider_id.as_deref(),
-                    None,
-                )
-                .await;
+    // Send with retry (up to 2 retries for transient failures)
+    let max_attempts = 3;
+    let mut last_error = None;
+    for attempt in 1..=max_attempts {
+        match state.email_provider.send(&email_message).await {
+            Ok(response) => {
+                notification.mark_sent(response.provider_id.clone());
+                let _ = state
+                    .db
+                    .update_status(
+                        &notification_id,
+                        NotificationStatus::Sent,
+                        response.provider_id.as_deref(),
+                        None,
+                    )
+                    .await;
 
-            tracing::info!(notification_id = %notification_id, "Email sent successfully");
-        }
-        Err(ProviderError::NotEnabled(msg)) => {
-            tracing::warn!(
-                notification_id = %notification_id,
-                "Email provider not enabled: {}. Marking as sent.",
-                msg
-            );
-            notification.mark_sent(Some("mock".to_string()));
-            let _ = state
-                .db
-                .update_status(
-                    &notification_id,
-                    NotificationStatus::Sent,
-                    Some("mock"),
-                    None,
-                )
-                .await;
-        }
-        Err(e) => {
-            let error_msg = e.to_string();
-            notification.mark_failed(error_msg.clone());
-            let _ = state
-                .db
-                .update_status(
-                    &notification_id,
-                    NotificationStatus::Failed,
-                    None,
-                    Some(&error_msg),
-                )
-                .await;
+                tracing::info!(notification_id = %notification_id, "Email sent successfully");
+                last_error = None;
+                break;
+            }
+            Err(ProviderError::NotEnabled(msg)) => {
+                let error_msg = format!("Email provider not enabled: {}", msg);
+                notification.mark_failed(error_msg.clone());
+                let _ = state
+                    .db
+                    .update_status(
+                        &notification_id,
+                        NotificationStatus::Failed,
+                        None,
+                        Some(&error_msg),
+                    )
+                    .await;
 
-            tracing::error!(
-                notification_id = %notification_id,
-                error = %error_msg,
-                "Failed to send email"
-            );
+                tracing::error!(
+                    notification_id = %notification_id,
+                    "Email provider not enabled: {}",
+                    msg
+                );
 
-            return Err(Status::internal(format!(
-                "Failed to send email: {}",
-                error_msg
-            )));
+                return Err(Status::failed_precondition(error_msg));
+            }
+            Err(ref e)
+                if matches!(e, ProviderError::SendFailed(_)) && attempt < max_attempts =>
+            {
+                tracing::warn!(
+                    notification_id = %notification_id,
+                    attempt = attempt,
+                    error = %e,
+                    "Email send failed, retrying"
+                );
+                last_error = Some(e.to_string());
+                tokio::time::sleep(std::time::Duration::from_millis(500 * attempt as u64)).await;
+            }
+            Err(e) => {
+                last_error = Some(e.to_string());
+                break;
+            }
         }
+    }
+
+    if let Some(error_msg) = last_error {
+        notification.mark_failed(error_msg.clone());
+        let _ = state
+            .db
+            .update_status(
+                &notification_id,
+                NotificationStatus::Failed,
+                None,
+                Some(&error_msg),
+            )
+            .await;
+
+        tracing::error!(
+            notification_id = %notification_id,
+            error = %error_msg,
+            "Failed to send email after {} attempts",
+            max_attempts
+        );
+
+        return Err(Status::internal(format!(
+            "Failed to send email: {}",
+            error_msg
+        )));
     }
 
     Ok(Response::new(SendEmailResponse {
@@ -198,21 +226,21 @@ pub async fn send_sms(
             tracing::info!(notification_id = %notification_id, "SMS sent successfully");
         }
         Err(ProviderError::NotEnabled(msg)) => {
-            tracing::warn!(
-                notification_id = %notification_id,
-                "SMS provider not enabled: {}. Marking as sent.",
-                msg
-            );
-            notification.mark_sent(Some("mock".to_string()));
+            let error_msg = format!("SMS provider not enabled: {}", msg);
+            notification.mark_failed(error_msg.clone());
             let _ = state
                 .db
                 .update_status(
                     &notification_id,
-                    NotificationStatus::Sent,
-                    Some("mock"),
+                    NotificationStatus::Failed,
                     None,
+                    Some(&error_msg),
                 )
                 .await;
+
+            tracing::error!(notification_id = %notification_id, "{}", error_msg);
+
+            return Err(Status::failed_precondition(error_msg));
         }
         Err(e) => {
             let error_msg = e.to_string();
@@ -328,21 +356,21 @@ pub async fn send_push(
             tracing::info!(notification_id = %notification_id, "Push notification sent successfully");
         }
         Err(ProviderError::NotEnabled(msg)) => {
-            tracing::warn!(
-                notification_id = %notification_id,
-                "Push provider not enabled: {}. Marking as sent.",
-                msg
-            );
-            notification.mark_sent(Some("mock".to_string()));
+            let error_msg = format!("Push provider not enabled: {}", msg);
+            notification.mark_failed(error_msg.clone());
             let _ = state
                 .db
                 .update_status(
                     &notification_id,
-                    NotificationStatus::Sent,
-                    Some("mock"),
+                    NotificationStatus::Failed,
                     None,
+                    Some(&error_msg),
                 )
                 .await;
+
+            tracing::error!(notification_id = %notification_id, "{}", error_msg);
+
+            return Err(Status::failed_precondition(error_msg));
         }
         Err(e) => {
             let error_msg = e.to_string();
