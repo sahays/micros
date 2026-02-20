@@ -27,6 +27,9 @@ pub struct SendOtpRequest {
     pub destination: String, // email or phone
     pub channel: OtpChannel,
     pub purpose: OtpPurpose,
+    /// App display name from the app registry (used as email sender name).
+    #[serde(skip)]
+    pub app_name: Option<String>,
 }
 
 /// Response after sending OTP.
@@ -184,7 +187,7 @@ pub async fn send_otp_impl(
     // Send OTP via appropriate channel
     match req.channel {
         OtpChannel::Email => {
-            send_otp_email(state, &req.destination, &code, &req.purpose).await?;
+            send_otp_email(state, &req.destination, &code, &req.purpose, req.app_name.as_deref()).await?;
         }
         OtpChannel::Sms => {
             // TODO: Implement SMS sending via Twilio
@@ -417,27 +420,30 @@ async fn send_otp_email(
     email: &str,
     code: &str,
     purpose: &OtpPurpose,
+    app_name: Option<&str>,
 ) -> Result<(), AppError> {
+    let name = app_name.unwrap_or("Our service");
+
     let (subject, heading, instruction) = match purpose {
         OtpPurpose::Login => (
-            "Your Login Code",
-            "Sign in to your account",
-            "Use the code below to sign in. It expires in 5 minutes.",
+            format!("Your {} Login Code", name),
+            format!("Sign in to {}", name),
+            format!("Use the code below to sign in to {}. It expires in 5 minutes.", name),
         ),
         OtpPurpose::VerifyEmail => (
-            "Verify Your Email",
-            "Email Verification",
-            "Use the code below to verify your email address. It expires in 5 minutes.",
+            format!("{} - Verify Your Email", name),
+            "Email Verification".to_string(),
+            format!("Use the code below to verify your email address on {}. It expires in 5 minutes.", name),
         ),
         OtpPurpose::VerifyPhone => (
-            "Verify Your Phone",
-            "Phone Verification",
-            "Use the code below to verify your phone number. It expires in 5 minutes.",
+            format!("{} - Verify Your Phone", name),
+            "Phone Verification".to_string(),
+            format!("Use the code below to verify your phone number on {}. It expires in 5 minutes.", name),
         ),
         OtpPurpose::ResetPassword => (
-            "Reset Your Password",
-            "Password Reset",
-            "Use the code below to reset your password. It expires in 5 minutes.",
+            format!("{} - Reset Your Password", name),
+            "Password Reset".to_string(),
+            format!("Use the code below to reset your {} password. It expires in 5 minutes.", name),
         ),
     };
 
@@ -459,7 +465,7 @@ async fn send_otp_email(
 
     state
         .email
-        .send_otp_email(email, code, subject, &plain_body, &html_body)
+        .send_otp_email(email, code, &subject, &plain_body, &html_body, app_name)
         .await
 }
 

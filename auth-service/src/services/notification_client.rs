@@ -79,11 +79,14 @@ impl NotificationClient {
         subject: &str,
         body_text: &str,
         body_html: &str,
+        from_name: Option<&str>,
     ) -> Result<(), AppError> {
         let mut client = self.get_client().await?;
 
         let mut metadata = HashMap::new();
         metadata.insert("source".to_string(), "auth-service".to_string());
+
+        let sender = from_name.unwrap_or("Auth Service").to_string();
 
         let response = client
             .send_email(
@@ -91,7 +94,7 @@ impl NotificationClient {
                 subject.to_string(),
                 Some(body_text.to_string()),
                 Some(body_html.to_string()),
-                Some("Auth Service".to_string()),
+                Some(sender),
                 None,
                 metadata,
             )
@@ -152,6 +155,7 @@ impl EmailProvider for NotificationClient {
             "Verify Your Email Address",
             &plain_body,
             &html_body,
+            None,
         )
         .await
     }
@@ -193,7 +197,7 @@ impl EmailProvider for NotificationClient {
             reset_link
         );
 
-        self.send_email(to_email, "Reset Your Password", &plain_body, &html_body)
+        self.send_email(to_email, "Reset Your Password", &plain_body, &html_body, None)
             .await
     }
 
@@ -204,8 +208,9 @@ impl EmailProvider for NotificationClient {
         subject: &str,
         plain_body: &str,
         html_body: &str,
+        app_name: Option<&str>,
     ) -> Result<(), AppError> {
-        self.send_email(to_email, subject, plain_body, html_body)
+        self.send_email(to_email, subject, plain_body, html_body, app_name)
             .await
     }
 }

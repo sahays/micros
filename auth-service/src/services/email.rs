@@ -24,6 +24,7 @@ pub trait EmailProvider: Send + Sync {
         subject: &str,
         plain_body: &str,
         html_body: &str,
+        app_name: Option<&str>,
     ) -> Result<(), AppError>;
 }
 
@@ -57,6 +58,7 @@ impl EmailProvider for MockEmailService {
         _subject: &str,
         _plain_body: &str,
         _html_body: &str,
+        _app_name: Option<&str>,
     ) -> Result<(), AppError> {
         Ok(())
     }

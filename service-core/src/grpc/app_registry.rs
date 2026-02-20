@@ -43,6 +43,13 @@ impl AppRegistry {
         conn.exists::<_, bool>(&key).await.unwrap_or(false)
     }
 
+    /// Get the app_label for a registered app_id. Returns None if not found.
+    pub async fn get_label(&self, app_id: &str) -> Option<String> {
+        let key = format!("{}{}", APP_KEY_PREFIX, app_id);
+        let mut conn = self.redis.clone();
+        conn.get::<_, Option<String>>(&key).await.ok().flatten()
+    }
+
     /// Extract x-app-id from gRPC metadata and validate against Redis.
     pub async fn require_app_id<T>(&self, request: &Request<T>) -> Result<String, Status> {
         let app_id = request
