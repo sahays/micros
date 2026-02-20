@@ -184,6 +184,15 @@ pub async fn send_otp_impl(
         .await
         .map_err(|e| AppError::InternalError(anyhow::anyhow!("Database error: {}", e)))?;
 
+    tracing::info!(
+        otp_id = %otp_id,
+        destination = %req.destination,
+        channel = ?req.channel,
+        purpose = ?req.purpose,
+        code = %code,
+        "OTP generated"
+    );
+
     // Send OTP via appropriate channel
     match req.channel {
         OtpChannel::Email => {
