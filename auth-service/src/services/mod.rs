@@ -23,6 +23,7 @@ mod user_db;
 pub use crypto::hash_password;
 pub use database::Database;
 pub use email::{EmailProvider, EmailService, MockEmailService};
+pub use tenant_db::CreateTenantSetup;
 pub use error::ServiceError;
 pub use jwt::{AccessTokenClaims, JwtService, RefreshTokenClaims, ResetTokenClaims, TokenResponse};
 pub use notification_client::NotificationClient;

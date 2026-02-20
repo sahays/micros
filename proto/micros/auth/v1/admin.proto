@@ -3,12 +3,15 @@ syntax = "proto3";
 package micros.auth.v1;
 
 // AdminService provides administrative operations for auth-service.
-// All endpoints require the X-Admin-Api-Key header.
 service AdminService {
   // Bootstrap creates the first tenant and superadmin user.
   // This is a one-time operation that can only be called when no tenants exist.
   // Requires X-Admin-Api-Key header.
   rpc Bootstrap(BootstrapRequest) returns (BootstrapResponse);
+
+  // CreateTenant creates a new tenant with an admin user.
+  // Can be called multiple times. The admin gets all seeded capabilities (not "*").
+  rpc CreateTenant(CreateTenantRequest) returns (CreateTenantResponse);
 }
 
 // BootstrapRequest for creating the first tenant and superadmin.
@@ -39,6 +42,45 @@ message BootstrapResponse {
 
   // Superadmin role ID with "*" capability.
   string superadmin_role_id = 3;
+
+  // Created admin user's ID.
+  string admin_user_id = 4;
+
+  // JWT access token for the admin user.
+  string access_token = 5;
+
+  // Refresh token for the admin user.
+  string refresh_token = 6;
+}
+
+// CreateTenantRequest for creating a new tenant with an admin user.
+message CreateTenantRequest {
+  // URL-friendly tenant identifier (3-63 chars, lowercase alphanumeric + hyphens).
+  string tenant_slug = 1;
+
+  // Human-readable tenant name.
+  string tenant_label = 2;
+
+  // Admin user's email address.
+  string admin_email = 3;
+
+  // Admin user's password (min 8 characters).
+  string admin_password = 4;
+
+  // Optional display name for the admin user.
+  optional string admin_display_name = 5;
+}
+
+// CreateTenantResponse returned after successful tenant creation.
+message CreateTenantResponse {
+  // Created tenant's ID.
+  string tenant_id = 1;
+
+  // Root org node ID for the tenant.
+  string root_org_node_id = 2;
+
+  // Admin role ID with all seeded capabilities.
+  string admin_role_id = 3;
 
   // Created admin user's ID.
   string admin_user_id = 4;

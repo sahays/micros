@@ -1,15 +1,18 @@
 //! gRPC implementation of AdminService.
 //!
 //! Provides administrative operations including the bootstrap mechanism
-//! for creating the first tenant and superadmin user.
+//! for creating the first tenant and superadmin user, and self-service
+//! tenant creation.
 
 use crate::grpc::proto::auth::{
     admin_service_server::AdminService, BootstrapRequest, BootstrapResponse,
+    CreateTenantRequest, CreateTenantResponse,
 };
 use crate::models::{
-    Capability, OrgAssignment, OrgNode, RefreshSession, Role, Tenant, User, UserIdentity,
+    AuditEvent, AuditEventType, Capability, OrgAssignment, OrgNode, RefreshSession, Role, Tenant,
+    User, UserIdentity,
 };
-use crate::services::hash_password;
+use crate::services::{hash_password, CreateTenantSetup};
 use crate::AppState;
 use sha2::{Digest, Sha256};
 use tonic::{Request, Response, Status};
@@ -245,6 +248,179 @@ impl AdminService for AdminServiceImpl {
             tenant_id: tenant_id.to_string(),
             root_org_node_id: root_org_node_id.to_string(),
             superadmin_role_id: superadmin_role_id.to_string(),
+            admin_user_id: admin_user_id.to_string(),
+            access_token,
+            refresh_token,
+        }))
+    }
+
+    async fn create_tenant(
+        &self,
+        request: Request<CreateTenantRequest>,
+    ) -> Result<Response<CreateTenantResponse>, Status> {
+        let req = request.into_inner();
+
+        // Validate slug format: 3-63 chars, lowercase alphanumeric + hyphens,
+        // no leading/trailing hyphens
+        if req.tenant_slug.len() < 3 || req.tenant_slug.len() > 63 {
+            return Err(Status::invalid_argument(
+                "tenant_slug must be 3-63 characters",
+            ));
+        }
+        if !req
+            .tenant_slug
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+        {
+            return Err(Status::invalid_argument(
+                "tenant_slug must contain only lowercase letters, digits, and hyphens",
+            ));
+        }
+        if req.tenant_slug.starts_with('-') || req.tenant_slug.ends_with('-') {
+            return Err(Status::invalid_argument(
+                "tenant_slug must not start or end with a hyphen",
+            ));
+        }
+
+        if req.tenant_label.is_empty() {
+            return Err(Status::invalid_argument("tenant_label is required"));
+        }
+        if !req.admin_email.contains('@') {
+            return Err(Status::invalid_argument(
+                "admin_email must be a valid email address",
+            ));
+        }
+        if req.admin_password.len() < 8 {
+            return Err(Status::invalid_argument(
+                "admin_password must be at least 8 characters",
+            ));
+        }
+
+        // Check slug uniqueness (DB UNIQUE constraint is the real safety net)
+        if self
+            .state
+            .db
+            .find_tenant_by_slug(&req.tenant_slug)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to check tenant slug");
+                Status::internal("Database error")
+            })?
+            .is_some()
+        {
+            return Err(Status::already_exists("Tenant slug already exists"));
+        }
+
+        // Hash password (CPU-intensive, done before transaction)
+        let password_hash = hash_password(&req.admin_password).map_err(|e| {
+            tracing::error!(error = %e, "Failed to hash password");
+            Status::internal("Failed to hash password")
+        })?;
+
+        // Fetch all capabilities, filter out "*"
+        let all_caps = self.state.db.get_all_capabilities().await.map_err(|e| {
+            tracing::error!(error = %e, "Failed to fetch capabilities");
+            Status::internal("Database error")
+        })?;
+        let cap_ids: Vec<_> = all_caps
+            .iter()
+            .filter(|c| c.cap_key != "*")
+            .map(|c| c.cap_id)
+            .collect();
+
+        // Build all domain objects
+        let tenant = Tenant::new(req.tenant_slug.clone(), req.tenant_label.clone());
+        let tenant_id = tenant.tenant_id;
+
+        let root_org_node = OrgNode::new(
+            tenant_id,
+            "org".to_string(),
+            format!("{} Root", req.tenant_label),
+            None,
+        );
+        let root_org_node_id = root_org_node.org_node_id;
+
+        let admin_role = Role::new(tenant_id, "Admin".to_string());
+        let admin_role_id = admin_role.role_id;
+
+        let display_name = req
+            .admin_display_name
+            .unwrap_or_else(|| "Admin".to_string());
+        let admin_user = User::new(tenant_id, req.admin_email.clone(), Some(display_name));
+        let admin_user_id = admin_user.user_id;
+
+        let admin_identity = UserIdentity::new_password(admin_user_id, password_hash);
+
+        let assignment = OrgAssignment::new(tenant_id, admin_user_id, root_org_node_id, admin_role_id);
+
+        // Generate tokens
+        let (access_token, refresh_token, refresh_token_id) = self
+            .state
+            .jwt
+            .generate_token_pair(
+                &admin_user_id.to_string(),
+                &tenant_id.to_string(),
+                "",
+                &req.admin_email,
+            )
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to generate tokens");
+                Status::internal("Failed to generate tokens")
+            })?;
+
+        let refresh_hash = hash_token(&refresh_token_id);
+        let refresh_session = RefreshSession::new(
+            admin_user_id,
+            refresh_hash,
+            self.state.jwt.refresh_token_expiry_days(),
+        );
+
+        let audit_event = AuditEvent::user_action(
+            tenant_id,
+            admin_user_id,
+            AuditEventType::TenantCreated,
+            Some("tenant".to_string()),
+            Some(tenant_id),
+            Some(serde_json::json!({
+                "tenant_slug": req.tenant_slug,
+            })),
+            None,
+            None,
+        );
+
+        // Execute everything in a single transaction
+        let setup = CreateTenantSetup {
+            tenant,
+            root_org_node,
+            admin_role,
+            cap_ids,
+            admin_user,
+            admin_identity,
+            assignment,
+            refresh_session,
+            audit_event,
+        };
+
+        self.state
+            .db
+            .create_tenant_with_setup(&setup)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to create tenant");
+                Status::internal("Failed to create tenant")
+            })?;
+
+        tracing::info!(
+            tenant_id = %tenant_id,
+            tenant_slug = %req.tenant_slug,
+            admin_user_id = %admin_user_id,
+            "Tenant created successfully"
+        );
+
+        Ok(Response::new(CreateTenantResponse {
+            tenant_id: tenant_id.to_string(),
+            root_org_node_id: root_org_node_id.to_string(),
+            admin_role_id: admin_role_id.to_string(),
             admin_user_id: admin_user_id.to_string(),
             access_token,
             refresh_token,

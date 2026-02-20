@@ -35,6 +35,7 @@ pub enum AuditEventType {
     InvitationCreated,
     InvitationAccepted,
     AuthzEvaluated,
+    TenantCreated,
 }
 
 impl AuditEventType {
@@ -66,6 +67,7 @@ impl AuditEventType {
             AuditEventType::InvitationCreated => "invitation_created",
             AuditEventType::InvitationAccepted => "invitation_accepted",
             AuditEventType::AuthzEvaluated => "authz_evaluated",
+            AuditEventType::TenantCreated => "tenant_created",
         }
     }
 }
