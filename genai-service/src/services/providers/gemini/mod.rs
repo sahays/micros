@@ -182,10 +182,17 @@ impl GeminiConfig {
 
     /// Build a Vertex AI URL for the given model and method.
     /// Uses the configured region (e.g., "global", "us-central1").
+    /// The "global" region uses `aiplatform.googleapis.com` without a region prefix;
+    /// all other regions use `{region}-aiplatform.googleapis.com`.
     pub fn vertex_url(&self, model: &str, method: &str) -> String {
+        let host = if self.region == "global" {
+            "aiplatform.googleapis.com".to_string()
+        } else {
+            format!("{}-aiplatform.googleapis.com", self.region)
+        };
         format!(
-            "https://{}-aiplatform.googleapis.com/v1/projects/{}/locations/{}/publishers/google/models/{}:{}",
-            self.region, self.project_id, self.region, model, method
+            "https://{}/v1/projects/{}/locations/{}/publishers/google/models/{}:{}",
+            host, self.project_id, self.region, model, method
         )
     }
 }

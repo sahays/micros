@@ -220,9 +220,9 @@ services:
       - MONGODB_DATABASE=${GENAI_MONGODB_DATABASE:-genai_db}
       - RUST_LOG=${RUST_LOG:-genai_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
       # Model Configuration
-      - GENAI_TEXT_MODEL=${GENAI_TEXT_MODEL:-gemini-2.0-flash}
-      - GENAI_AUDIO_MODEL=${GENAI_AUDIO_MODEL:-gemini-2.0-flash}
-      - GENAI_VIDEO_MODEL=${GENAI_VIDEO_MODEL:-veo-2}
+      - GENAI_TEXT_MODEL=${GENAI_TEXT_MODEL:-gemini-3-flash-preview}
+      - GENAI_AUDIO_MODEL=${GENAI_AUDIO_MODEL:-gemini-3-flash-preview}
+      - GENAI_VIDEO_MODEL=${GENAI_VIDEO_MODEL:-veo-3.1-generate-preview}
       - GENAI_DEFAULT_CONTENT_THRESHOLD_BYTES=${GENAI_DEFAULT_CONTENT_THRESHOLD_BYTES:-1048576}
       # Region Configuration
       - GEMINI_REGION=${GEMINI_REGION:-global}
