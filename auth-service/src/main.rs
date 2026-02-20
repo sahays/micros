@@ -63,6 +63,15 @@ async fn main() -> anyhow::Result<()> {
         as Arc<dyn services::EmailProvider>;
     tracing::info!("Email provider initialized (via notification-service)");
 
+    // Create app registry (Redis-backed)
+    let app_registry = Arc::new(
+        service_core::grpc::AppRegistry::new(&config.redis.url)
+            .await
+            .expect("Failed to create app registry"),
+    );
+    let app_registry_svc = service_core::grpc::AppRegistryServiceImpl::new(app_registry.clone());
+    tracing::info!("App registry initialized");
+
     // Build application state
     let state = AppState {
         config: config.clone(),
@@ -70,6 +79,7 @@ async fn main() -> anyhow::Result<()> {
         email,
         jwt,
         redis,
+        app_registry,
     };
 
     // HTTP health endpoint for Docker/K8s probes
@@ -86,15 +96,6 @@ async fn main() -> anyhow::Result<()> {
 
     let health_listener = TcpListener::bind(health_addr).await?;
     let health_server = axum::serve(health_listener, health_router.into_make_service());
-
-    // Create app registry (Redis-backed)
-    let app_registry = Arc::new(
-        service_core::grpc::AppRegistry::new(&config.redis.url)
-            .await
-            .expect("Failed to create app registry"),
-    );
-    let app_registry_svc = service_core::grpc::AppRegistryServiceImpl::new(app_registry);
-    tracing::info!("App registry initialized");
 
     // Build gRPC services
     let grpc_port = config.common.port + 1;

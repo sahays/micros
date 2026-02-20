@@ -170,6 +170,13 @@ impl AuthService for AuthServiceImpl {
         &self,
         request: Request<SendOtpRequest>,
     ) -> Result<Response<SendOtpResponse>, Status> {
+        // Extract app_id from metadata before consuming the request
+        let app_name = if let Some(app_id) = service_core::grpc::interceptors::extract_app_id(&request) {
+            self.state.app_registry.get_label(&app_id).await
+        } else {
+            None
+        };
+
         let req = request.into_inner();
 
         let channel = match req.channel {
@@ -192,6 +199,7 @@ impl AuthService for AuthServiceImpl {
             destination: req.destination,
             channel,
             purpose,
+            app_name,
         };
 
         let result = otp_handler::send_otp_impl(&self.state, handler_req)

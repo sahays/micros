@@ -26,4 +26,5 @@ pub struct AppState {
     pub email: Arc<dyn EmailProvider>,
     pub jwt: JwtService,
     pub redis: Arc<dyn TokenBlacklist>,
+    pub app_registry: Arc<service_core::grpc::AppRegistry>,
 }
