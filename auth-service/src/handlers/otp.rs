@@ -101,14 +101,21 @@ pub async fn send_otp_impl(
     state: &AppState,
     req: SendOtpRequest,
 ) -> Result<SendOtpResponse, AppError> {
-    // Validate tenant exists (lookup by slug)
-    let tenant = state
-        .db
-        .find_tenant_by_slug(&req.tenant_slug)
-        .await
-        .map_err(|e| AppError::InternalError(anyhow::anyhow!("Database error: {}", e)))?
-        .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Tenant not found")))?;
-    let tenant_id = tenant.tenant_id;
+    // Resolve tenant_id: for VerifyEmail/VerifyPhone an empty slug is allowed
+    // (the OTP was created during registration before the caller knew the slug).
+    let tenant_id = if req.tenant_slug.is_empty()
+        && matches!(req.purpose, OtpPurpose::VerifyEmail | OtpPurpose::VerifyPhone)
+    {
+        None
+    } else {
+        let tenant = state
+            .db
+            .find_tenant_by_slug(&req.tenant_slug)
+            .await
+            .map_err(|e| AppError::InternalError(anyhow::anyhow!("Database error: {}", e)))?
+            .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Tenant not found")))?;
+        Some(tenant.tenant_id)
+    };
 
     // Validate destination format
     validate_destination(&req.destination, &req.channel)?;
@@ -129,6 +136,9 @@ pub async fn send_otp_impl(
 
     // For login purpose, verify user exists (email-based only for now)
     if req.purpose == OtpPurpose::Login {
+        let tid = tenant_id
+            .ok_or_else(|| AppError::BadRequest(anyhow::anyhow!("tenant_slug is required for login")))?;
+
         // Currently only email-based login is supported
         // SMS/WhatsApp login requires phone number lookup via user_identities
         if req.channel != OtpChannel::Email {
@@ -139,7 +149,7 @@ pub async fn send_otp_impl(
 
         let user = state
             .db
-            .find_user_by_email_in_tenant(tenant_id, &req.destination)
+            .find_user_by_email_in_tenant(tid, &req.destination)
             .await
             .map_err(|e| AppError::InternalError(anyhow::anyhow!("Database error: {}", e)))?;
 
@@ -154,7 +164,7 @@ pub async fn send_otp_impl(
 
     // Create OTP record
     let otp = OtpCode::new(
-        Some(tenant_id),
+        tenant_id,
         req.destination.clone(),
         req.channel.clone(),
         req.purpose.clone(),
