@@ -46,6 +46,7 @@ impl Default for LedgerClientConfig {
 pub struct LedgerClient {
     client: LedgerServiceClient<Channel>,
     retry_config: RetryConfig,
+    app_id: Option<String>,
 }
 
 impl LedgerClient {
@@ -60,7 +61,14 @@ impl LedgerClient {
         Ok(Self {
             client: LedgerServiceClient::new(channel),
             retry_config: config.retry_config,
+            app_id: None,
         })
+    }
+
+    /// Return a clone with the given app ID set for header injection.
+    pub fn with_app_id(mut self, app_id: String) -> Self {
+        self.app_id = Some(app_id);
+        self
     }
 
     /// Create a new ledger client connecting to the specified endpoint.
@@ -112,8 +120,13 @@ impl LedgerClient {
         retry_grpc_call(&self.retry_config, "create_account", || {
             let mut c = client.clone();
             let req = request.clone();
+            let app_id = self.app_id.clone();
             async move {
-                let response = c.create_account(Request::new(req)).await?;
+                let mut grpc_req = Request::new(req);
+                if let Some(ref id) = app_id {
+                    super::interceptors::inject_app_id(&mut grpc_req, id);
+                }
+                let response = c.create_account(grpc_req).await?;
                 Ok(response.into_inner())
             }
         })
@@ -135,8 +148,13 @@ impl LedgerClient {
         retry_grpc_call(&self.retry_config, "get_account", || {
             let mut c = client.clone();
             let req = request.clone();
+            let app_id = self.app_id.clone();
             async move {
-                let response = c.get_account(Request::new(req)).await?;
+                let mut grpc_req = Request::new(req);
+                if let Some(ref id) = app_id {
+                    super::interceptors::inject_app_id(&mut grpc_req, id);
+                }
+                let response = c.get_account(grpc_req).await?;
                 Ok(response.into_inner())
             }
         })
@@ -164,8 +182,13 @@ impl LedgerClient {
         retry_grpc_call(&self.retry_config, "list_accounts", || {
             let mut c = client.clone();
             let req = request.clone();
+            let app_id = self.app_id.clone();
             async move {
-                let response = c.list_accounts(Request::new(req)).await?;
+                let mut grpc_req = Request::new(req);
+                if let Some(ref id) = app_id {
+                    super::interceptors::inject_app_id(&mut grpc_req, id);
+                }
+                let response = c.list_accounts(grpc_req).await?;
                 Ok(response.into_inner())
             }
         })
@@ -199,8 +222,13 @@ impl LedgerClient {
         retry_grpc_call(&self.retry_config, "post_transaction", || {
             let mut c = client.clone();
             let req = request.clone();
+            let app_id = self.app_id.clone();
             async move {
-                let response = c.post_transaction(Request::new(req)).await?;
+                let mut grpc_req = Request::new(req);
+                if let Some(ref id) = app_id {
+                    super::interceptors::inject_app_id(&mut grpc_req, id);
+                }
+                let response = c.post_transaction(grpc_req).await?;
                 Ok(response.into_inner())
             }
         })
@@ -222,8 +250,13 @@ impl LedgerClient {
         retry_grpc_call(&self.retry_config, "get_transaction", || {
             let mut c = client.clone();
             let req = request.clone();
+            let app_id = self.app_id.clone();
             async move {
-                let response = c.get_transaction(Request::new(req)).await?;
+                let mut grpc_req = Request::new(req);
+                if let Some(ref id) = app_id {
+                    super::interceptors::inject_app_id(&mut grpc_req, id);
+                }
+                let response = c.get_transaction(grpc_req).await?;
                 Ok(response.into_inner())
             }
         })
@@ -253,8 +286,13 @@ impl LedgerClient {
         retry_grpc_call(&self.retry_config, "list_transactions", || {
             let mut c = client.clone();
             let req = request.clone();
+            let app_id = self.app_id.clone();
             async move {
-                let response = c.list_transactions(Request::new(req)).await?;
+                let mut grpc_req = Request::new(req);
+                if let Some(ref id) = app_id {
+                    super::interceptors::inject_app_id(&mut grpc_req, id);
+                }
+                let response = c.list_transactions(grpc_req).await?;
                 Ok(response.into_inner())
             }
         })
@@ -282,8 +320,13 @@ impl LedgerClient {
         retry_grpc_call(&self.retry_config, "get_balance", || {
             let mut c = client.clone();
             let req = request.clone();
+            let app_id = self.app_id.clone();
             async move {
-                let response = c.get_balance(Request::new(req)).await?;
+                let mut grpc_req = Request::new(req);
+                if let Some(ref id) = app_id {
+                    super::interceptors::inject_app_id(&mut grpc_req, id);
+                }
+                let response = c.get_balance(grpc_req).await?;
                 Ok(response.into_inner())
             }
         })
@@ -307,8 +350,13 @@ impl LedgerClient {
         retry_grpc_call(&self.retry_config, "get_balances", || {
             let mut c = client.clone();
             let req = request.clone();
+            let app_id = self.app_id.clone();
             async move {
-                let response = c.get_balances(Request::new(req)).await?;
+                let mut grpc_req = Request::new(req);
+                if let Some(ref id) = app_id {
+                    super::interceptors::inject_app_id(&mut grpc_req, id);
+                }
+                let response = c.get_balances(grpc_req).await?;
                 Ok(response.into_inner())
             }
         })
@@ -338,8 +386,13 @@ impl LedgerClient {
         retry_grpc_call(&self.retry_config, "get_statement", || {
             let mut c = client.clone();
             let req = request.clone();
+            let app_id = self.app_id.clone();
             async move {
-                let response = c.get_statement(Request::new(req)).await?;
+                let mut grpc_req = Request::new(req);
+                if let Some(ref id) = app_id {
+                    super::interceptors::inject_app_id(&mut grpc_req, id);
+                }
+                let response = c.get_statement(grpc_req).await?;
                 Ok(response.into_inner())
             }
         })

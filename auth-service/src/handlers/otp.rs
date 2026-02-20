@@ -411,31 +411,56 @@ fn validate_destination(destination: &str, channel: &OtpChannel) -> Result<(), A
     Ok(())
 }
 
-/// Send OTP via email.
-///
-/// In production, this sends the actual email. Currently logs for testing.
+/// Send OTP via email using the Gmail email service on AppState.
 async fn send_otp_email(
-    _state: &AppState,
-    _email: &str,
-    _code: &str,
+    state: &AppState,
+    email: &str,
+    code: &str,
     purpose: &OtpPurpose,
 ) -> Result<(), AppError> {
-    let subject = match purpose {
-        OtpPurpose::Login => "Your login code",
-        OtpPurpose::VerifyEmail => "Verify your email",
-        OtpPurpose::VerifyPhone => "Verify your phone",
-        OtpPurpose::ResetPassword => "Reset your password",
+    let (subject, heading, instruction) = match purpose {
+        OtpPurpose::Login => (
+            "Your Login Code",
+            "Sign in to your account",
+            "Use the code below to sign in. It expires in 5 minutes.",
+        ),
+        OtpPurpose::VerifyEmail => (
+            "Verify Your Email",
+            "Email Verification",
+            "Use the code below to verify your email address. It expires in 5 minutes.",
+        ),
+        OtpPurpose::VerifyPhone => (
+            "Verify Your Phone",
+            "Phone Verification",
+            "Use the code below to verify your phone number. It expires in 5 minutes.",
+        ),
+        OtpPurpose::ResetPassword => (
+            "Reset Your Password",
+            "Password Reset",
+            "Use the code below to reset your password. It expires in 5 minutes.",
+        ),
     };
 
-    // Use the email service - for now just log since we're using mock in tests
-    // Note: Never log OTP codes - they are sensitive tokens
-    tracing::info!(
-        subject = %subject,
-        purpose = ?purpose,
-        "OTP email sent"
+    let html_body = format!(
+        r###"<html>
+<body style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+    <h2>{heading}</h2>
+    <p>{instruction}</p>
+    <p style="font-size: 32px; font-weight: bold; letter-spacing: 8px; text-align: center;
+              background-color: #f4f4f4; padding: 16px; border-radius: 8px;">{code}</p>
+    <p style="color: #666; font-size: 12px;">If you didn't request this code, please ignore this email.</p>
+</body>
+</html>"###,
     );
 
-    Ok(())
+    let plain_body = format!(
+        "{heading}\n\n{instruction}\n\nYour code: {code}\n\nIf you didn't request this code, please ignore this email.",
+    );
+
+    state
+        .email
+        .send_otp_email(email, code, subject, &plain_body, &html_body)
+        .await
 }
 
 /// Find user by email in a tenant.

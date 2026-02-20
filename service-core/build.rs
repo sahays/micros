@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let proto_root = PathBuf::from("../proto");
+    let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
 
     // Tell cargo to recompile if any proto files change
     println!("cargo:rerun-if-changed=../proto/micros/auth/v1/");
@@ -112,6 +113,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build_client(true)
         .compile_protos(
             &["../proto/micros/reconciliation/v1/reconciliation.proto"],
+            &[&proto_root],
+        )?;
+
+    // Compile common app registry proto (server + client for all services)
+    tonic_build::configure()
+        .build_server(true)
+        .build_client(true)
+        .file_descriptor_set_path(out_dir.join("app_registry_descriptor.bin"))
+        .compile_protos(
+            &["../proto/micros/common/app.proto"],
             &[&proto_root],
         )?;
 

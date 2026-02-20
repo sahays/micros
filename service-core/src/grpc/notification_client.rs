@@ -38,6 +38,7 @@ impl Default for NotificationClientConfig {
 #[derive(Clone)]
 pub struct NotificationClient {
     client: NotificationServiceClient<Channel>,
+    app_id: Option<String>,
 }
 
 impl NotificationClient {
@@ -51,7 +52,28 @@ impl NotificationClient {
 
         Ok(Self {
             client: NotificationServiceClient::new(channel),
+            app_id: None,
         })
+    }
+
+    /// Set the app ID to inject on all outgoing requests.
+    pub fn set_app_id(&mut self, app_id: String) {
+        self.app_id = Some(app_id);
+    }
+
+    /// Return a clone with the given app ID set.
+    pub fn with_app_id(mut self, app_id: String) -> Self {
+        self.app_id = Some(app_id);
+        self
+    }
+
+    /// Create a request with app_id metadata injected.
+    fn make_request<T>(&self, inner: T) -> Request<T> {
+        let mut req = Request::new(inner);
+        if let Some(ref id) = self.app_id {
+            super::interceptors::inject_app_id(&mut req, id);
+        }
+        req
     }
 
     /// Create a new notification client connecting to the specified endpoint.
@@ -79,7 +101,7 @@ impl NotificationClient {
         reply_to: Option<String>,
         metadata: HashMap<String, String>,
     ) -> Result<SendEmailResponse, tonic::Status> {
-        let request = Request::new(SendEmailRequest {
+        let request = self.make_request(SendEmailRequest {
             to,
             subject,
             body_text,
@@ -114,7 +136,7 @@ impl NotificationClient {
         body: String,
         metadata: HashMap<String, String>,
     ) -> Result<SendSmsResponse, tonic::Status> {
-        let request = Request::new(SendSmsRequest { to, body, metadata });
+        let request = self.make_request(SendSmsRequest { to, body, metadata });
         let response = self.client.send_sms(request).await?;
         Ok(response.into_inner())
     }
@@ -142,7 +164,7 @@ impl NotificationClient {
         data: HashMap<String, String>,
         metadata: HashMap<String, String>,
     ) -> Result<SendPushResponse, tonic::Status> {
-        let request = Request::new(SendPushRequest {
+        let request = self.make_request(SendPushRequest {
             device_token,
             platform: platform as i32,
             title,
@@ -182,7 +204,7 @@ impl NotificationClient {
         &mut self,
         request: SendBatchRequest,
     ) -> Result<SendBatchResponse, tonic::Status> {
-        let response = self.client.send_batch(Request::new(request)).await?;
+        let response = self.client.send_batch(self.make_request(request)).await?;
         Ok(response.into_inner())
     }
 
@@ -195,7 +217,7 @@ impl NotificationClient {
         &mut self,
         notification_id: String,
     ) -> Result<GetNotificationResponse, tonic::Status> {
-        let request = Request::new(GetNotificationRequest { notification_id });
+        let request = self.make_request(GetNotificationRequest { notification_id });
         let response = self.client.get_notification(request).await?;
         Ok(response.into_inner())
     }
@@ -212,7 +234,7 @@ impl NotificationClient {
         page_size: i32,
         page_token: Option<String>,
     ) -> Result<ListNotificationsResponse, tonic::Status> {
-        let request = Request::new(ListNotificationsRequest {
+        let request = self.make_request(ListNotificationsRequest {
             channel: channel.map(|c| c as i32),
             status: status.map(|s| s as i32),
             recipient,

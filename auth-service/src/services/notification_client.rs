@@ -196,4 +196,16 @@ impl EmailProvider for NotificationClient {
         self.send_email(to_email, "Reset Your Password", &plain_body, &html_body)
             .await
     }
+
+    async fn send_otp_email(
+        &self,
+        to_email: &str,
+        _code: &str,
+        subject: &str,
+        plain_body: &str,
+        html_body: &str,
+    ) -> Result<(), AppError> {
+        self.send_email(to_email, subject, plain_body, html_body)
+            .await
+    }
 }

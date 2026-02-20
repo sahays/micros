@@ -83,6 +83,7 @@ services:
       - "${DOCUMENT_SERVICE_PORT:-8082}:8080"
     environment:
       - APP__PORT=8080
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - RUST_LOG=${LOG_LEVEL:-info}
     logging:
       driver: "json-file"

@@ -12,6 +12,9 @@ pub const REQUEST_ID_KEY: &str = "x-request-id";
 /// gRPC metadata key for tenant ID (used for metering).
 pub const TENANT_ID_KEY: &str = "x-tenant-id";
 
+/// gRPC metadata key for app ID (used for app registration).
+pub const APP_ID_KEY: &str = "x-app-id";
+
 /// Extract tenant ID from incoming gRPC request metadata.
 pub fn extract_tenant_id<T>(request: &Request<T>) -> Option<String> {
     request
@@ -25,6 +28,22 @@ pub fn extract_tenant_id<T>(request: &Request<T>) -> Option<String> {
 pub fn inject_tenant_id<T>(request: &mut Request<T>, tenant_id: &str) {
     if let Ok(value) = tenant_id.parse() {
         request.metadata_mut().insert(TENANT_ID_KEY, value);
+    }
+}
+
+/// Extract app ID from incoming gRPC request metadata.
+pub fn extract_app_id<T>(request: &Request<T>) -> Option<String> {
+    request
+        .metadata()
+        .get(APP_ID_KEY)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+}
+
+/// Inject app ID into outgoing gRPC request metadata.
+pub fn inject_app_id<T>(request: &mut Request<T>, app_id: &str) {
+    if let Ok(value) = app_id.parse() {
+        request.metadata_mut().insert(APP_ID_KEY, value);
     }
 }
 

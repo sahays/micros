@@ -1,0 +1,16 @@
+syntax = "proto3";
+package micros.common;
+
+service AppRegistryService {
+  rpc RegisterApp(RegisterAppRequest) returns (RegisterAppResponse);
+}
+
+message RegisterAppRequest {
+  string app_id = 1;     // Fixed identifier chosen by the app, e.g. "bharatsc"
+  string app_label = 2;  // Display name, e.g. "BharatSC"
+}
+
+message RegisterAppResponse {
+  string app_id = 1;
+  string app_label = 2;
+}

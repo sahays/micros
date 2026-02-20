@@ -78,6 +78,7 @@ services:
       - GRPC_PORT=8081
       - MONGODB_URI=${MONGODB_URI:-mongodb://host.docker.internal:27017}
       - MONGODB_DATABASE=${MONGODB_DATABASE:-micros_db}
+      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
       - RUST_LOG=${RUST_LOG:-document_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
       - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
       - STORAGE_LOCAL_PATH=${STORAGE_LOCAL_PATH:-./storage}
@@ -109,6 +110,7 @@ services:
       - ENVIRONMENT=${ENVIRONMENT:-dev}
       - MONGODB_URI=${NOTIFICATION_MONGODB_URI:-mongodb://host.docker.internal:27017}
       - MONGODB_DATABASE=${NOTIFICATION_MONGODB_DATABASE:-notification_db}
+      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
       - RUST_LOG=${RUST_LOG:-notification_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
       # Google Service Account Key (Gmail, etc.)
       - GOOGLE_SERVICE_ACCOUNT_KEY_PATH=${GOOGLE_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-gcp-service-account-key.json}
@@ -151,6 +153,7 @@ services:
       - ENVIRONMENT=${ENVIRONMENT:-dev}
       - MONGODB_URI=${GENAI_MONGODB_URI:-mongodb://host.docker.internal:27017}
       - MONGODB_DATABASE=${GENAI_MONGODB_DATABASE:-genai_db}
+      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
       - RUST_LOG=${RUST_LOG:-genai_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
       # Model Configuration
       - GENAI_TEXT_MODEL=${GENAI_TEXT_MODEL:-gemini-3-flash-preview}
@@ -193,6 +196,7 @@ services:
       - DATABASE_URL=${LEDGER_DATABASE_URL:-postgres://postgres:password@host.docker.internal:5432/ledger_db}
       - DATABASE_MAX_CONNECTIONS=${LEDGER_DATABASE_MAX_CONNECTIONS:-10}
       - DATABASE_MIN_CONNECTIONS=${LEDGER_DATABASE_MIN_CONNECTIONS:-2}
+      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
       - RUST_LOG=${RUST_LOG:-ledger_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
     logging:
       driver: "json-file"
@@ -221,6 +225,7 @@ services:
       - PAYMENT_DATABASE_URL=${PAYMENT_DATABASE_URL:-mongodb://host.docker.internal:27017}
       - PAYMENT_DATABASE_NAME=${PAYMENT_DATABASE_NAME:-payment_db}
       - PAYMENT_REDIS_URL=${PAYMENT_REDIS_URL:-redis://host.docker.internal:6379/0}
+      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
       - RUST_LOG=${RUST_LOG:-payment_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
       - PAYMENT_SIGNATURE_ENABLED=${PAYMENT_SIGNATURE_ENABLED:-false}
       - PAYMENT_SIGNATURE_SECRET=${PAYMENT_SIGNATURE_SECRET:-dev-secret}
@@ -260,6 +265,7 @@ services:
       - DATABASE_URL=${BILLING_DATABASE_URL:-postgres://postgres:password@host.docker.internal:5432/billing_db}
       - DATABASE_MAX_CONNECTIONS=${BILLING_DATABASE_MAX_CONNECTIONS:-10}
       - DATABASE_MIN_CONNECTIONS=${BILLING_DATABASE_MIN_CONNECTIONS:-2}
+      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
       - RUST_LOG=${RUST_LOG:-billing_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
       # Invoicing Service Integration (gRPC)
       - INVOICING_SERVICE_URL=${INVOICING_SERVICE_URL:-http://invoicing-service:8081}
@@ -295,6 +301,7 @@ services:
       - DATABASE_URL=${RECONCILIATION_DATABASE_URL:-postgres://postgres:password@host.docker.internal:5432/reconciliation_db}
       - DATABASE_MAX_CONNECTIONS=${RECONCILIATION_DATABASE_MAX_CONNECTIONS:-10}
       - DATABASE_MIN_CONNECTIONS=${RECONCILIATION_DATABASE_MIN_CONNECTIONS:-2}
+      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
       - RUST_LOG=${RUST_LOG:-reconciliation_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
       # Ledger Service Integration (gRPC)
       - LEDGER_SERVICE_URL=${LEDGER_SERVICE_URL:-http://ledger-service:8081}
@@ -334,6 +341,7 @@ services:
       - DATABASE_URL=${INVOICING_DATABASE_URL:-postgres://postgres:password@host.docker.internal:5432/invoicing_db}
       - DATABASE_MAX_CONNECTIONS=${INVOICING_DATABASE_MAX_CONNECTIONS:-10}
       - DATABASE_MIN_CONNECTIONS=${INVOICING_DATABASE_MIN_CONNECTIONS:-2}
+      - REDIS_URL=${REDIS_URL:-redis://host.docker.internal:6379/0}
       - RUST_LOG=${RUST_LOG:-invoicing_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
       # Ledger Service Integration (gRPC)
       - LEDGER_SERVICE_URL=${LEDGER_SERVICE_URL:-http://ledger-service:8081}

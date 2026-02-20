@@ -8,6 +8,7 @@ use crate::grpc::{
     proto::{notification_service_server::NotificationServiceServer, FILE_DESCRIPTOR_SET},
     CapabilityChecker, NotificationGrpcService,
 };
+use service_core::grpc::proto::common::app_registry_service_server::AppRegistryServiceServer;
 use crate::services::{
     EmailProvider, FcmProvider, GmailApiProvider, MockEmailProvider, MockPushProvider,
     MockSmsProvider, Msg91Provider, NotificationDb, PushProvider, SmsProvider,
@@ -227,6 +228,18 @@ impl Application {
         // Build gRPC server
         let notification_service = NotificationGrpcService::new(self.state);
 
+        // App registry (Redis-backed)
+        let redis_url =
+            std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://localhost:6379".to_string());
+        let app_registry = std::sync::Arc::new(
+            service_core::grpc::AppRegistry::new(&redis_url)
+                .await
+                .map_err(|e| {
+                    std::io::Error::other(format!("Failed to create app registry: {}", e))
+                })?,
+        );
+        let app_registry_svc = service_core::grpc::AppRegistryServiceImpl::new(app_registry);
+
         // gRPC health service
         let (mut health_reporter, grpc_health_service) = tonic_health::server::health_reporter();
         health_reporter
@@ -236,6 +249,9 @@ impl Application {
         // Reflection service for debugging
         let reflection_service = tonic_reflection::server::Builder::configure()
             .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
+            .register_encoded_file_descriptor_set(
+                service_core::grpc::proto::common::APP_REGISTRY_FILE_DESCRIPTOR_SET,
+            )
             .build_v1()
             .map_err(|e| {
                 std::io::Error::other(format!("Failed to build reflection service: {}", e))
@@ -246,6 +262,7 @@ impl Application {
             .add_service(grpc_health_service)
             .add_service(reflection_service)
             .add_service(NotificationServiceServer::new(notification_service))
+            .add_service(AppRegistryServiceServer::new(app_registry_svc))
             .serve_with_incoming(incoming);
 
         // Run both servers concurrently
