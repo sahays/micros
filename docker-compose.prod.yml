@@ -92,7 +92,7 @@ services:
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
       - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI:-}
       # Google Service Account Key (Gmail, Vertex AI, etc.)
-      - GOOGLE_SERVICE_ACCOUNT_KEY_PATH=${GOOGLE_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-emailsender-key.json}
+      - GOOGLE_SERVICE_ACCOUNT_KEY_PATH=${GOOGLE_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-gcp-service-account-key.json}
       - GMAIL_API_SENDER_EMAIL=${GMAIL_API_SENDER_EMAIL:-support@bharatsc.com}
       - GMAIL_API_SENDER_NAME=${GMAIL_API_SENDER_NAME:-BharatSC}
       - GMAIL_API_ENABLED=${GMAIL_API_ENABLED:-false}
@@ -108,7 +108,7 @@ services:
         tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
     volumes:
       - ./auth-service/keys:/app/keys
-      - ./${GOOGLE_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-emailsender-key.json}:/app/bharatsc-emailsender-key.json:ro
+      - ./${GOOGLE_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-gcp-service-account-key.json}:/app/${GOOGLE_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-gcp-service-account-key.json}:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -175,7 +175,7 @@ services:
       - MONGODB_DATABASE=${NOTIFICATION_MONGODB_DATABASE:-notification_db}
       - RUST_LOG=${RUST_LOG:-notification_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
       # Google Service Account Key (Gmail, etc.)
-      - GOOGLE_SERVICE_ACCOUNT_KEY_PATH=${GOOGLE_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-emailsender-key.json}
+      - GOOGLE_SERVICE_ACCOUNT_KEY_PATH=${GOOGLE_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-gcp-service-account-key.json}
       - GMAIL_API_SENDER_EMAIL=${NOTIFICATION_GMAIL_API_SENDER_EMAIL:-support@bharatsc.com}
       - GMAIL_API_SENDER_NAME=${NOTIFICATION_GMAIL_API_SENDER_NAME:-Notification Service}
       - GMAIL_API_ENABLED=${NOTIFICATION_GMAIL_API_ENABLED:-false}
@@ -194,7 +194,7 @@ services:
         max-file: "3"
         tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
     volumes:
-      - ./${GOOGLE_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-emailsender-key.json}:/app/bharatsc-emailsender-key.json:ro
+      - ./${GOOGLE_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-gcp-service-account-key.json}:/app/${GOOGLE_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-gcp-service-account-key.json}:ro
     depends_on:
       mongo:
         condition: service_healthy
@@ -228,7 +228,7 @@ services:
       - GEMINI_REGION=${GEMINI_REGION:-global}
       - VEO_REGION=${VEO_REGION:-us-central1}
       # Google Service Account Key (Vertex AI)
-      - GOOGLE_SERVICE_ACCOUNT_KEY_PATH=${GOOGLE_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-emailsender-key.json}
+      - GOOGLE_SERVICE_ACCOUNT_KEY_PATH=${GOOGLE_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-gcp-service-account-key.json}
       # Document Service
       - DOCUMENT_SERVICE_GRPC_URL=${DOCUMENT_SERVICE_GRPC_URL:-http://document-service:8081}
     logging:
@@ -238,7 +238,7 @@ services:
         max-file: "3"
         tag: "{{.ImageName}}|{{.Name}}|{{.ID}}"
     volumes:
-      - ./${GOOGLE_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-emailsender-key.json}:/app/bharatsc-emailsender-key.json:ro
+      - ./${GOOGLE_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-gcp-service-account-key.json}:/app/${GOOGLE_SERVICE_ACCOUNT_KEY_PATH:-bharatsc-gcp-service-account-key.json}:ro
     depends_on:
       mongo:
         condition: service_healthy

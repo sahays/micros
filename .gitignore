@@ -26,6 +26,8 @@ keys/
 secrets/
 *-google-oauth2-credential.json
 *-emailsender-key.json
+*-gcp-service-account-key.json
+rzp-key*.csv
 
 # IDEs
 .vscode/
