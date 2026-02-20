@@ -42,6 +42,7 @@ impl Default for GenaiClientConfig {
 pub struct GenaiClient {
     client: GenAiServiceClient<Channel>,
     retry_config: RetryConfig,
+    app_id: Option<String>,
 }
 
 impl GenaiClient {
@@ -56,7 +57,14 @@ impl GenaiClient {
         Ok(Self {
             client: GenAiServiceClient::new(channel),
             retry_config: config.retry_config,
+            app_id: None,
         })
+    }
+
+    /// Return a clone with the given app ID set for header injection.
+    pub fn with_app_id(mut self, app_id: String) -> Self {
+        self.app_id = Some(app_id);
+        self
     }
 
     /// Create a new genai client connecting to the specified endpoint.
@@ -120,8 +128,13 @@ impl GenaiClient {
         retry_grpc_call(&self.retry_config, "process_structured", || {
             let mut c = client.clone();
             let req = request.clone();
+            let app_id = self.app_id.clone();
             async move {
-                let response = c.process(Request::new(req)).await?;
+                let mut grpc_req = Request::new(req);
+                if let Some(ref id) = app_id {
+                    super::interceptors::inject_app_id(&mut grpc_req, id);
+                }
+                let response = c.process(grpc_req).await?;
                 Ok(response.into_inner())
             }
         })
@@ -155,8 +168,13 @@ impl GenaiClient {
         retry_grpc_call(&self.retry_config, "process_text", || {
             let mut c = client.clone();
             let req = request.clone();
+            let app_id = self.app_id.clone();
             async move {
-                let response = c.process(Request::new(req)).await?;
+                let mut grpc_req = Request::new(req);
+                if let Some(ref id) = app_id {
+                    super::interceptors::inject_app_id(&mut grpc_req, id);
+                }
+                let response = c.process(grpc_req).await?;
                 Ok(response.into_inner())
             }
         })

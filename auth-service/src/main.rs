@@ -7,6 +7,7 @@ use auth_service::grpc::proto::auth::{
     org_service_server::OrgServiceServer, role_service_server::RoleServiceServer,
     visibility_service_server::VisibilityServiceServer,
 };
+use service_core::grpc::proto::common::app_registry_service_server::AppRegistryServiceServer;
 use auth_service::grpc::{
     AdminServiceImpl, AssignmentServiceImpl, AuditServiceImpl, AuthServiceImpl, AuthzServiceImpl,
     InvitationServiceImpl, OrgServiceImpl, RoleServiceImpl, VisibilityServiceImpl,
@@ -57,10 +58,10 @@ async fn main() -> anyhow::Result<()> {
         as Arc<dyn services::TokenBlacklist>;
     tracing::info!("Redis connection established");
 
-    // Create email service
-    let email =
-        Arc::new(services::EmailService::new(&config.gmail)?) as Arc<dyn services::EmailProvider>;
-    tracing::info!("Email service initialized");
+    // Create email provider via notification-service gRPC
+    let email = Arc::new(services::NotificationClient::new(&config.notification.url))
+        as Arc<dyn services::EmailProvider>;
+    tracing::info!("Email provider initialized (via notification-service)");
 
     // Build application state
     let state = AppState {
@@ -86,6 +87,15 @@ async fn main() -> anyhow::Result<()> {
     let health_listener = TcpListener::bind(health_addr).await?;
     let health_server = axum::serve(health_listener, health_router.into_make_service());
 
+    // Create app registry (Redis-backed)
+    let app_registry = Arc::new(
+        service_core::grpc::AppRegistry::new(&config.redis.url)
+            .await
+            .expect("Failed to create app registry"),
+    );
+    let app_registry_svc = service_core::grpc::AppRegistryServiceImpl::new(app_registry);
+    tracing::info!("App registry initialized");
+
     // Build gRPC services
     let grpc_port = config.common.port + 1;
     let grpc_addr = SocketAddr::from(([0, 0, 0, 0], grpc_port));
@@ -103,6 +113,9 @@ async fn main() -> anyhow::Result<()> {
     // Create reflection service
     let reflection_service = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(auth_service::grpc::proto::auth::FILE_DESCRIPTOR_SET)
+        .register_encoded_file_descriptor_set(
+            service_core::grpc::proto::common::APP_REGISTRY_FILE_DESCRIPTOR_SET,
+        )
         .build_v1()?;
 
     // Create gRPC health service
@@ -149,6 +162,7 @@ async fn main() -> anyhow::Result<()> {
         .add_service(InvitationServiceServer::new(invitation_service))
         .add_service(VisibilityServiceServer::new(visibility_service))
         .add_service(AuditServiceServer::new(audit_service))
+        .add_service(AppRegistryServiceServer::new(app_registry_svc))
         .serve_with_shutdown(grpc_addr, shutdown_signal());
 
     // Run both servers concurrently

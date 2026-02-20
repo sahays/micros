@@ -13,6 +13,7 @@
 //! - Ledger service client for service-to-service communication
 //! - Capability checking infrastructure for authorization
 
+pub mod app_registry;
 pub mod auth_client;
 pub mod capability_checker;
 pub mod document_client;
@@ -55,8 +56,14 @@ pub mod proto {
     pub mod reconciliation {
         tonic::include_proto!("micros.reconciliation.v1");
     }
+    pub mod common {
+        tonic::include_proto!("micros.common");
+        pub const APP_REGISTRY_FILE_DESCRIPTOR_SET: &[u8] =
+            tonic::include_file_descriptor_set!("app_registry_descriptor");
+    }
 }
 
+pub use app_registry::{AppRegistry, AppRegistryServiceImpl};
 pub use auth_client::{AuthClient, AuthClientConfig};
 pub use capability_checker::{
     AuthContext, CapabilityChecker, CapabilityMetadata, extract_bearer_token, extract_org_node_id,
@@ -70,7 +77,10 @@ pub use genai_client::{
     BANK_STATEMENT_PROMPT, BANK_STATEMENT_SCHEMA_V1, GenaiClient, GenaiClientConfig,
 };
 pub use health::{HealthComponents, HealthReporter, HealthStatus, create_health_service};
-pub use interceptors::{TENANT_ID_KEY, extract_request_id, extract_tenant_id, inject_tenant_id};
+pub use interceptors::{
+    APP_ID_KEY, TENANT_ID_KEY, extract_app_id, extract_request_id, extract_tenant_id,
+    inject_app_id, inject_tenant_id,
+};
 pub use ledger_client::{LedgerClient, LedgerClientConfig, TransactionEntry};
 pub use notification_client::{
     BatchNotification, BatchNotificationResult, NotificationChannelProto, NotificationClient,
