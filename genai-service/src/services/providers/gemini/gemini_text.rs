@@ -60,12 +60,12 @@ impl GeminiTextProvider {
     ///
     /// For images and PDFs with supported MIME types, downloads content from
     /// document-service via gRPC and sends as base64 inlineData.
-    /// Falls back to text placeholder on download failure.
+    /// Returns an error if an inline-capable document cannot be downloaded.
     async fn documents_to_parts(
         &self,
         documents: &[DocumentContext],
         tenant: Option<&TenantContext>,
-    ) -> Vec<ContentPart> {
+    ) -> Result<Vec<ContentPart>, ProviderError> {
         let mut parts = Vec::with_capacity(documents.len());
 
         for doc in documents {
@@ -79,52 +79,55 @@ impl GeminiTextProvider {
 
             // If MIME type supports inline data (images, PDFs), download via document-service
             if DocumentFetcher::supports_inline(&doc.mime_type) {
-                if let Some(tc) = tenant {
-                    match self
-                        .document_fetcher
-                        .download_content(&doc.document_id, tc)
-                        .await
-                    {
-                        Ok(content) => {
-                            let b64 =
-                                base64::engine::general_purpose::STANDARD.encode(&content.data);
-                            tracing::info!(
-                                document_id = %doc.document_id,
-                                mime_type = %content.mime_type,
-                                size_bytes = content.data.len(),
-                                "Downloaded document for inline submission"
-                            );
-                            parts.push(ContentPart::InlineData {
-                                inline_data: InlineData {
-                                    mime_type: content.mime_type,
-                                    data: b64,
-                                },
-                            });
-                            continue;
-                        }
-                        Err(e) => {
-                            tracing::warn!(
-                                document_id = %doc.document_id,
-                                mime_type = %doc.mime_type,
-                                error = %e,
-                                "Failed to download document, falling back to text placeholder"
-                            );
-                            // Fall through to text placeholder
-                        }
-                    }
-                }
+                let tc = tenant.ok_or_else(|| {
+                    ProviderError::InvalidRequest(format!(
+                        "Document {} requires tenant context for download",
+                        doc.document_id
+                    ))
+                })?;
+
+                let content = self
+                    .document_fetcher
+                    .download_content(&doc.document_id, tc)
+                    .await
+                    .map_err(|e| {
+                        tracing::error!(
+                            document_id = %doc.document_id,
+                            mime_type = %doc.mime_type,
+                            error = %e,
+                            "Failed to download document for inline submission"
+                        );
+                        ProviderError::InvalidRequest(format!(
+                            "Failed to download document {}: {}",
+                            doc.document_id, e
+                        ))
+                    })?;
+
+                let b64 = base64::engine::general_purpose::STANDARD.encode(&content.data);
+                tracing::info!(
+                    document_id = %doc.document_id,
+                    mime_type = %content.mime_type,
+                    size_bytes = content.data.len(),
+                    "Downloaded document for inline submission"
+                );
+                parts.push(ContentPart::InlineData {
+                    inline_data: InlineData {
+                        mime_type: content.mime_type,
+                        data: b64,
+                    },
+                });
+                continue;
             }
 
-            // Fallback: text placeholder for unsupported types or download failures
-            parts.push(ContentPart::Text {
-                text: format!(
-                    "[Document {} - {}]",
-                    doc.document_id, doc.mime_type
-                ),
-            });
+            // Unsupported MIME type with no text content
+            tracing::warn!(
+                document_id = %doc.document_id,
+                mime_type = %doc.mime_type,
+                "Document has no text content and unsupported MIME type, skipping"
+            );
         }
 
-        parts
+        Ok(parts)
     }
 
     /// Build generation config from parameters.
@@ -220,7 +223,7 @@ impl TextProvider for GeminiTextProvider {
         // Build content parts
         let mut parts: Vec<ContentPart> = self
             .documents_to_parts(documents, params.tenant_context.as_ref())
-            .await;
+            .await?;
         parts.push(ContentPart::Text {
             text: prompt.to_string(),
         });
@@ -359,7 +362,7 @@ impl TextProvider for GeminiTextProvider {
         // Build content parts
         let mut parts: Vec<ContentPart> = self
             .documents_to_parts(documents, params.tenant_context.as_ref())
-            .await;
+            .await?;
         parts.push(ContentPart::Text {
             text: prompt.to_string(),
         });
