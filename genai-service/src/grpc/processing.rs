@@ -11,12 +11,14 @@ use crate::grpc::proto::{
     TokenUsage,
 };
 use crate::models::UsageRecord;
+use crate::services::document_fetcher::TenantContext;
 use crate::services::providers::{DocumentContext, StreamChunk};
 use crate::startup::AppState;
 use futures::StreamExt;
 use std::time::Instant;
 use tonic::{Request, Response, Status};
 
+use super::capability_check::extract_org_node_id;
 use super::genai_service::ProcessStreamResult;
 
 #[tracing::instrument(
@@ -45,8 +47,18 @@ pub async fn process(
         )
         .await?;
 
+    // Extract org_id from request metadata before consuming the request
+    let org_id = extract_org_node_id(&request).unwrap_or_default();
+
     let req = request.into_inner();
     let request_id = uuid::Uuid::new_v4().to_string();
+
+    // Build tenant context for document-service calls
+    let tenant_context = TenantContext {
+        app_id: auth.tenant_id.clone(),
+        org_id,
+        user_id: auth.user_id.clone(),
+    };
 
     let span = tracing::Span::current();
     span.record("request_id", &request_id);
@@ -114,7 +126,11 @@ pub async fn process(
         .map(proto_to_document_context)
         .collect();
 
-    let enriched_documents = match state.document_fetcher.enrich_documents(&documents).await {
+    let enriched_documents = match state
+        .document_fetcher
+        .enrich_documents(&documents, &tenant_context)
+        .await
+    {
         Ok(docs) => docs,
         Err(e) => {
             tracing::warn!(
@@ -126,7 +142,8 @@ pub async fn process(
         }
     };
 
-    let params = build_generation_params(&req, output_format, model_override);
+    let mut params = build_generation_params(&req, output_format, model_override);
+    params.tenant_context = Some(tenant_context);
 
     let provider_response = match state
         .text_provider
@@ -232,8 +249,18 @@ pub async fn process_stream(
         )
         .await?;
 
+    // Extract org_id from request metadata before consuming the request
+    let org_id = extract_org_node_id(&request).unwrap_or_default();
+
     let req = request.into_inner();
     let request_id = uuid::Uuid::new_v4().to_string();
+
+    // Build tenant context for document-service calls
+    let tenant_context = TenantContext {
+        app_id: auth.tenant_id.clone(),
+        org_id,
+        user_id: auth.user_id.clone(),
+    };
 
     let span = tracing::Span::current();
     span.record("request_id", &request_id);
@@ -301,7 +328,11 @@ pub async fn process_stream(
         .map(proto_to_document_context)
         .collect();
 
-    let enriched_documents = match state.document_fetcher.enrich_documents(&documents).await {
+    let enriched_documents = match state
+        .document_fetcher
+        .enrich_documents(&documents, &tenant_context)
+        .await
+    {
         Ok(docs) => docs,
         Err(e) => {
             tracing::warn!(
@@ -313,7 +344,8 @@ pub async fn process_stream(
         }
     };
 
-    let params = build_stream_generation_params(&req, output_format, model_override);
+    let mut params = build_stream_generation_params(&req, output_format, model_override);
+    params.tenant_context = Some(tenant_context);
 
     let mut provider_stream = match state
         .text_provider

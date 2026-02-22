@@ -96,6 +96,9 @@ pub struct GenerationParams {
 
     /// Optional model override. When set, overrides the provider's default model.
     pub model: Option<String>,
+
+    /// Tenant context for document-service calls.
+    pub tenant_context: Option<crate::services::document_fetcher::TenantContext>,
 }
 
 /// Document context for AI requests.

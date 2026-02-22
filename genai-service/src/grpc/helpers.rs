@@ -123,6 +123,7 @@ pub fn build_generation_params(
             None
         },
         model,
+        tenant_context: None,
     }
 }
 
@@ -145,6 +146,7 @@ pub fn build_stream_generation_params(
             None
         },
         model,
+        tenant_context: None,
     }
 }
 

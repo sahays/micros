@@ -13,6 +13,32 @@ use std::time::Instant;
 use tokio::sync::RwLock;
 use tonic::transport::Channel;
 
+/// Tenant context for document-service gRPC requests.
+///
+/// All document-service RPCs require tenant headers (x-app-id, x-org-id, x-user-id).
+#[derive(Debug, Clone)]
+pub struct TenantContext {
+    pub app_id: String,
+    pub org_id: String,
+    pub user_id: String,
+}
+
+impl TenantContext {
+    /// Inject tenant headers into a gRPC request's metadata.
+    fn inject_metadata<T>(&self, request: &mut tonic::Request<T>) {
+        let metadata = request.metadata_mut();
+        if let Ok(v) = self.app_id.parse() {
+            metadata.insert("x-app-id", v);
+        }
+        if let Ok(v) = self.org_id.parse() {
+            metadata.insert("x-org-id", v);
+        }
+        if let Ok(v) = self.user_id.parse() {
+            metadata.insert("x-user-id", v);
+        }
+    }
+}
+
 /// Maximum file size for inline Gemini submission (20MB Vertex AI limit).
 const MAX_INLINE_SIZE_BYTES: usize = 20 * 1024 * 1024;
 
@@ -137,10 +163,11 @@ impl DocumentFetcher {
     /// For each document that doesn't have pre-extracted text, this method
     /// fetches the document metadata from document-service and adds any
     /// extracted text to the context.
-    #[tracing::instrument(skip(self, documents), fields(document_count = documents.len()))]
+    #[tracing::instrument(skip(self, documents, tenant), fields(document_count = documents.len()))]
     pub async fn enrich_documents(
         &self,
         documents: &[DocumentContext],
+        tenant: &TenantContext,
     ) -> Result<Vec<DocumentContext>, DocumentFetcherError> {
         let start = Instant::now();
         let mut enriched = Vec::with_capacity(documents.len());
@@ -161,7 +188,7 @@ impl DocumentFetcher {
             }
 
             // Try to fetch extracted text from document-service
-            match self.fetch_document_text(&doc.document_id).await {
+            match self.fetch_document_text(&doc.document_id, tenant).await {
                 Ok(Some(text)) => {
                     tracing::debug!(
                         document_id = %doc.document_id,
@@ -212,19 +239,23 @@ impl DocumentFetcher {
     }
 
     /// Fetch extracted text for a document.
-    #[tracing::instrument(skip(self), fields(document_id = %document_id))]
+    #[tracing::instrument(skip(self, tenant), fields(document_id = %document_id))]
     async fn fetch_document_text(
         &self,
         document_id: &str,
+        tenant: &TenantContext,
     ) -> Result<Option<String>, DocumentFetcherError> {
         let mut client = self.get_client().await?;
 
         // First, check if document exists and is ready
         tracing::debug!("Fetching document metadata");
+        let mut get_request = tonic::Request::new(GetDocumentRequest {
+            document_id: document_id.to_string(),
+        });
+        tenant.inject_metadata(&mut get_request);
+
         let doc_response = client
-            .get_document(GetDocumentRequest {
-                document_id: document_id.to_string(),
-            })
+            .get_document(get_request)
             .await
             .map_err(|e| {
                 tracing::warn!(error = %e, "Failed to get document");
@@ -260,10 +291,13 @@ impl DocumentFetcher {
 
         // If no extracted text in document metadata, try processing status
         tracing::debug!("Checking processing status for extracted text");
+        let mut status_request = tonic::Request::new(GetProcessingStatusRequest {
+            document_id: document_id.to_string(),
+        });
+        tenant.inject_metadata(&mut status_request);
+
         let status_response = client
-            .get_processing_status(GetProcessingStatusRequest {
-                document_id: document_id.to_string(),
-            })
+            .get_processing_status(status_request)
             .await
             .map_err(|e| {
                 tracing::warn!(error = %e, "Failed to get processing status");
@@ -296,20 +330,24 @@ impl DocumentFetcher {
     /// Download document content via the DownloadDocument gRPC RPC.
     ///
     /// Enforces the 20MB Vertex AI inline data size limit.
-    #[tracing::instrument(skip(self), fields(document_id = %document_id))]
+    #[tracing::instrument(skip(self, tenant), fields(document_id = %document_id))]
     pub async fn download_content(
         &self,
         document_id: &str,
+        tenant: &TenantContext,
     ) -> Result<DownloadedContent, DocumentFetcherError> {
         let start = Instant::now();
         let mut client = self.get_client().await?;
 
         tracing::debug!("Starting document download via gRPC");
 
+        let mut request = tonic::Request::new(DownloadDocumentRequest {
+            document_id: document_id.to_string(),
+        });
+        tenant.inject_metadata(&mut request);
+
         let response = client
-            .download_document(DownloadDocumentRequest {
-                document_id: document_id.to_string(),
-            })
+            .download_document(request)
             .await
             .map_err(|e| {
                 tracing::warn!(error = %e, "Failed to download document");
