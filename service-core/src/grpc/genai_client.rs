@@ -112,10 +112,6 @@ impl GenaiClient {
                 top_p: None,
                 stop_sequences: vec![],
                 content_size_threshold_bytes: None,
-                voice: None,
-                audio_format: None,
-                video_format: None,
-                duration_seconds: None,
             }),
             metadata: Some(RequestMetadata {
                 tenant_id: tenant_id.to_string(),

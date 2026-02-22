@@ -36,7 +36,6 @@ pub async fn create_session(
         .map(|d| {
             SessionDocument::new(
                 d.document_id.clone(),
-                d.signed_url.clone(),
                 d.mime_type.clone(),
                 d.text_content.clone(),
             )
@@ -295,38 +294,14 @@ pub async fn list_models(
 
     tracing::debug!("Listing available models");
 
-    let models = vec![
-        ModelInfo {
-            id: state.config.models.text_model.clone(),
-            name: "Text Model".to_string(),
-            provider: "google".to_string(),
-            supports_vision: true,
-            supports_audio_output: false,
-            supports_video_output: false,
-            supports_streaming: true,
-            context_window: 1_000_000,
-        },
-        ModelInfo {
-            id: state.config.models.audio_model.clone(),
-            name: "Audio Model".to_string(),
-            provider: "google".to_string(),
-            supports_vision: true,
-            supports_audio_output: true,
-            supports_video_output: false,
-            supports_streaming: true,
-            context_window: 1_000_000,
-        },
-        ModelInfo {
-            id: state.config.models.video_model.clone(),
-            name: "Video Model".to_string(),
-            provider: "google".to_string(),
-            supports_vision: false,
-            supports_audio_output: false,
-            supports_video_output: true,
-            supports_streaming: false,
-            context_window: 0,
-        },
-    ];
+    let models = vec![ModelInfo {
+        id: state.config.models.text_model.clone(),
+        name: "Text Model".to_string(),
+        provider: "google".to_string(),
+        supports_vision: true,
+        supports_streaming: true,
+        context_window: 1_000_000,
+    }];
 
     let duration = start.elapsed();
 

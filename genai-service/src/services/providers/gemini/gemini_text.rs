@@ -6,13 +6,15 @@
 
 use super::{
     Content, ContentPart, GeminiConfig, GenerateContentRequest, GenerateContentResponse,
-    GenerationConfig, PROVIDER_NAME,
+    GenerationConfig, InlineData, PROVIDER_NAME,
 };
+use crate::services::document_fetcher::DocumentFetcher;
 use crate::services::providers::{
     DocumentContext, FinishReason, GenerationParams, ProviderError, ProviderResponse,
     ProviderStream, StreamChunk, TextProvider,
 };
 use async_trait::async_trait;
+use base64::Engine;
 use futures::StreamExt;
 use reqwest::Client;
 use std::time::Instant;
@@ -26,17 +28,22 @@ const CONNECT_TIMEOUT_SECS: u64 = 10;
 pub struct GeminiTextProvider {
     config: GeminiConfig,
     client: Client,
+    document_fetcher: DocumentFetcher,
 }
 
 impl GeminiTextProvider {
-    pub fn new(config: GeminiConfig) -> Self {
+    pub fn new(config: GeminiConfig, document_fetcher: DocumentFetcher) -> Self {
         let client = Client::builder()
             .connect_timeout(std::time::Duration::from_secs(CONNECT_TIMEOUT_SECS))
             .timeout(std::time::Duration::from_secs(REQUEST_TIMEOUT_SECS))
             .build()
             .expect("Failed to create HTTP client");
 
-        Self { config, client }
+        Self {
+            config,
+            client,
+            document_fetcher,
+        }
     }
 
     /// Resolve the effective model: use the override from params if present,
@@ -50,38 +57,68 @@ impl GeminiTextProvider {
     }
 
     /// Convert documents to Gemini content parts.
-    fn documents_to_parts(&self, documents: &[DocumentContext]) -> Vec<ContentPart> {
-        documents
-            .iter()
-            .map(|doc| {
-                // If we have pre-extracted text, use it
-                if let Some(text) = &doc.text_content {
-                    return ContentPart::Text {
-                        text: format!("[Document {}]: {}", doc.document_id, text),
-                    };
-                }
+    ///
+    /// For images and PDFs with supported MIME types, downloads content from
+    /// document-service via gRPC and sends as base64 inlineData.
+    /// Falls back to text placeholder on download failure.
+    async fn documents_to_parts(&self, documents: &[DocumentContext]) -> Vec<ContentPart> {
+        let mut parts = Vec::with_capacity(documents.len());
 
-                // Otherwise, include as inline data if it's an image
-                if doc.mime_type.starts_with("image/") {
-                    // For images, we'd need to fetch and base64 encode
-                    // For now, just note that the document exists
-                    return ContentPart::Text {
-                        text: format!(
-                            "[Document {} - {} - URL: {}]",
-                            doc.document_id, doc.mime_type, doc.url
-                        ),
-                    };
-                }
+        for doc in documents {
+            // If we have pre-extracted text, use it
+            if let Some(text) = &doc.text_content {
+                parts.push(ContentPart::Text {
+                    text: format!("[Document {}]: {}", doc.document_id, text),
+                });
+                continue;
+            }
 
-                // For other types, note the document
-                ContentPart::Text {
-                    text: format!(
-                        "[Document {} - {} available at {}]",
-                        doc.document_id, doc.mime_type, doc.url
-                    ),
+            // If MIME type supports inline data (images, PDFs), download via document-service
+            if DocumentFetcher::supports_inline(&doc.mime_type) {
+                match self
+                    .document_fetcher
+                    .download_content(&doc.document_id)
+                    .await
+                {
+                    Ok(content) => {
+                        let b64 =
+                            base64::engine::general_purpose::STANDARD.encode(&content.data);
+                        tracing::info!(
+                            document_id = %doc.document_id,
+                            mime_type = %content.mime_type,
+                            size_bytes = content.data.len(),
+                            "Downloaded document for inline submission"
+                        );
+                        parts.push(ContentPart::InlineData {
+                            inline_data: InlineData {
+                                mime_type: content.mime_type,
+                                data: b64,
+                            },
+                        });
+                        continue;
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            document_id = %doc.document_id,
+                            mime_type = %doc.mime_type,
+                            error = %e,
+                            "Failed to download document, falling back to text placeholder"
+                        );
+                        // Fall through to text placeholder
+                    }
                 }
-            })
-            .collect()
+            }
+
+            // Fallback: text placeholder for unsupported types or download failures
+            parts.push(ContentPart::Text {
+                text: format!(
+                    "[Document {} - {}]",
+                    doc.document_id, doc.mime_type
+                ),
+            });
+        }
+
+        parts
     }
 
     /// Build generation config from parameters.
@@ -175,7 +212,7 @@ impl TextProvider for GeminiTextProvider {
             })?;
 
         // Build content parts
-        let mut parts: Vec<ContentPart> = self.documents_to_parts(documents);
+        let mut parts: Vec<ContentPart> = self.documents_to_parts(documents).await;
         parts.push(ContentPart::Text {
             text: prompt.to_string(),
         });
@@ -276,8 +313,6 @@ impl TextProvider for GeminiTextProvider {
 
         Ok(ProviderResponse {
             text,
-            audio: None,
-            video: None,
             input_tokens,
             output_tokens,
             finish_reason,
@@ -314,7 +349,7 @@ impl TextProvider for GeminiTextProvider {
             })?;
 
         // Build content parts
-        let mut parts: Vec<ContentPart> = self.documents_to_parts(documents);
+        let mut parts: Vec<ContentPart> = self.documents_to_parts(documents).await;
         parts.push(ContentPart::Text {
             text: prompt.to_string(),
         });

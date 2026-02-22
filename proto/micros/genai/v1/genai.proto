@@ -90,8 +90,7 @@ message DocumentContext {
   // Document ID from document-service.
   string document_id = 1;
 
-  // Signed URL for access.
-  string signed_url = 2;
+  reserved 2; // was signed_url
 
   // MIME type (e.g., "application/pdf", "image/png").
   string mime_type = 3;
@@ -105,8 +104,7 @@ enum OutputFormat {
   OUTPUT_FORMAT_UNSPECIFIED = 0;
   OUTPUT_FORMAT_TEXT = 1;            // Free-form text
   OUTPUT_FORMAT_STRUCTURED_JSON = 2; // JSON conforming to output_schema
-  OUTPUT_FORMAT_AUDIO = 3;           // Audio bytes (e.g., TTS)
-  OUTPUT_FORMAT_VIDEO = 4;           // Video bytes
+  reserved 3, 4;
 }
 
 // GenerationParams for controlling output.
@@ -124,17 +122,7 @@ message GenerationParams {
   // If total document size exceeds this, service uses max token output.
   optional int64 content_size_threshold_bytes = 4;
 
-  // Audio-specific: voice for TTS output.
-  optional string voice = 5;
-
-  // Audio-specific: format ("mp3", "wav", etc.).
-  optional string audio_format = 6;
-
-  // Video-specific: format ("mp4", etc.).
-  optional string video_format = 7;
-
-  // Video-specific: duration in seconds.
-  optional int32 duration_seconds = 8;
+  reserved 5, 6, 7, 8;
 }
 
 // RequestMetadata for multi-tenancy and tracking.
@@ -158,13 +146,8 @@ message ProcessResponse {
 
     // Structured JSON (as string, conforms to output_schema).
     string json = 2;
-
-    // Audio bytes.
-    bytes audio = 3;
-
-    // Video bytes.
-    bytes video = 4;
   }
+  reserved 3, 4;
 
   // Output format used.
   OutputFormat output_format = 5;
@@ -212,15 +195,10 @@ message ProcessStreamResponse {
     // Text chunk (for TEXT or STRUCTURED_JSON).
     string text_chunk = 1;
 
-    // Audio chunk (for AUDIO).
-    bytes audio_chunk = 2;
-
-    // Video chunk (for VIDEO).
-    bytes video_chunk = 3;
-
     // Final completion message.
     StreamComplete complete = 4;
   }
+  reserved 2, 3;
 }
 
 // StreamComplete signals end of stream with final metadata.
@@ -395,11 +373,7 @@ message ModelInfo {
   // Supports vision/image input.
   bool supports_vision = 4;
 
-  // Supports audio output.
-  bool supports_audio_output = 5;
-
-  // Supports video output.
-  bool supports_video_output = 6;
+  reserved 5, 6;
 
   // Supports streaming.
   bool supports_streaming = 7;

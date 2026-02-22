@@ -4,13 +4,36 @@
 //! via gRPC, enriching document context with extracted text when available.
 
 use crate::grpc::document_proto::{
-    document_service_client::DocumentServiceClient, GetDocumentRequest, GetProcessingStatusRequest,
+    document_service_client::DocumentServiceClient, DownloadDocumentRequest,
+    GetDocumentRequest, GetProcessingStatusRequest,
 };
 use crate::services::providers::DocumentContext;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::RwLock;
 use tonic::transport::Channel;
+
+/// Maximum file size for inline Gemini submission (20MB Vertex AI limit).
+const MAX_INLINE_SIZE_BYTES: usize = 20 * 1024 * 1024;
+
+/// MIME types that can be sent as Gemini inlineData.
+const INLINE_MIME_TYPES: &[&str] = &[
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "image/heic",
+    "image/heif",
+    "application/pdf",
+];
+
+/// Downloaded file content from document-service.
+pub struct DownloadedContent {
+    /// Raw file bytes.
+    pub data: Vec<u8>,
+    /// MIME type from the download metadata.
+    pub mime_type: String,
+}
 
 /// Error type for document fetching operations.
 #[derive(Debug, thiserror::Error)]
@@ -29,6 +52,9 @@ pub enum DocumentFetcherError {
 
     #[error("Transport error: {0}")]
     TransportError(#[from] tonic::transport::Error),
+
+    #[error("File too large: {0} bytes exceeds {MAX_INLINE_SIZE_BYTES} byte limit")]
+    TooLarge(usize),
 }
 
 impl DocumentFetcherError {
@@ -40,6 +66,7 @@ impl DocumentFetcherError {
             Self::NotReady(_) => "not_ready",
             Self::GrpcError(_) => "grpc",
             Self::TransportError(_) => "transport",
+            Self::TooLarge(_) => "too_large",
         }
     }
 }
@@ -143,7 +170,6 @@ impl DocumentFetcher {
                     );
                     enriched.push(DocumentContext {
                         document_id: doc.document_id.clone(),
-                        url: doc.url.clone(),
                         mime_type: doc.mime_type.clone(),
                         text_content: Some(text),
                     });
@@ -261,6 +287,102 @@ impl DocumentFetcher {
 
         Ok(None)
     }
+
+    /// Check if a MIME type supports inline Gemini submission (images, PDFs).
+    pub fn supports_inline(mime_type: &str) -> bool {
+        INLINE_MIME_TYPES.contains(&mime_type)
+    }
+
+    /// Download document content via the DownloadDocument gRPC streaming RPC.
+    ///
+    /// Collects all streamed chunks into a single byte buffer.
+    /// Enforces the 20MB Vertex AI inline data size limit.
+    #[tracing::instrument(skip(self), fields(document_id = %document_id))]
+    pub async fn download_content(
+        &self,
+        document_id: &str,
+    ) -> Result<DownloadedContent, DocumentFetcherError> {
+        let start = Instant::now();
+        let mut client = self.get_client().await?;
+
+        tracing::debug!("Starting document download via gRPC");
+
+        let mut stream = client
+            .download_document(DownloadDocumentRequest {
+                document_id: document_id.to_string(),
+                signature: None,
+                expires: None,
+            })
+            .await
+            .map_err(|e| {
+                tracing::warn!(error = %e, "Failed to start document download");
+                e
+            })?
+            .into_inner();
+
+        let mut data = Vec::new();
+        let mut mime_type = String::new();
+
+        use crate::grpc::document_proto::download_document_response::Data;
+        use tokio_stream::StreamExt;
+
+        while let Some(msg) = stream.next().await {
+            let msg = msg.map_err(|e| {
+                tracing::warn!(error = %e, "Error in download stream");
+                DocumentFetcherError::GrpcError(e)
+            })?;
+
+            match msg.data {
+                Some(Data::Metadata(meta)) => {
+                    mime_type = meta.content_type;
+                    let total_size = meta.size as usize;
+
+                    if total_size > MAX_INLINE_SIZE_BYTES {
+                        tracing::warn!(
+                            size = total_size,
+                            max = MAX_INLINE_SIZE_BYTES,
+                            "Document too large for inline submission"
+                        );
+                        return Err(DocumentFetcherError::TooLarge(total_size));
+                    }
+
+                    data.reserve(total_size);
+                    tracing::debug!(
+                        content_type = %mime_type,
+                        size = total_size,
+                        "Download metadata received"
+                    );
+                }
+                Some(Data::Chunk(chunk)) => {
+                    data.extend_from_slice(&chunk);
+
+                    if data.len() > MAX_INLINE_SIZE_BYTES {
+                        tracing::warn!(
+                            accumulated = data.len(),
+                            max = MAX_INLINE_SIZE_BYTES,
+                            "Download exceeded size limit during streaming"
+                        );
+                        return Err(DocumentFetcherError::TooLarge(data.len()));
+                    }
+                }
+                Some(Data::ChunkedVideo(_)) => {
+                    tracing::debug!("Skipping chunked video info in download stream");
+                }
+                None => {}
+            }
+        }
+
+        let duration = start.elapsed();
+
+        tracing::info!(
+            duration_ms = duration.as_millis(),
+            size_bytes = data.len(),
+            content_type = %mime_type,
+            "Document download completed"
+        );
+
+        Ok(DownloadedContent { data, mime_type })
+    }
 }
 
 #[cfg(test)]
@@ -287,5 +409,28 @@ mod tests {
             DocumentFetcherError::NotReady("test".to_string()).error_type(),
             "not_ready"
         );
+        assert_eq!(
+            DocumentFetcherError::TooLarge(100).error_type(),
+            "too_large"
+        );
+    }
+
+    #[test]
+    fn test_supports_inline_known_types() {
+        assert!(DocumentFetcher::supports_inline("image/png"));
+        assert!(DocumentFetcher::supports_inline("image/jpeg"));
+        assert!(DocumentFetcher::supports_inline("image/gif"));
+        assert!(DocumentFetcher::supports_inline("image/webp"));
+        assert!(DocumentFetcher::supports_inline("image/heic"));
+        assert!(DocumentFetcher::supports_inline("image/heif"));
+        assert!(DocumentFetcher::supports_inline("application/pdf"));
+    }
+
+    #[test]
+    fn test_supports_inline_unknown_types() {
+        assert!(!DocumentFetcher::supports_inline("video/mp4"));
+        assert!(!DocumentFetcher::supports_inline("audio/mpeg"));
+        assert!(!DocumentFetcher::supports_inline("text/plain"));
+        assert!(!DocumentFetcher::supports_inline("application/json"));
     }
 }

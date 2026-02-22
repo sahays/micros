@@ -113,8 +113,6 @@ async fn main() -> std::io::Result<()> {
     tracing::info!(
         mongodb_database = %config.mongodb.database,
         text_model = %config.models.text_model,
-        audio_model = %config.models.audio_model,
-        video_model = %config.models.video_model,
         document_service_url = %config.document_service.grpc_url,
         http_port = %config.common.port,
         grpc_port = %(config.common.port + 1),
@@ -135,6 +133,13 @@ async fn main() -> std::io::Result<()> {
         std::io::Error::other(format!("Database initialization error: {}", e))
     })?;
 
+    // Initialize document fetcher
+    let document_fetcher = DocumentFetcher::new(&config.document_service.grpc_url);
+    tracing::info!(
+        endpoint = %config.document_service.grpc_url,
+        "Initialized document fetcher"
+    );
+
     // Initialize Gemini text provider (Vertex AI + service account)
     let gemini_config = GeminiConfig::from_service_account(
         &config.google.service_account_key_path,
@@ -145,19 +150,13 @@ async fn main() -> std::io::Result<()> {
         tracing::error!(error = %e, "Failed to initialize Gemini config");
         std::io::Error::other(format!("Gemini config error: {}", e))
     })?;
-    let text_provider: Arc<dyn TextProvider> = Arc::new(GeminiTextProvider::new(gemini_config));
+    let text_provider: Arc<dyn TextProvider> =
+        Arc::new(GeminiTextProvider::new(gemini_config, document_fetcher.clone()));
 
     tracing::info!(
         model = %config.models.text_model,
         provider = "gemini",
         "Initialized text provider"
-    );
-
-    // Initialize document fetcher
-    let document_fetcher = DocumentFetcher::new(&config.document_service.grpc_url);
-    tracing::info!(
-        endpoint = %config.document_service.grpc_url,
-        "Initialized document fetcher"
     );
 
     // Initialize capability checker

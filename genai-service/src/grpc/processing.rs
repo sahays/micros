@@ -147,12 +147,6 @@ pub async fn process(
         OutputFormat::StructuredJson => provider_response
             .text
             .map(crate::grpc::proto::process_response::Result::Json),
-        OutputFormat::Audio => provider_response
-            .audio
-            .map(crate::grpc::proto::process_response::Result::Audio),
-        OutputFormat::Video => provider_response
-            .video
-            .map(crate::grpc::proto::process_response::Result::Video),
     };
 
     let usage = TokenUsage {
@@ -359,26 +353,6 @@ pub async fn process_stream(
                         Ok(ProcessStreamResponse {
                             data: Some(
                                 crate::grpc::proto::process_stream_response::Data::TextChunk(text),
-                            ),
-                        })
-                    }
-                    StreamChunk::Audio(audio) => {
-                        chunk_count += 1;
-                        Ok(ProcessStreamResponse {
-                            data: Some(
-                                crate::grpc::proto::process_stream_response::Data::AudioChunk(
-                                    audio,
-                                ),
-                            ),
-                        })
-                    }
-                    StreamChunk::Video(video) => {
-                        chunk_count += 1;
-                        Ok(ProcessStreamResponse {
-                            data: Some(
-                                crate::grpc::proto::process_stream_response::Data::VideoChunk(
-                                    video,
-                                ),
                             ),
                         })
                     }

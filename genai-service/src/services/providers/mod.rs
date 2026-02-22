@@ -1,11 +1,10 @@
 //! AI provider abstractions and implementations.
 //!
 //! This module provides a trait-based abstraction for AI providers,
-//! allowing easy swapping between different backends (Gemini, Veo, mock).
+//! allowing easy swapping between different backends (Gemini, mock).
 
 pub mod gemini;
 pub mod mock;
-pub mod veo;
 
 use async_trait::async_trait;
 use std::pin::Pin;
@@ -42,12 +41,6 @@ pub struct ProviderResponse {
     /// Text content (for TEXT/STRUCTURED_JSON).
     pub text: Option<String>,
 
-    /// Audio bytes (for AUDIO).
-    pub audio: Option<Vec<u8>>,
-
-    /// Video bytes (for VIDEO).
-    pub video: Option<Vec<u8>>,
-
     /// Input tokens consumed.
     pub input_tokens: i32,
 
@@ -71,12 +64,6 @@ pub enum FinishReason {
 pub enum StreamChunk {
     /// Text chunk.
     Text(String),
-
-    /// Audio chunk.
-    Audio(Vec<u8>),
-
-    /// Video chunk.
-    Video(Vec<u8>),
 
     /// Final completion with usage stats.
     Complete {
@@ -107,18 +94,6 @@ pub struct GenerationParams {
     /// JSON schema for structured output.
     pub output_schema: Option<String>,
 
-    /// Voice for TTS.
-    pub voice: Option<String>,
-
-    /// Audio format.
-    pub audio_format: Option<String>,
-
-    /// Video format.
-    pub video_format: Option<String>,
-
-    /// Video duration in seconds.
-    pub duration_seconds: Option<i32>,
-
     /// Optional model override. When set, overrides the provider's default model.
     pub model: Option<String>,
 }
@@ -128,9 +103,6 @@ pub struct GenerationParams {
 pub struct DocumentContext {
     /// Document ID.
     pub document_id: String,
-
-    /// Content URL.
-    pub url: String,
 
     /// MIME type.
     pub mime_type: String,
@@ -157,41 +129,6 @@ pub trait TextProvider: Send + Sync {
         documents: &[DocumentContext],
         params: &GenerationParams,
     ) -> Result<ProviderStream, ProviderError>;
-
-    /// Health check.
-    async fn health_check(&self) -> Result<(), ProviderError>;
-}
-
-/// Trait for audio generation providers (e.g., Gemini TTS).
-#[async_trait]
-pub trait AudioProvider: Send + Sync {
-    /// Generate audio response.
-    async fn generate(
-        &self,
-        prompt: &str,
-        params: &GenerationParams,
-    ) -> Result<ProviderResponse, ProviderError>;
-
-    /// Generate streaming audio response.
-    async fn generate_stream(
-        &self,
-        prompt: &str,
-        params: &GenerationParams,
-    ) -> Result<ProviderStream, ProviderError>;
-
-    /// Health check.
-    async fn health_check(&self) -> Result<(), ProviderError>;
-}
-
-/// Trait for video generation providers (e.g., Veo).
-#[async_trait]
-pub trait VideoProvider: Send + Sync {
-    /// Generate video response.
-    async fn generate(
-        &self,
-        prompt: &str,
-        params: &GenerationParams,
-    ) -> Result<ProviderResponse, ProviderError>;
 
     /// Health check.
     async fn health_check(&self) -> Result<(), ProviderError>;

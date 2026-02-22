@@ -3,10 +3,8 @@
 //! Implements text generation using Google's Gemini models through the
 //! Vertex AI endpoint, authenticated with a service account key file.
 
-mod gemini_audio;
 mod gemini_text;
 
-pub use gemini_audio::GeminiAudioProvider;
 pub use gemini_text::GeminiTextProvider;
 
 use chrono::Utc;

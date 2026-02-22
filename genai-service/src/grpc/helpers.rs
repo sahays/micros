@@ -16,10 +16,7 @@ use tonic::Status;
 /// Convert proto output format to internal enum.
 pub fn proto_to_output_format(format: i32) -> OutputFormat {
     match format {
-        1 => OutputFormat::Text,
         2 => OutputFormat::StructuredJson,
-        3 => OutputFormat::Audio,
-        4 => OutputFormat::Video,
         _ => OutputFormat::Text,
     }
 }
@@ -29,8 +26,6 @@ pub fn output_format_to_proto(format: OutputFormat) -> i32 {
     match format {
         OutputFormat::Text => ProtoOutputFormat::Text as i32,
         OutputFormat::StructuredJson => ProtoOutputFormat::StructuredJson as i32,
-        OutputFormat::Audio => ProtoOutputFormat::Audio as i32,
-        OutputFormat::Video => ProtoOutputFormat::Video as i32,
     }
 }
 
@@ -39,8 +34,6 @@ pub fn output_format_str(format: OutputFormat) -> &'static str {
     match format {
         OutputFormat::Text => "text",
         OutputFormat::StructuredJson => "json",
-        OutputFormat::Audio => "audio",
-        OutputFormat::Video => "video",
     }
 }
 
@@ -106,7 +99,6 @@ pub fn provider_error_to_status(error: ProviderError) -> Status {
 pub fn proto_to_document_context(doc: &crate::grpc::proto::DocumentContext) -> DocumentContext {
     DocumentContext {
         document_id: doc.document_id.clone(),
-        url: doc.signed_url.clone(),
         mime_type: doc.mime_type.clone(),
         text_content: doc.text_content.clone(),
     }
@@ -130,10 +122,6 @@ pub fn build_generation_params(
         } else {
             None
         },
-        voice: params.and_then(|p| p.voice.clone()),
-        audio_format: params.and_then(|p| p.audio_format.clone()),
-        video_format: params.and_then(|p| p.video_format.clone()),
-        duration_seconds: params.and_then(|p| p.duration_seconds),
         model,
     }
 }
@@ -156,10 +144,6 @@ pub fn build_stream_generation_params(
         } else {
             None
         },
-        voice: params.and_then(|p| p.voice.clone()),
-        audio_format: params.and_then(|p| p.audio_format.clone()),
-        video_format: params.and_then(|p| p.video_format.clone()),
-        duration_seconds: params.and_then(|p| p.duration_seconds),
         model,
     }
 }
@@ -183,7 +167,6 @@ pub fn session_to_proto(session: &Session) -> ProtoSession {
             .iter()
             .map(|d| crate::grpc::proto::DocumentContext {
                 document_id: d.document_id.clone(),
-                signed_url: d.signed_url.clone(),
                 mime_type: d.mime_type.clone(),
                 text_content: d.text_content.clone(),
             })
@@ -210,8 +193,6 @@ pub fn session_message_to_proto(msg: &SessionMessage) -> ProtoSessionMessage {
             .map(|f| match f.as_str() {
                 "text" => ProtoOutputFormat::Text as i32,
                 "json" => ProtoOutputFormat::StructuredJson as i32,
-                "audio" => ProtoOutputFormat::Audio as i32,
-                "video" => ProtoOutputFormat::Video as i32,
                 _ => ProtoOutputFormat::Unspecified as i32,
             })
             .unwrap_or(ProtoOutputFormat::Unspecified as i32),

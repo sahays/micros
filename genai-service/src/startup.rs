@@ -91,6 +91,13 @@ impl Application {
             e
         })?;
 
+        // Initialize document fetcher
+        let document_fetcher = DocumentFetcher::new(&config.document_service.grpc_url);
+        tracing::info!(
+            endpoint = %config.document_service.grpc_url,
+            "Initialized document fetcher"
+        );
+
         // Initialize Gemini text provider (Vertex AI + service account)
         let gemini_config = GeminiConfig::from_service_account(
             &config.google.service_account_key_path,
@@ -101,18 +108,12 @@ impl Application {
             tracing::error!("Failed to initialize Gemini config: {}", e);
             AppError::ConfigError(anyhow::anyhow!("Gemini config error: {}", e))
         })?;
-        let text_provider: Arc<dyn TextProvider> = Arc::new(GeminiTextProvider::new(gemini_config));
+        let text_provider: Arc<dyn TextProvider> =
+            Arc::new(GeminiTextProvider::new(gemini_config, document_fetcher.clone()));
 
         tracing::info!(
             model = %config.models.text_model,
             "Initialized Gemini text provider (Vertex AI)"
-        );
-
-        // Initialize document fetcher
-        let document_fetcher = DocumentFetcher::new(&config.document_service.grpc_url);
-        tracing::info!(
-            endpoint = %config.document_service.grpc_url,
-            "Initialized document fetcher"
         );
 
         // Initialize capability checker

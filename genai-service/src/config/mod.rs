@@ -35,10 +35,6 @@ pub struct MongoConfig {
 pub struct ModelConfig {
     /// Model for TEXT and STRUCTURED_JSON output (e.g., gemini-2.0-flash)
     pub text_model: String,
-    /// Model for AUDIO output (e.g., gemini-2.0-flash with audio)
-    pub audio_model: String,
-    /// Model for VIDEO output (e.g., veo-2)
-    pub video_model: String,
     /// Default content size threshold in bytes
     pub default_content_threshold_bytes: i64,
 }
@@ -46,10 +42,8 @@ pub struct ModelConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct GoogleConfig {
     pub service_account_key_path: String,
-    /// Region for Gemini text/audio models (e.g., "global", "us-central1").
+    /// Region for Gemini text models (e.g., "global", "us-central1").
     pub gemini_region: String,
-    /// Region for Veo video models (e.g., "us-central1").
-    pub veo_region: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -70,12 +64,6 @@ impl GenaiConfig {
             },
             models: ModelConfig {
                 text_model: get_env("GENAI_TEXT_MODEL", Some("gemini-3-flash-preview"), is_prod)?,
-                audio_model: get_env("GENAI_AUDIO_MODEL", Some("gemini-3-flash-preview"), is_prod)?,
-                video_model: get_env(
-                    "GENAI_VIDEO_MODEL",
-                    Some("veo-3.1-generate-preview"),
-                    is_prod,
-                )?,
                 default_content_threshold_bytes: get_env(
                     "GENAI_DEFAULT_CONTENT_THRESHOLD_BYTES",
                     Some(&DEFAULT_CONTENT_THRESHOLD_BYTES.to_string()),
@@ -91,7 +79,6 @@ impl GenaiConfig {
                     is_prod,
                 )?,
                 gemini_region: get_env("GEMINI_REGION", Some("global"), is_prod)?,
-                veo_region: get_env("VEO_REGION", Some("us-central1"), is_prod)?,
             },
             document_service: DocumentServiceConfig {
                 grpc_url: get_env(
@@ -109,30 +96,18 @@ impl GenaiConfig {
     }
 
     /// Get the appropriate model based on output format.
-    pub fn model_for_output(&self, output_format: OutputFormat) -> &str {
-        match output_format {
-            OutputFormat::Text | OutputFormat::StructuredJson => &self.models.text_model,
-            OutputFormat::Audio => &self.models.audio_model,
-            OutputFormat::Video => &self.models.video_model,
-        }
+    pub fn model_for_output(&self, _output_format: OutputFormat) -> &str {
+        &self.models.text_model
     }
 
     /// Check whether a model string matches one of the configured models.
     pub fn is_valid_model(&self, model: &str) -> bool {
         model == self.models.text_model
-            || model == self.models.audio_model
-            || model == self.models.video_model
     }
 
-    /// Return the list of configured model names (deduplicated).
+    /// Return the list of configured model names.
     pub fn valid_models(&self) -> Vec<&str> {
-        let mut models = vec![
-            self.models.text_model.as_str(),
-            self.models.audio_model.as_str(),
-            self.models.video_model.as_str(),
-        ];
-        models.dedup();
-        models
+        vec![self.models.text_model.as_str()]
     }
 }
 
@@ -141,17 +116,12 @@ impl GenaiConfig {
 pub enum OutputFormat {
     Text,
     StructuredJson,
-    Audio,
-    Video,
 }
 
 impl From<i32> for OutputFormat {
     fn from(value: i32) -> Self {
         match value {
-            1 => OutputFormat::Text,
             2 => OutputFormat::StructuredJson,
-            3 => OutputFormat::Audio,
-            4 => OutputFormat::Video,
             _ => OutputFormat::Text, // Default to text for unspecified
         }
     }

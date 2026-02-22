@@ -53,9 +53,6 @@ pub struct SessionDocument {
     /// Document ID from document-service.
     pub document_id: String,
 
-    /// Signed URL for access.
-    pub signed_url: String,
-
     /// MIME type.
     pub mime_type: String,
 
@@ -130,15 +127,9 @@ impl Session {
 
 impl SessionDocument {
     /// Create a new session document.
-    pub fn new(
-        document_id: String,
-        signed_url: String,
-        mime_type: String,
-        text_content: Option<String>,
-    ) -> Self {
+    pub fn new(document_id: String, mime_type: String, text_content: Option<String>) -> Self {
         Self {
             document_id,
-            signed_url,
             mime_type,
             text_content,
         }
