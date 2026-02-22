@@ -72,14 +72,9 @@ async fn upload_document_requires_tenant_context() {
     let app = TestApp::spawn().await;
 
     // Try to connect and upload without proper tenant headers
-    // The gRPC client requires tenant context in metadata
-    // This test verifies the server rejects requests without proper metadata
-
-    use std::collections::HashMap;
     use tonic::transport::Channel;
     use workflow_tests::proto::document::{
-        document_service_client::DocumentServiceClient, upload_document_request::Data,
-        UploadDocumentRequest, UploadMetadata,
+        document_service_client::DocumentServiceClient, UploadDocumentRequest,
     };
 
     let channel = Channel::from_shared(app.grpc_address.clone())
@@ -91,19 +86,11 @@ async fn upload_document_requires_tenant_context() {
     let mut raw_client = DocumentServiceClient::new(channel);
 
     // Create upload request WITHOUT tenant metadata
-    let metadata_msg = UploadDocumentRequest {
-        data: Some(Data::Metadata(UploadMetadata {
-            filename: "test.txt".to_string(),
-            mime_type: "text/plain".to_string(),
-            metadata: HashMap::new(),
-        })),
-    };
-
-    let chunk_msg = UploadDocumentRequest {
-        data: Some(Data::Chunk(vec![0; 100])),
-    };
-
-    let request = tonic::Request::new(futures::stream::iter(vec![metadata_msg, chunk_msg]));
+    let request = tonic::Request::new(UploadDocumentRequest {
+        filename: "test.txt".to_string(),
+        mime_type: "text/plain".to_string(),
+        data: vec![0; 100],
+    });
     // Note: No tenant metadata added
 
     let result = raw_client.upload_document(request).await;

@@ -70,7 +70,7 @@ pub use capability_checker::{
 };
 pub use document_client::{
     DocumentClient, DocumentClientConfig, DocumentProto, DocumentStatusProto,
-    ProcessingMetadataProto, ProcessingOptionsProto, ProcessorTypeProto,
+    ProcessingMetadataProto,
 };
 pub use error::{GrpcResult, IntoStatus};
 pub use genai_client::{

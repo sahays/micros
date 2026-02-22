@@ -1,26 +1,18 @@
-use crate::dtos::{
-    ImageOptions, PdfOptions, ProcessingOptions, ProcessorType as DtoProcessorType, VideoOptions,
-};
 use crate::grpc::proto::{
     document_service_server::DocumentService, DeleteDocumentRequest, DeleteDocumentResponse,
     Document as ProtoDocument, DocumentStatus, DownloadDocumentRequest, DownloadDocumentResponse,
-    DownloadVideoChunkRequest, DownloadVideoChunkResponse, GenerateSignedUrlRequest,
-    GenerateSignedUrlResponse, GetDocumentRequest, GetDocumentResponse, GetProcessingStatusRequest,
+    GetDocumentRequest, GetDocumentResponse, GetProcessingStatusRequest,
     GetProcessingStatusResponse, ListDocumentsRequest, ListDocumentsResponse,
     ProcessDocumentRequest, ProcessDocumentResponse, ProcessingMetadata as ProtoProcessingMetadata,
-    ProcessingOptions as ProtoProcessingOptions, ProcessorType, UploadDocumentRequest,
-    UploadDocumentResponse,
+    UploadDocumentRequest, UploadDocumentResponse,
 };
 use crate::middleware::tenant::TenantContext;
 use crate::models::{Document, DocumentStatus as ModelDocumentStatus};
 use crate::startup::AppState;
 use prost_types::Timestamp;
-use std::pin::Pin;
-use tonic::{Request, Response, Status, Streaming};
+use tonic::{Request, Response, Status};
 
-use super::{documents, processing, streaming};
-
-pub const CHUNK_SIZE: usize = 64 * 1024; // 64KB chunks for streaming
+use super::{documents, processing};
 
 pub struct DocumentGrpcService {
     state: AppState,
@@ -36,38 +28,6 @@ impl DocumentGrpcService {
 #[allow(clippy::result_large_err)]
 pub fn extract_tenant_context(
     request: &Request<impl std::any::Any>,
-) -> Result<TenantContext, Status> {
-    let metadata = request.metadata();
-
-    let app_id = metadata
-        .get("x-app-id")
-        .and_then(|v| v.to_str().ok())
-        .map(String::from)
-        .ok_or_else(|| Status::unauthenticated("Missing x-app-id header"))?;
-
-    let org_id = metadata
-        .get("x-org-id")
-        .and_then(|v| v.to_str().ok())
-        .map(String::from)
-        .ok_or_else(|| Status::unauthenticated("Missing x-org-id header"))?;
-
-    let user_id = metadata
-        .get("x-user-id")
-        .and_then(|v| v.to_str().ok())
-        .map(String::from)
-        .ok_or_else(|| Status::unauthenticated("Missing x-user-id header"))?;
-
-    Ok(TenantContext {
-        app_id,
-        org_id,
-        user_id,
-    })
-}
-
-/// Extract tenant context from streaming request metadata.
-#[allow(clippy::result_large_err)]
-pub fn extract_tenant_context_from_streaming<T>(
-    request: &Request<Streaming<T>>,
 ) -> Result<TenantContext, Status> {
     let metadata = request.metadata();
 
@@ -132,7 +92,6 @@ pub fn document_to_proto(doc: &Document) -> ProtoDocument {
         original_name: doc.original_name.clone(),
         mime_type: doc.mime_type.clone(),
         size: doc.size,
-        storage_key: doc.storage_key.clone(),
         status: status_to_proto(&doc.status),
         error_message: doc.error_message.clone(),
         processing_metadata: doc
@@ -141,76 +100,19 @@ pub fn document_to_proto(doc: &Document) -> ProtoDocument {
             .map(|m| ProtoProcessingMetadata {
                 extracted_text: m.extracted_text.clone(),
                 page_count: m.page_count,
-                duration_seconds: m.duration_seconds,
-                optimized_size: m.optimized_size,
-                thumbnail_path: m.thumbnail_path.clone(),
                 error_details: m.error_details.clone(),
-                resolution: m.resolution.clone(),
-                chunk_count: m.chunk_count,
-                total_size: m.total_size,
             }),
         created_at: Some(datetime_to_timestamp(doc.created_at)),
         updated_at: Some(datetime_to_timestamp(doc.updated_at)),
     }
 }
 
-pub fn proto_to_processing_options(opts: Option<ProtoProcessingOptions>) -> ProcessingOptions {
-    match opts {
-        Some(o) => ProcessingOptions {
-            processors: if o.processors.is_empty() {
-                None
-            } else {
-                Some(
-                    o.processors
-                        .iter()
-                        .filter_map(|p| match ProcessorType::try_from(*p) {
-                            Ok(ProcessorType::Pdf) => Some(DtoProcessorType::Pdf),
-                            Ok(ProcessorType::Image) => Some(DtoProcessorType::Image),
-                            Ok(ProcessorType::Video) => Some(DtoProcessorType::Video),
-                            _ => None,
-                        })
-                        .collect(),
-                )
-            },
-            pdf_options: o.pdf_options.map(|p| PdfOptions {
-                extract_text: p.extract_text,
-                extract_images: p.extract_images,
-            }),
-            image_options: o.image_options.map(|i| ImageOptions {
-                format: if i.format.is_empty() {
-                    "webp".to_string()
-                } else {
-                    i.format
-                },
-                quality: i.quality.clamp(1, 100) as u8,
-            }),
-            video_options: o.video_options.map(|v| VideoOptions {
-                format: if v.format.is_empty() {
-                    "hls".to_string()
-                } else {
-                    v.format
-                },
-                resolution: v.resolution,
-            }),
-        },
-        None => ProcessingOptions::default(),
-    }
-}
-
-pub type DownloadStream =
-    Pin<Box<dyn futures::Stream<Item = Result<DownloadDocumentResponse, Status>> + Send>>;
-pub type ChunkDownloadStream =
-    Pin<Box<dyn futures::Stream<Item = Result<DownloadVideoChunkResponse, Status>> + Send>>;
-
 #[tonic::async_trait]
 impl DocumentService for DocumentGrpcService {
-    type DownloadDocumentStream = DownloadStream;
-    type DownloadVideoChunkStream = ChunkDownloadStream;
-
     #[tracing::instrument(skip(self, request))]
     async fn upload_document(
         &self,
-        request: Request<Streaming<UploadDocumentRequest>>,
+        request: Request<UploadDocumentRequest>,
     ) -> Result<Response<UploadDocumentResponse>, Status> {
         documents::upload_document(&self.state, request).await
     }
@@ -219,7 +121,7 @@ impl DocumentService for DocumentGrpcService {
     async fn download_document(
         &self,
         request: Request<DownloadDocumentRequest>,
-    ) -> Result<Response<Self::DownloadDocumentStream>, Status> {
+    ) -> Result<Response<DownloadDocumentResponse>, Status> {
         documents::download_document(&self.state, request).await
     }
 
@@ -261,21 +163,5 @@ impl DocumentService for DocumentGrpcService {
         request: Request<GetProcessingStatusRequest>,
     ) -> Result<Response<GetProcessingStatusResponse>, Status> {
         processing::get_processing_status(&self.state, request).await
-    }
-
-    #[tracing::instrument(skip(self, request))]
-    async fn generate_signed_url(
-        &self,
-        request: Request<GenerateSignedUrlRequest>,
-    ) -> Result<Response<GenerateSignedUrlResponse>, Status> {
-        processing::generate_signed_url(&self.state, request).await
-    }
-
-    #[tracing::instrument(skip(self, request))]
-    async fn download_video_chunk(
-        &self,
-        request: Request<DownloadVideoChunkRequest>,
-    ) -> Result<Response<Self::DownloadVideoChunkStream>, Status> {
-        streaming::download_video_chunk(&self.state, request).await
     }
 }

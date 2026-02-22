@@ -1133,7 +1133,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
- "validator",
 ]
 
 [[package]]

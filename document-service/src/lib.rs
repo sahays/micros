@@ -1,5 +1,4 @@
 pub mod config;
-pub mod dtos;
 pub mod grpc;
 pub mod handlers;
 pub mod middleware;

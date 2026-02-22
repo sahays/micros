@@ -11,22 +11,7 @@ pub struct DocumentConfig {
     pub common: core_config::Config,
     pub mongodb: MongoConfig,
     pub storage: StorageConfig,
-    pub signature: SignatureConfig,
     pub worker: WorkerConfig,
-    pub auth: AuthConfig,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct SignatureConfig {
-    pub require_signatures: bool,
-    pub signing_secret: String,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct AuthConfig {
-    /// When set, enables capability enforcement via auth-service.
-    /// Leave empty to use BFF trust model.
-    pub auth_service_endpoint: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -72,13 +57,6 @@ impl DocumentConfig {
             storage: StorageConfig {
                 local_path: get_env("STORAGE_LOCAL_PATH", Some("storage"), is_prod)?,
             },
-            signature: SignatureConfig {
-                require_signatures: env::var("REQUIRE_SIGNATURES")
-                    .unwrap_or_else(|_| "false".to_string())
-                    .parse()
-                    .unwrap_or(false),
-                signing_secret: get_env("SIGNING_SECRET", Some("dev-signing-secret"), is_prod)?,
-            },
             worker: WorkerConfig {
                 enabled: env::var("WORKER_ENABLED")
                     .unwrap_or_else(|_| "true".to_string())
@@ -101,11 +79,6 @@ impl DocumentConfig {
                     Some("/tmp/document-processing"),
                     is_prod,
                 )?),
-            },
-            auth: AuthConfig {
-                // When set, capability enforcement is enabled via auth-service.
-                // Leave empty/unset for BFF trust model (default).
-                auth_service_endpoint: env::var("AUTH_SERVICE_ENDPOINT").ok(),
             },
         })
     }

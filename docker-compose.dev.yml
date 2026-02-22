@@ -82,8 +82,6 @@ services:
       - RUST_LOG=${RUST_LOG:-document_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
       - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
       - STORAGE_LOCAL_PATH=${STORAGE_LOCAL_PATH:-./storage}
-      - REQUIRE_SIGNATURES=${REQUIRE_SIGNATURES:-false}
-      - SIGNING_SECRET=${DOCUMENT_SERVICE_SIGNING_SECRET:-dev-signing-secret}
     logging:
       driver: "json-file"
       options:

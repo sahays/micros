@@ -1,97 +1,55 @@
-use crate::grpc::capability_check::{capabilities, CapabilityMetadata};
-use crate::grpc::document_service::DownloadStream;
 use crate::grpc::document_service::{
-    document_to_proto, extract_tenant_context, extract_tenant_context_from_streaming,
-    proto_to_status, CHUNK_SIZE,
+    document_to_proto, extract_tenant_context, proto_to_status,
 };
 use crate::grpc::proto::{
-    ChunkedVideoInfo, DeleteDocumentRequest, DeleteDocumentResponse, DownloadDocumentRequest,
-    DownloadDocumentResponse, DownloadMetadata, GetDocumentRequest, GetDocumentResponse,
-    ListDocumentsRequest, ListDocumentsResponse, UploadDocumentRequest, UploadDocumentResponse,
-    VideoChunkInfo,
+    DeleteDocumentRequest, DeleteDocumentResponse, DownloadDocumentRequest,
+    DownloadDocumentResponse, GetDocumentRequest, GetDocumentResponse, ListDocumentsRequest,
+    ListDocumentsResponse, UploadDocumentRequest, UploadDocumentResponse,
 };
 use crate::models::{Document, DocumentStatus as ModelDocumentStatus};
 use crate::startup::AppState;
 use futures::stream::TryStreamExt;
-use futures::StreamExt;
 use mongodb::bson::doc;
 use mongodb::options::FindOptions;
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
-use tonic::{Request, Response, Status, Streaming};
+use tonic::{Request, Response, Status};
 use uuid::Uuid;
 
 #[tracing::instrument(skip(state, request))]
 pub async fn upload_document(
     state: &AppState,
-    request: Request<Streaming<UploadDocumentRequest>>,
+    request: Request<UploadDocumentRequest>,
 ) -> Result<Response<UploadDocumentResponse>, Status> {
-    // Extract metadata for capability check before consuming the request
-    let cap_metadata = CapabilityMetadata::try_from_request(&request);
-    let tenant = extract_tenant_context_from_streaming(&request)?;
-    let mut stream = request.into_inner();
+    let tenant = extract_tenant_context(&request)?;
+    let req = request.into_inner();
 
-    // Capability check (if enabled) - use extracted metadata
-    if let Some(metadata) = cap_metadata {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::DOCUMENT_UPLOAD)
-            .await?;
-    } else if state.capability_checker.is_enabled() {
-        // If capability checking is enabled but no auth header, fail
-        return Err(Status::unauthenticated("Missing authorization header"));
-    }
-
-    // First message should contain metadata
-    let first_msg = stream
-        .next()
-        .await
-        .ok_or_else(|| Status::invalid_argument("Empty upload stream"))?
-        .map_err(|e| Status::internal(format!("Stream error: {}", e)))?;
-
-    let metadata = match first_msg.data {
-        Some(crate::grpc::proto::upload_document_request::Data::Metadata(m)) => m,
-        _ => {
-            return Err(Status::invalid_argument(
-                "First message must contain metadata",
-            ))
-        }
-    };
-
-    let filename = if metadata.filename.is_empty() {
+    let filename = if req.filename.is_empty() {
         "unnamed".to_string()
     } else {
-        metadata.filename
+        req.filename
     };
 
-    let mime_type = if metadata.mime_type.is_empty() {
+    let mime_type = if req.mime_type.is_empty() {
         "application/octet-stream".to_string()
     } else {
-        metadata.mime_type
+        req.mime_type
     };
 
-    // Collect file data from subsequent chunks
-    let mut file_data = Vec::new();
-    while let Some(msg) = stream.next().await {
-        let msg = msg.map_err(|e| Status::internal(format!("Stream error: {}", e)))?;
-        if let Some(crate::grpc::proto::upload_document_request::Data::Chunk(chunk)) = msg.data {
-            file_data.extend_from_slice(&chunk);
+    let file_data = req.data;
 
-            // Check size limit (20MB)
-            if file_data.len() > 20 * 1024 * 1024 {
-                return Err(Status::invalid_argument("File too large (max 20MB)"));
-            }
-        }
+    // Check size limit (20MB)
+    if file_data.len() > 20 * 1024 * 1024 {
+        return Err(Status::invalid_argument("File too large (max 20MB)"));
     }
 
     let size = file_data.len() as i64;
 
-    // Generate storage key
+    // Generate storage key: {app_id}/{org_id}/{document_id}.{ext}
     let extension = std::path::Path::new(&filename)
         .extension()
         .and_then(|ext| ext.to_str())
         .unwrap_or("bin");
-    let storage_key = format!("{}/{}.{}", Uuid::new_v4(), Uuid::new_v4(), extension);
+    let document_id = Uuid::new_v4().to_string();
+    let storage_key = format!("{}/{}/{}.{}", tenant.app_id, tenant.org_id, document_id, extension);
 
     // Create document
     let mut document = Document::new(
@@ -103,6 +61,8 @@ pub async fn upload_document(
         size,
         storage_key.clone(),
     );
+    // Use the pre-generated document_id
+    document.id = document_id;
 
     tracing::info!(
         document_id = %document.id,
@@ -145,172 +105,44 @@ pub async fn upload_document(
 pub async fn download_document(
     state: &AppState,
     request: Request<DownloadDocumentRequest>,
-) -> Result<Response<DownloadStream>, Status> {
-    let req = request.get_ref();
+) -> Result<Response<DownloadDocumentResponse>, Status> {
+    let tenant = extract_tenant_context(&request)?;
+    let req = request.into_inner();
 
-    // Capability check only if not using signed URL
-    let has_signature = req.signature.is_some() && req.expires.is_some();
-    if !has_signature {
-        state
-            .capability_checker
-            .require_capability(&request, capabilities::DOCUMENT_DOWNLOAD)
-            .await?;
-    }
-
-    // Check for signed URL parameters
-    let is_signed = if let (Some(signature), Some(expires)) = (&req.signature, &req.expires) {
-        service_core::utils::signature::validate_document_signature(
-            &req.document_id,
-            signature,
-            *expires,
-            &state.config.signature.signing_secret,
+    // Fetch document with tenant filter
+    let document = state
+        .db
+        .documents()
+        .find_one(
+            doc! {
+                "_id": &req.document_id,
+                "app_id": &tenant.app_id,
+                "org_id": &tenant.org_id
+            },
+            None,
         )
-        .map_err(|e| Status::permission_denied(format!("Invalid signature: {}", e)))?;
-        true
-    } else {
-        false
-    };
-
-    // Get tenant context if not signed
-    let tenant = if !is_signed {
-        Some(extract_tenant_context(&request)?)
-    } else {
-        None
-    };
-
-    // Fetch document
-    let document = if is_signed {
-        state
-            .db
-            .documents()
-            .find_one(doc! { "_id": &req.document_id }, None)
-            .await
-            .map_err(|e| Status::internal(format!("Database error: {}", e)))?
-            .ok_or_else(|| Status::not_found("Document not found"))?
-    } else {
-        let tenant = tenant.unwrap();
-        state
-            .db
-            .documents()
-            .find_one(
-                doc! {
-                    "_id": &req.document_id,
-                    "app_id": &tenant.app_id,
-                    "org_id": &tenant.org_id
-                },
-                None,
-            )
-            .await
-            .map_err(|e| Status::internal(format!("Database error: {}", e)))?
-            .ok_or_else(|| Status::not_found("Document not found"))?
-    };
-
-    // Check for chunked video
-    if let Some(ref metadata) = document.processing_metadata {
-        if document.mime_type.starts_with("video/") {
-            if let Some(ref chunks) = metadata.chunks {
-                // Return chunked video info
-                let chunked_info = ChunkedVideoInfo {
-                    original_name: document.original_name.clone(),
-                    resolution: metadata.resolution.clone(),
-                    total_size: metadata.total_size.unwrap_or(0),
-                    chunk_count: chunks.len() as i32,
-                    chunks: chunks
-                        .iter()
-                        .map(|c| VideoChunkInfo {
-                            index: c.index as i32,
-                            size: c.size,
-                        })
-                        .collect(),
-                };
-
-                let response = DownloadDocumentResponse {
-                    data: Some(
-                        crate::grpc::proto::download_document_response::Data::ChunkedVideo(
-                            chunked_info,
-                        ),
-                    ),
-                };
-
-                let stream = futures::stream::once(async move { Ok(response) });
-                return Ok(Response::new(Box::pin(stream)));
-            }
-        }
-    }
-
-    // Determine storage key and content type
-    let (storage_key, content_type, filename) =
-        if let Some(ref metadata) = document.processing_metadata {
-            if let Some(ref processed_path) = metadata.thumbnail_path {
-                let ct = if processed_path.ends_with(".webp") {
-                    "image/webp"
-                } else if processed_path.ends_with(".mp4") {
-                    "video/mp4"
-                } else {
-                    "application/octet-stream"
-                };
-                (
-                    processed_path.clone(),
-                    ct.to_string(),
-                    document.original_name.clone(),
-                )
-            } else {
-                (
-                    document.storage_key.clone(),
-                    document.mime_type.clone(),
-                    document.original_name.clone(),
-                )
-            }
-        } else {
-            (
-                document.storage_key.clone(),
-                document.mime_type.clone(),
-                document.original_name.clone(),
-            )
-        };
+        .await
+        .map_err(|e| Status::internal(format!("Database error: {}", e)))?
+        .ok_or_else(|| Status::not_found("Document not found"))?;
 
     // Download file
-    let file_data = state.storage.download(&storage_key).await.map_err(|e| {
-        tracing::error!("Failed to download file: {}", e);
-        Status::internal(format!("Storage error: {}", e))
-    })?;
+    let file_data = state
+        .storage
+        .download(&document.storage_key)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to download file: {}", e);
+            Status::internal(format!("Storage error: {}", e))
+        })?;
 
     let total_size = file_data.len() as i64;
 
-    // Create streaming response
-    let (tx, rx) = mpsc::channel(32);
-
-    tokio::spawn(async move {
-        // Send metadata first
-        let metadata_msg = DownloadDocumentResponse {
-            data: Some(
-                crate::grpc::proto::download_document_response::Data::Metadata(DownloadMetadata {
-                    filename,
-                    content_type,
-                    size: total_size,
-                }),
-            ),
-        };
-
-        if tx.send(Ok(metadata_msg)).await.is_err() {
-            return;
-        }
-
-        // Send file chunks
-        for chunk in file_data.chunks(CHUNK_SIZE) {
-            let chunk_msg = DownloadDocumentResponse {
-                data: Some(crate::grpc::proto::download_document_response::Data::Chunk(
-                    chunk.to_vec(),
-                )),
-            };
-
-            if tx.send(Ok(chunk_msg)).await.is_err() {
-                return;
-            }
-        }
-    });
-
-    Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
+    Ok(Response::new(DownloadDocumentResponse {
+        filename: document.original_name,
+        content_type: document.mime_type,
+        size: total_size,
+        data: file_data,
+    }))
 }
 
 #[tracing::instrument(skip(state, request))]
@@ -318,12 +150,6 @@ pub async fn get_document(
     state: &AppState,
     request: Request<GetDocumentRequest>,
 ) -> Result<Response<GetDocumentResponse>, Status> {
-    // Capability check (if enabled)
-    state
-        .capability_checker
-        .require_capability(&request, capabilities::DOCUMENT_READ)
-        .await?;
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
@@ -352,12 +178,6 @@ pub async fn list_documents(
     state: &AppState,
     request: Request<ListDocumentsRequest>,
 ) -> Result<Response<ListDocumentsResponse>, Status> {
-    // Capability check (if enabled)
-    state
-        .capability_checker
-        .require_capability(&request, capabilities::DOCUMENT_READ)
-        .await?;
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
@@ -428,12 +248,6 @@ pub async fn delete_document(
     state: &AppState,
     request: Request<DeleteDocumentRequest>,
 ) -> Result<Response<DeleteDocumentResponse>, Status> {
-    // Capability check (if enabled)
-    state
-        .capability_checker
-        .require_capability(&request, capabilities::DOCUMENT_DELETE)
-        .await?;
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
@@ -461,18 +275,6 @@ pub async fn delete_document(
                 error = %e,
                 "Failed to delete file from storage"
             );
-        }
-
-        // Delete processed files if any
-        if let Some(metadata) = doc.processing_metadata {
-            if let Some(thumbnail_path) = metadata.thumbnail_path {
-                let _ = state.storage.delete(&thumbnail_path).await;
-            }
-            if let Some(chunks) = metadata.chunks {
-                for chunk in chunks {
-                    let _ = state.storage.delete(&chunk.path).await;
-                }
-            }
         }
 
         tracing::info!(document_id = %req.document_id, "Document deleted");

@@ -2,7 +2,7 @@ use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::ge
 use document_service::config::DocumentConfig;
 use document_service::grpc::{
     proto::{document_service_server::DocumentServiceServer, FILE_DESCRIPTOR_SET},
-    CapabilityChecker, DocumentGrpcService,
+    DocumentGrpcService,
 };
 use service_core::grpc::proto::common::app_registry_service_server::AppRegistryServiceServer;
 use document_service::services::{LocalStorage, MongoDb, Storage};
@@ -121,20 +121,11 @@ async fn main() -> std::io::Result<()> {
         orchestrator.start().await;
     });
 
-    // Initialize capability checker
-    let capability_checker = CapabilityChecker::new(config.auth.auth_service_endpoint.as_deref())
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to initialize capability checker: {}", e);
-            std::io::Error::other(format!("Capability checker initialization error: {}", e))
-        })?;
-
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
         storage,
         job_tx: Some(job_tx),
-        capability_checker,
     };
 
     let health_state = HealthState { db };

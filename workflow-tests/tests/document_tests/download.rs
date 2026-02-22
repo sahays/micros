@@ -230,32 +230,3 @@ async fn delete_document_works() {
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().code(), tonic::Code::NotFound);
 }
-
-#[tokio::test]
-async fn signed_url_generation_works() {
-    let app = TestApp::spawn().await;
-    let mut client = app.grpc_client().await;
-    let user_id = Uuid::new_v4().to_string();
-
-    // Upload a document
-    let doc_id = upload_test_document(
-        &mut client,
-        &user_id,
-        "signed.txt",
-        "text/plain",
-        vec![0; 100],
-    )
-    .await;
-
-    // Generate signed URL
-    let response = client
-        .generate_signed_url(TEST_APP_ID, TEST_ORG_ID, &user_id, doc_id.clone(), 3600)
-        .await
-        .expect("Failed to generate signed URL");
-
-    // Verify URL contains document ID and signature
-    assert!(response.url.contains(&doc_id));
-    assert!(response.url.contains("signature="));
-    assert!(response.url.contains("expires="));
-    assert!(response.expires_at.is_some());
-}

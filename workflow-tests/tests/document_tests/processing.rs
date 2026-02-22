@@ -76,32 +76,27 @@ async fn manual_processing_trigger_works() {
 }
 
 #[tokio::test]
-async fn processing_with_custom_options_works() {
+async fn processing_with_pdf_options_works() {
     let app = TestApp::spawn().await;
     let mut client = app.grpc_client().await;
     let user_id = Uuid::new_v4().to_string();
 
-    // Upload an image document
+    // Upload a PDF document
     let doc_id = upload_test_document(
         &mut client,
         &user_id,
-        "image.jpg",
-        "image/jpeg",
+        "document.pdf",
+        "application/pdf",
         vec![0; 200],
     )
     .await;
 
-    // Trigger processing with custom image options
-    use workflow_tests::proto::document::{ImageOptions, ProcessingOptions};
+    // Trigger processing with PDF options
+    use workflow_tests::proto::document::PdfOptions;
 
-    let options = ProcessingOptions {
-        processors: vec![],
-        pdf_options: None,
-        image_options: Some(ImageOptions {
-            format: "webp".to_string(),
-            quality: 90,
-        }),
-        video_options: None,
+    let pdf_options = PdfOptions {
+        extract_text: true,
+        extract_images: false,
     };
 
     let process_response = client
@@ -110,7 +105,7 @@ async fn processing_with_custom_options_works() {
             TEST_ORG_ID,
             &user_id,
             doc_id.clone(),
-            Some(options),
+            Some(pdf_options),
         )
         .await
         .expect("Failed to trigger processing");
@@ -167,7 +162,7 @@ async fn status_endpoint_returns_correct_information() {
     )
     .await;
 
-    // Get processing status (should be Ready, 0 attempts)
+    // Get processing status (should be Ready, no metadata)
     let status_response = client
         .get_processing_status(TEST_APP_ID, TEST_ORG_ID, &user_id, doc_id.clone())
         .await
@@ -175,7 +170,6 @@ async fn status_endpoint_returns_correct_information() {
 
     assert_eq!(status_response.document_id, doc_id);
     assert_eq!(status_response.status, DocumentStatusProto::Ready as i32);
-    assert_eq!(status_response.processing_attempts, 0);
     assert!(status_response.metadata.is_none());
     assert!(status_response.error_message.is_none());
 }

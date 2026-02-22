@@ -20,7 +20,6 @@ config = { workspace = true }
 mongodb = { workspace = true, features = ["bson-chrono-0_4"] }
 tower-http = { workspace = true, features = ["trace", "cors"] }
 axum-extra = { workspace = true, features = ["typed-header", "multipart"] }
-validator = { workspace = true, features = ["derive"] }
 async-trait = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }

@@ -1,4 +1,3 @@
-use crate::dtos::ProcessingOptions;
 use crate::models::{Document, ProcessingMetadata};
 use crate::workers::executor::CommandExecutor;
 use async_trait::async_trait;
@@ -14,7 +13,6 @@ pub trait Processor: Send + Sync {
         document: &Document,
         file_path: &Path,
         executor: &CommandExecutor,
-        options: &ProcessingOptions,
     ) -> Result<ProcessingMetadata, AppError>;
 }
 
@@ -30,14 +28,10 @@ impl Default for ProcessorRegistry {
 
 impl ProcessorRegistry {
     pub fn new() -> Self {
-        use crate::workers::{ImageProcessor, PdfProcessor, VideoProcessor};
+        use crate::workers::PdfProcessor;
 
         Self {
-            processors: vec![
-                Box::new(PdfProcessor::new()),
-                Box::new(ImageProcessor::new()),
-                Box::new(VideoProcessor::new()),
-            ],
+            processors: vec![Box::new(PdfProcessor::new())],
         }
     }
 

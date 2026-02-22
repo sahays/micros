@@ -1,5 +1,4 @@
 use crate::config::WorkerConfig;
-use crate::dtos::ProcessingOptions;
 use crate::models::{Document, ProcessingMetadata};
 use crate::services::database::MongoDb;
 use crate::services::storage::Storage;
@@ -25,7 +24,6 @@ pub struct ProcessingJob {
     pub owner_id: String,
     pub mime_type: String,
     pub storage_key: String,
-    pub options: ProcessingOptions,
 }
 
 pub struct WorkerOrchestrator {
@@ -243,7 +241,7 @@ impl Worker {
         );
 
         let metadata = processor
-            .process(&document, &temp_file, &self.executor, &job.options)
+            .process(&document, &temp_file, &self.executor)
             .await?;
 
         // 4. Cleanup temp file
@@ -283,9 +281,6 @@ impl Worker {
                 "status": "failed",
                 "error_message": error,
                 "updated_at": mongodb::bson::DateTime::from_chrono(Utc::now()),
-            },
-            "$inc": {
-                "processing_attempts": 1,
             }
         };
 

@@ -6,7 +6,7 @@
 use crate::config::DocumentConfig;
 use crate::grpc::{
     proto::{document_service_server::DocumentServiceServer, FILE_DESCRIPTOR_SET},
-    CapabilityChecker, DocumentGrpcService,
+    DocumentGrpcService,
 };
 use service_core::grpc::proto::common::app_registry_service_server::AppRegistryServiceServer;
 use crate::services::{LocalStorage, MongoDb, Storage};
@@ -27,7 +27,6 @@ pub struct AppState {
     pub db: MongoDb,
     pub storage: Arc<dyn Storage>,
     pub job_tx: Option<mpsc::Sender<ProcessingJob>>,
-    pub capability_checker: CapabilityChecker,
 }
 
 /// State for health check endpoints.
@@ -114,24 +113,11 @@ impl Application {
             orchestrator.start().await;
         });
 
-        // Initialize capability checker
-        let capability_checker =
-            CapabilityChecker::new(config.auth.auth_service_endpoint.as_deref())
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to initialize capability checker: {}", e);
-                    AppError::from(std::io::Error::other(format!(
-                        "Capability checker initialization error: {}",
-                        e
-                    )))
-                })?;
-
         let state = AppState {
             config: config.clone(),
             db: db.clone(),
             storage,
             job_tx: Some(job_tx),
-            capability_checker,
         };
 
         // Bind HTTP listener (port 0 = random port for testing)

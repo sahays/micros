@@ -293,9 +293,8 @@ impl DocumentFetcher {
         INLINE_MIME_TYPES.contains(&mime_type)
     }
 
-    /// Download document content via the DownloadDocument gRPC streaming RPC.
+    /// Download document content via the DownloadDocument gRPC RPC.
     ///
-    /// Collects all streamed chunks into a single byte buffer.
     /// Enforces the 20MB Vertex AI inline data size limit.
     #[tracing::instrument(skip(self), fields(document_id = %document_id))]
     pub async fn download_content(
@@ -307,69 +306,27 @@ impl DocumentFetcher {
 
         tracing::debug!("Starting document download via gRPC");
 
-        let mut stream = client
+        let response = client
             .download_document(DownloadDocumentRequest {
                 document_id: document_id.to_string(),
-                signature: None,
-                expires: None,
             })
             .await
             .map_err(|e| {
-                tracing::warn!(error = %e, "Failed to start document download");
+                tracing::warn!(error = %e, "Failed to download document");
                 e
-            })?
-            .into_inner();
-
-        let mut data = Vec::new();
-        let mut mime_type = String::new();
-
-        use crate::grpc::document_proto::download_document_response::Data;
-        use tokio_stream::StreamExt;
-
-        while let Some(msg) = stream.next().await {
-            let msg = msg.map_err(|e| {
-                tracing::warn!(error = %e, "Error in download stream");
-                DocumentFetcherError::GrpcError(e)
             })?;
 
-            match msg.data {
-                Some(Data::Metadata(meta)) => {
-                    mime_type = meta.content_type;
-                    let total_size = meta.size as usize;
+        let resp = response.into_inner();
+        let mime_type = resp.content_type;
+        let data = resp.data;
 
-                    if total_size > MAX_INLINE_SIZE_BYTES {
-                        tracing::warn!(
-                            size = total_size,
-                            max = MAX_INLINE_SIZE_BYTES,
-                            "Document too large for inline submission"
-                        );
-                        return Err(DocumentFetcherError::TooLarge(total_size));
-                    }
-
-                    data.reserve(total_size);
-                    tracing::debug!(
-                        content_type = %mime_type,
-                        size = total_size,
-                        "Download metadata received"
-                    );
-                }
-                Some(Data::Chunk(chunk)) => {
-                    data.extend_from_slice(&chunk);
-
-                    if data.len() > MAX_INLINE_SIZE_BYTES {
-                        tracing::warn!(
-                            accumulated = data.len(),
-                            max = MAX_INLINE_SIZE_BYTES,
-                            "Download exceeded size limit during streaming"
-                        );
-                        return Err(DocumentFetcherError::TooLarge(data.len()));
-                    }
-                }
-                Some(Data::ChunkedVideo(_)) => {
-                    tracing::debug!("Skipping chunked video info in download stream");
-                }
-                None => {}
-            }
+        if data.len() > MAX_INLINE_SIZE_BYTES {
+            tracing::warn!(
+                size = data.len(),
+                max = MAX_INLINE_SIZE_BYTES,
+                "Document too large for inline submission"
+            );
+            return Err(DocumentFetcherError::TooLarge(data.len()));
         }
 
         let duration = start.elapsed();

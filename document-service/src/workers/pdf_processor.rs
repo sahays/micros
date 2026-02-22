@@ -1,4 +1,3 @@
-use crate::dtos::ProcessingOptions;
 use crate::models::{Document, ProcessingMetadata};
 use crate::workers::executor::CommandExecutor;
 use crate::workers::processor::Processor;
@@ -26,23 +25,14 @@ impl Processor for PdfProcessor {
         _document: &Document,
         file_path: &Path,
         executor: &CommandExecutor,
-        options: &ProcessingOptions,
     ) -> Result<ProcessingMetadata, AppError> {
         tracing::info!(file_path = ?file_path, "Processing PDF document");
 
-        // Get PDF-specific options or use defaults
-        let pdf_opts = options.pdf_options.as_ref();
-        let extract_text = pdf_opts.is_none_or(|opts| opts.extract_text);
-
-        let extracted_text = if extract_text {
-            // Extract text using pdftotext
-            let output = executor
-                .execute("pdftotext", &[file_path.to_str().unwrap(), "-"], None)
-                .await?;
-            Some(String::from_utf8_lossy(&output.stdout).to_string())
-        } else {
-            None
-        };
+        // Extract text using pdftotext
+        let output = executor
+            .execute("pdftotext", &[file_path.to_str().unwrap(), "-"], None)
+            .await?;
+        let extracted_text = Some(String::from_utf8_lossy(&output.stdout).to_string());
 
         // Get page count using pdfinfo
         let info_output = executor
@@ -53,7 +43,6 @@ impl Processor for PdfProcessor {
 
         tracing::info!(
             page_count = page_count,
-            text_extracted = extract_text,
             text_length = extracted_text.as_ref().map_or(0, |t| t.len()),
             "PDF processing completed"
         );
@@ -61,14 +50,7 @@ impl Processor for PdfProcessor {
         Ok(ProcessingMetadata {
             extracted_text,
             page_count: Some(page_count),
-            duration_seconds: None,
-            optimized_size: None,
-            thumbnail_path: None,
             error_details: None,
-            resolution: None,
-            chunks: None,
-            chunk_count: None,
-            total_size: None,
         })
     }
 }
