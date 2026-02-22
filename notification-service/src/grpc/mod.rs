@@ -1,10 +1,8 @@
-mod batch;
-pub mod capability_check;
 pub mod notification_service;
+mod batch;
 mod queries;
 mod send;
 
-pub use capability_check::{capabilities, CapabilityChecker};
 pub use notification_service::NotificationGrpcService;
 
 // Include generated proto code

@@ -1,6 +1,5 @@
 //! gRPC handlers for settlement operations.
 
-use crate::grpc::capability_check::{capabilities, CapabilityMetadata};
 use crate::grpc::helpers::{
     check_feature_flag, check_razorpay_configured, datetime_to_timestamp, extract_tenant_context,
 };
@@ -16,13 +15,6 @@ pub async fn request_on_demand_settlement(
     state: &AppState,
     request: Request<RequestOnDemandSettlementRequest>,
 ) -> Result<Response<RequestOnDemandSettlementResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_SETTLEMENT_CREATE)
-            .await?;
-    }
-
     check_feature_flag(
         state.config.feature_flags.razorpay_route_enabled,
         "Razorpay Route",
@@ -50,7 +42,7 @@ pub async fn request_on_demand_settlement(
     let settlement = models::Settlement {
         id: Uuid::new_v4().to_string(),
         app_id: tenant.app_id.clone(),
-        org_id: tenant.org_id.clone(),
+        tenant_id: tenant.tenant_id.clone(),
         razorpay_settlement_id: rz_response.id,
         linked_account_id: req.linked_account_id,
         amount: rz_response.amount,
@@ -80,19 +72,12 @@ pub async fn get_settlement(
     state: &AppState,
     request: Request<GetSettlementRequest>,
 ) -> Result<Response<GetSettlementResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_SETTLEMENT_READ)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
     let settlement = state
         .repository
-        .get_settlement_in_tenant(&tenant.app_id, &tenant.org_id, &req.settlement_id)
+        .get_settlement_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.settlement_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch settlement");
@@ -109,13 +94,6 @@ pub async fn list_settlements(
     state: &AppState,
     request: Request<ListSettlementsRequest>,
 ) -> Result<Response<ListSettlementsResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_SETTLEMENT_READ)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
@@ -128,7 +106,7 @@ pub async fn list_settlements(
         .repository
         .list_settlements_in_tenant(
             &tenant.app_id,
-            &tenant.org_id,
+            &tenant.tenant_id,
             req.linked_account_id.as_deref(),
             status_filter,
             type_filter,
@@ -151,7 +129,7 @@ fn settlement_to_proto(s: models::Settlement) -> Settlement {
     Settlement {
         id: s.id,
         app_id: s.app_id,
-        org_id: s.org_id,
+        tenant_id: s.tenant_id,
         razorpay_settlement_id: s.razorpay_settlement_id,
         linked_account_id: s.linked_account_id,
         amount: s.amount,

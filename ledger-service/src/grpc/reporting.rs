@@ -1,11 +1,10 @@
 //! gRPC handlers for balance and statement operations.
 
-use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::proto::{
     Direction as ProtoDirection, GetBalanceRequest, GetBalanceResponse, GetBalancesRequest,
     GetBalancesResponse, GetStatementRequest, GetStatementResponse,
 };
-use crate::grpc::service::{format_decimal, parse_tenant_id};
+use crate::grpc::service::format_decimal;
 use crate::services::Database;
 use chrono::NaiveDate;
 use std::sync::Arc;
@@ -14,18 +13,14 @@ use tracing::{instrument, warn};
 use uuid::Uuid;
 
 #[instrument(
-    skip(db, capability_checker, request),
+    skip(db, request),
     fields(service = "ledger-service", method = "GetBalance")
 )]
 pub async fn get_balance(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetBalanceRequest>,
 ) -> Result<Response<GetBalanceResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::LEDGER_BALANCE_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
 
@@ -69,18 +64,14 @@ pub async fn get_balance(
 }
 
 #[instrument(
-    skip(db, capability_checker, request),
+    skip(db, request),
     fields(service = "ledger-service", method = "GetBalances")
 )]
 pub async fn get_balances(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetBalancesRequest>,
 ) -> Result<Response<GetBalancesResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::LEDGER_BALANCE_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
 
@@ -128,18 +119,14 @@ pub async fn get_balances(
 }
 
 #[instrument(
-    skip(db, capability_checker, request),
+    skip(db, request),
     fields(service = "ledger-service", method = "GetStatement")
 )]
 pub async fn get_statement(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetStatementRequest>,
 ) -> Result<Response<GetStatementResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::LEDGER_STATEMENT_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
 

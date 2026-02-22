@@ -266,8 +266,6 @@ services:
       - RUST_LOG=${RUST_LOG:-billing_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
       # Invoicing Service Integration (gRPC)
       - INVOICING_SERVICE_URL=${INVOICING_SERVICE_URL:-http://invoicing-service:8081}
-      # Auth Service Integration
-      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
     logging:
       driver: "json-file"
       options:
@@ -306,8 +304,6 @@ services:
       - GENAI_SERVICE_URL=${GENAI_SERVICE_URL:-http://genai-service:8081}
       # Document Service Integration (gRPC)
       - DOCUMENT_SERVICE_URL=${DOCUMENT_SERVICE_URL:-http://document-service:8081}
-      # Auth Service Integration
-      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
     logging:
       driver: "json-file"
       options:
@@ -344,8 +340,6 @@ services:
       - LEDGER_SERVICE_URL=${LEDGER_SERVICE_URL:-http://ledger-service:8081}
       # Payment Service Integration (gRPC)
       - PAYMENT_SERVICE_URL=${PAYMENT_SERVICE_URL:-http://payment-service:3004}
-      # Auth Service Integration
-      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
     logging:
       driver: "json-file"
       options:

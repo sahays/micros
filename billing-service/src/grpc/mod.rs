@@ -2,7 +2,6 @@
 
 mod billing_cycles;
 mod billing_runs;
-pub mod capability_check;
 mod charges;
 pub mod helpers;
 mod plans;
@@ -10,7 +9,6 @@ mod service;
 mod subscriptions;
 mod usage;
 
-pub use capability_check::{capabilities, CapabilityChecker};
 pub use service::BillingServiceImpl;
 
 /// Generated protobuf code.

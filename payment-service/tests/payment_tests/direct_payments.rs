@@ -1,4 +1,4 @@
-use crate::common::embedded::{TestApp, TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID};
+use crate::common::embedded::{TestApp, TEST_APP_ID, TEST_TENANT_ID, TEST_USER_ID};
 use serial_test::serial;
 use service_core::grpc::proto::payment::{PaymentChannel, PaymentMethodType, TransactionStatus};
 
@@ -16,7 +16,7 @@ async fn record_direct_upi_payment_creates_completed_transaction() {
     let tx = client
         .record_direct_upi_payment(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             50000, // 500.00 INR
             "INR",
@@ -31,7 +31,7 @@ async fn record_direct_upi_payment_creates_completed_transaction() {
     assert_eq!(tx.amount_paise, 50000);
     assert_eq!(tx.currency, "INR");
     assert_eq!(tx.app_id, TEST_APP_ID);
-    assert_eq!(tx.org_id, TEST_ORG_ID);
+    assert_eq!(tx.tenant_id, TEST_TENANT_ID);
     assert_eq!(tx.user_id, Some(TEST_USER_ID.to_string()));
     assert_eq!(tx.payment_channel(), PaymentChannel::DirectUpi);
     assert_eq!(tx.payment_method_type(), PaymentMethodType::Upi);
@@ -41,7 +41,7 @@ async fn record_direct_upi_payment_creates_completed_transaction() {
 
     // Verify we can fetch it back
     let fetched = client
-        .get_transaction(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), &tx.id)
+        .get_transaction(TEST_APP_ID, TEST_TENANT_ID, Some(TEST_USER_ID), &tx.id)
         .await
         .expect("Failed to get transaction");
     assert_eq!(fetched.id, tx.id);
@@ -59,7 +59,7 @@ async fn record_direct_upi_payment_rejects_duplicate_utr() {
     client
         .record_direct_upi_payment(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             10000,
             "INR",
@@ -74,7 +74,7 @@ async fn record_direct_upi_payment_rejects_duplicate_utr() {
     let err = client
         .record_direct_upi_payment(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             20000,
             "INR",
@@ -99,7 +99,7 @@ async fn record_direct_upi_payment_rejects_zero_amount() {
     let err = client
         .record_direct_upi_payment(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             0,
             "INR",
@@ -124,7 +124,7 @@ async fn record_direct_upi_payment_rejects_empty_utr() {
     let err = client
         .record_direct_upi_payment(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             10000,
             "INR",
@@ -153,7 +153,7 @@ async fn record_offline_cash_payment_creates_completed_transaction() {
     let tx = client
         .record_offline_payment(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             25000, // 250.00 INR
             "INR",
@@ -186,7 +186,7 @@ async fn record_offline_cheque_payment_with_reference() {
     let tx = client
         .record_offline_payment(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             100000, // 1000.00 INR
             "INR",
@@ -214,7 +214,7 @@ async fn record_offline_payment_rejects_duplicate_external_ref() {
     client
         .record_offline_payment(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             50000,
             "INR",
@@ -229,7 +229,7 @@ async fn record_offline_payment_rejects_duplicate_external_ref() {
     let err = client
         .record_offline_payment(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             30000,
             "INR",
@@ -254,7 +254,7 @@ async fn record_offline_payment_rejects_zero_amount() {
     let err = client
         .record_offline_payment(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             0,
             "INR",

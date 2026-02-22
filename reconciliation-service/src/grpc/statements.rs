@@ -1,6 +1,5 @@
 //! Statement import and management gRPC handlers.
 
-use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::proto::*;
 use crate::services::Database;
 use std::sync::Arc;
@@ -8,12 +7,10 @@ use tonic::{Request, Response, Status};
 
 pub async fn import_statement(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ImportStatementRequest>,
 ) -> Result<Response<ImportStatementResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_STATEMENT_IMPORT)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     tracing::info!(
@@ -23,7 +20,7 @@ pub async fn import_statement(
     );
 
     let statement = db
-        .create_statement(&_auth.tenant_id, &req.bank_account_id, &req.document_id)
+        .create_statement(&app_id, &req.bank_account_id, &req.document_id)
         .await
         .map_err(|e| {
             Status::internal(format!("Failed to import statement: {}", e))
@@ -38,16 +35,14 @@ pub async fn import_statement(
 
 pub async fn get_statement(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetStatementRequest>,
 ) -> Result<Response<GetStatementResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_STATEMENT_READ)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     let statement = db
-        .get_statement(&_auth.tenant_id, &req.statement_id)
+        .get_statement(&app_id, &req.statement_id)
         .await
         .map_err(|e| Status::internal(format!("Failed to get statement: {}", e)))?
         .ok_or_else(|| Status::not_found("Statement not found"))?;
@@ -59,17 +54,15 @@ pub async fn get_statement(
 
 pub async fn list_statements(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListStatementsRequest>,
 ) -> Result<Response<ListStatementsResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_STATEMENT_READ)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     let (statements, next_token) = db
         .list_statements(
-            &_auth.tenant_id,
+            &app_id,
             &req.bank_account_id,
             req.page_size,
             req.page_token.as_deref(),
@@ -85,17 +78,15 @@ pub async fn list_statements(
 
 pub async fn get_staged_transactions(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetStagedTransactionsRequest>,
 ) -> Result<Response<GetStagedTransactionsResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_STATEMENT_READ)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     let (transactions, next_token) = db
         .get_staged_transactions(
-            &_auth.tenant_id,
+            &app_id,
             &req.statement_id,
             req.page_size,
             req.page_token.as_deref(),
@@ -111,17 +102,15 @@ pub async fn get_staged_transactions(
 
 pub async fn update_staged_transaction(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<UpdateStagedTransactionRequest>,
 ) -> Result<Response<UpdateStagedTransactionResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_STAGED_UPDATE)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     let transaction = db
         .update_staged_transaction(
-            &_auth.tenant_id,
+            &app_id,
             &req.transaction_id,
             req.transaction_date.as_deref(),
             req.description.as_deref(),
@@ -139,16 +128,14 @@ pub async fn update_staged_transaction(
 
 pub async fn commit_statement(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<CommitStatementRequest>,
 ) -> Result<Response<CommitStatementResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_STATEMENT_COMMIT)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     let (statement, count) = db
-        .commit_statement(&_auth.tenant_id, &req.statement_id)
+        .commit_statement(&app_id, &req.statement_id)
         .await
         .map_err(|e| {
             Status::internal(format!("Failed to commit statement: {}", e))
@@ -156,7 +143,7 @@ pub async fn commit_statement(
 
     // Apply matching rules to auto-match transactions
     let auto_matched = db
-        .apply_matching_rules(&_auth.tenant_id, &req.statement_id)
+        .apply_matching_rules(&app_id, &req.statement_id)
         .await
         .unwrap_or_else(|e| {
             tracing::warn!(error = %e, "Failed to apply matching rules");
@@ -178,15 +165,13 @@ pub async fn commit_statement(
 
 pub async fn abandon_statement(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<AbandonStatementRequest>,
 ) -> Result<Response<AbandonStatementResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_STATEMENT_ABANDON)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
-    db.abandon_statement(&_auth.tenant_id, &req.statement_id)
+    db.abandon_statement(&app_id, &req.statement_id)
         .await
         .map_err(|e| Status::internal(format!("Failed to abandon statement: {}", e)))?;
 

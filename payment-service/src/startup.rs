@@ -6,7 +6,7 @@
 use crate::config::Config;
 use crate::grpc::{
     proto::{payment_service_server::PaymentServiceServer, FILE_DESCRIPTOR_SET},
-    CapabilityChecker, PaymentGrpcService,
+    PaymentGrpcService,
 };
 use service_core::grpc::proto::common::app_registry_service_server::AppRegistryServiceServer;
 use crate::services::{PaymentRepository, RazorpayClient};
@@ -29,7 +29,6 @@ pub struct AppState {
     pub signature_config: SignatureConfig,
     pub repository: PaymentRepository,
     pub razorpay: RazorpayClient,
-    pub capability_checker: CapabilityChecker,
 }
 
 /// Health check endpoint for Docker/K8s liveness probes.
@@ -106,18 +105,6 @@ impl Application {
             );
         }
 
-        // Initialize capability checker
-        let capability_checker =
-            CapabilityChecker::new(config.auth.auth_service_endpoint.as_deref())
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to initialize capability checker: {}", e);
-                    AppError::from(std::io::Error::other(format!(
-                        "Capability checker initialization error: {}",
-                        e
-                    )))
-                })?;
-
         let state = AppState {
             db,
             redis,
@@ -125,7 +112,6 @@ impl Application {
             signature_config,
             repository,
             razorpay,
-            capability_checker,
         };
 
         // Bind HTTP listener (port 0 = random port for testing)

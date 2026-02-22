@@ -1,6 +1,5 @@
 //! gRPC handlers for payment link operations.
 
-use crate::grpc::capability_check::{capabilities, CapabilityMetadata};
 use crate::grpc::helpers::{
     check_razorpay_configured, datetime_to_timestamp, extract_tenant_context,
 };
@@ -16,13 +15,6 @@ pub async fn create_payment_link(
     state: &AppState,
     request: Request<CreatePaymentLinkRequest>,
 ) -> Result<Response<CreatePaymentLinkResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_LINK_CREATE)
-            .await?;
-    }
-
     check_razorpay_configured(&state.razorpay)?;
 
     let tenant = extract_tenant_context(&request)?;
@@ -69,7 +61,7 @@ pub async fn create_payment_link(
     let link = models::PaymentLink {
         id: Uuid::new_v4().to_string(),
         app_id: tenant.app_id.clone(),
-        org_id: tenant.org_id.clone(),
+        tenant_id: tenant.tenant_id.clone(),
         razorpay_payment_link_id: rz_response.id,
         amount: req.amount,
         currency: req.currency,
@@ -103,19 +95,12 @@ pub async fn get_payment_link(
     state: &AppState,
     request: Request<GetPaymentLinkRequest>,
 ) -> Result<Response<GetPaymentLinkResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_LINK_READ)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
     let link = state
         .repository
-        .get_payment_link_in_tenant(&tenant.app_id, &tenant.org_id, &req.payment_link_id)
+        .get_payment_link_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.payment_link_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch payment link");
@@ -132,13 +117,6 @@ pub async fn cancel_payment_link(
     state: &AppState,
     request: Request<CancelPaymentLinkRequest>,
 ) -> Result<Response<CancelPaymentLinkResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_LINK_CANCEL)
-            .await?;
-    }
-
     check_razorpay_configured(&state.razorpay)?;
 
     let tenant = extract_tenant_context(&request)?;
@@ -146,7 +124,7 @@ pub async fn cancel_payment_link(
 
     let link = state
         .repository
-        .get_payment_link_in_tenant(&tenant.app_id, &tenant.org_id, &req.payment_link_id)
+        .get_payment_link_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.payment_link_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch payment link");
@@ -186,7 +164,7 @@ pub async fn cancel_payment_link(
 
     let updated = state
         .repository
-        .get_payment_link_in_tenant(&tenant.app_id, &tenant.org_id, &req.payment_link_id)
+        .get_payment_link_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.payment_link_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch payment link");
@@ -203,13 +181,6 @@ pub async fn list_payment_links(
     state: &AppState,
     request: Request<ListPaymentLinksRequest>,
 ) -> Result<Response<ListPaymentLinksResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_LINK_READ)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
@@ -219,7 +190,7 @@ pub async fn list_payment_links(
 
     let (links, total_count) = state
         .repository
-        .list_payment_links_in_tenant(&tenant.app_id, &tenant.org_id, status_filter, limit, offset)
+        .list_payment_links_in_tenant(&tenant.app_id, &tenant.tenant_id, status_filter, limit, offset)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to list payment links");
@@ -236,7 +207,7 @@ fn payment_link_to_proto(l: models::PaymentLink) -> PaymentLink {
     PaymentLink {
         id: l.id,
         app_id: l.app_id,
-        org_id: l.org_id,
+        tenant_id: l.tenant_id,
         razorpay_payment_link_id: l.razorpay_payment_link_id,
         amount: l.amount,
         currency: l.currency,

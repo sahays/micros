@@ -1,4 +1,3 @@
-use crate::grpc::capability_check::capabilities;
 use crate::grpc::notification_service::proto_to_push_platform;
 use crate::grpc::proto::{
     SendEmailRequest, SendEmailResponse, SendPushRequest, SendPushResponse, SendSmsRequest,
@@ -15,12 +14,9 @@ pub async fn send_email(
     state: &AppState,
     request: Request<SendEmailRequest>,
 ) -> Result<Response<SendEmailResponse>, Status> {
-    // Capability check - derive tenant_id from auth context
-    let auth = state
-        .capability_checker
-        .require_capability(&request, capabilities::NOTIFICATION_EMAIL_SEND)
-        .await?;
-    let tenant_id = auth.tenant_id.clone();
+    // Extract tenant context from request metadata
+    let ctx = service_core::grpc::extract_tenant_context(&request)?;
+    let tenant_id = ctx.tenant_id.clone();
 
     let req = request.into_inner();
 
@@ -166,12 +162,9 @@ pub async fn send_sms(
     state: &AppState,
     request: Request<SendSmsRequest>,
 ) -> Result<Response<SendSmsResponse>, Status> {
-    // Capability check - derive tenant_id from auth context
-    let auth = state
-        .capability_checker
-        .require_capability(&request, capabilities::NOTIFICATION_SMS_SEND)
-        .await?;
-    let tenant_id = auth.tenant_id.clone();
+    // Extract tenant context from request metadata
+    let ctx = service_core::grpc::extract_tenant_context(&request)?;
+    let tenant_id = ctx.tenant_id.clone();
 
     let req = request.into_inner();
 
@@ -280,12 +273,9 @@ pub async fn send_push(
     state: &AppState,
     request: Request<SendPushRequest>,
 ) -> Result<Response<SendPushResponse>, Status> {
-    // Capability check - derive tenant_id from auth context
-    let auth = state
-        .capability_checker
-        .require_capability(&request, capabilities::NOTIFICATION_PUSH_SEND)
-        .await?;
-    let tenant_id = auth.tenant_id.clone();
+    // Extract tenant context from request metadata
+    let ctx = service_core::grpc::extract_tenant_context(&request)?;
+    let tenant_id = ctx.tenant_id.clone();
 
     let req = request.into_inner();
 

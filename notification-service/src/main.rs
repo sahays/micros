@@ -2,7 +2,7 @@ use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::ge
 use notification_service::config::NotificationConfig;
 use notification_service::grpc::{
     proto::{notification_service_server::NotificationServiceServer, FILE_DESCRIPTOR_SET},
-    CapabilityChecker, NotificationGrpcService,
+    NotificationGrpcService,
 };
 use service_core::grpc::proto::common::app_registry_service_server::AppRegistryServiceServer;
 use notification_service::services::{
@@ -137,21 +137,12 @@ async fn main() -> std::io::Result<()> {
         Arc::new(MockPushProvider::new(true))
     };
 
-    // Initialize capability checker
-    let capability_checker = CapabilityChecker::new(config.auth.auth_service_endpoint.as_deref())
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to initialize capability checker: {}", e);
-            std::io::Error::other(format!("Capability checker initialization error: {}", e))
-        })?;
-
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
         email_provider,
         sms_provider,
         push_provider,
-        capability_checker,
     };
 
     let health_state = HealthState { db };

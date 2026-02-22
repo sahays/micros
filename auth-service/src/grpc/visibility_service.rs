@@ -1,6 +1,6 @@
 //! gRPC implementation of VisibilityService.
 
-use crate::grpc::capability_check::require_capability;
+use crate::grpc::capability_check::extract_auth_context;
 use crate::grpc::proto::auth::{
     visibility_service_server::VisibilityService, CreateVisibilityGrantRequest,
     CreateVisibilityGrantResponse, ListUserVisibilityGrantsRequest,
@@ -40,8 +40,7 @@ impl VisibilityService for VisibilityServiceImpl {
         &self,
         request: Request<CreateVisibilityGrantRequest>,
     ) -> Result<Response<CreateVisibilityGrantResponse>, Status> {
-        // Require visibility:grant capability
-        let _auth = require_capability(&self.state, &request, "visibility:grant").await?;
+        let _auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 
@@ -128,8 +127,7 @@ impl VisibilityService for VisibilityServiceImpl {
         &self,
         request: Request<RevokeVisibilityGrantRequest>,
     ) -> Result<Response<RevokeVisibilityGrantResponse>, Status> {
-        // Require visibility:revoke capability
-        let _auth = require_capability(&self.state, &request, "visibility:revoke").await?;
+        let _auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 
@@ -159,8 +157,7 @@ impl VisibilityService for VisibilityServiceImpl {
         &self,
         request: Request<ListUserVisibilityGrantsRequest>,
     ) -> Result<Response<ListUserVisibilityGrantsResponse>, Status> {
-        // Require visibility:read capability
-        let _auth = require_capability(&self.state, &request, "visibility:read").await?;
+        let _auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 

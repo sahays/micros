@@ -1,6 +1,5 @@
 //! gRPC handlers for session and usage operations.
 
-use crate::grpc::capability_check::capabilities;
 use crate::grpc::helpers::{session_message_to_proto, session_to_proto};
 use crate::grpc::proto::{
     CreateSessionRequest, CreateSessionResponse, DeleteSessionRequest, DeleteSessionResponse,
@@ -9,6 +8,7 @@ use crate::grpc::proto::{
 };
 use crate::models::{Session, SessionDocument};
 use crate::startup::AppState;
+use service_core::grpc::extract_tenant_context;
 use std::time::Instant;
 use tonic::{Request, Response, Status};
 
@@ -19,16 +19,13 @@ pub async fn create_session(
 ) -> Result<Response<CreateSessionResponse>, Status> {
     let start = Instant::now();
 
-    let auth = state
-        .capability_checker
-        .require_capability(&request, capabilities::GENAI_SESSION_CREATE)
-        .await?;
+    let ctx = extract_tenant_context(&request)?;
 
     let req = request.into_inner();
 
     let span = tracing::Span::current();
-    span.record("tenant_id", &auth.tenant_id);
-    span.record("user_id", &auth.user_id);
+    span.record("tenant_id", &ctx.app_id);
+    span.record("user_id", &ctx.user_id);
 
     let documents: Vec<SessionDocument> = req
         .documents
@@ -43,8 +40,8 @@ pub async fn create_session(
         .collect();
 
     let session = Session::new(
-        auth.tenant_id.clone(),
-        auth.user_id.clone(),
+        ctx.app_id.clone(),
+        ctx.user_id.clone(),
         req.title,
         req.system_prompt,
         documents,
@@ -78,10 +75,7 @@ pub async fn get_session(
 ) -> Result<Response<GetSessionResponse>, Status> {
     let start = Instant::now();
 
-    let auth = state
-        .capability_checker
-        .require_capability(&request, capabilities::GENAI_SESSION_READ)
-        .await?;
+    let ctx = extract_tenant_context(&request)?;
 
     let req = request.into_inner();
 
@@ -97,7 +91,7 @@ pub async fn get_session(
 
     let session = match state
         .db
-        .find_session(&auth.tenant_id, &req.session_id)
+        .find_session(&ctx.app_id, &req.session_id)
         .await
     {
         Ok(Some(s)) => s,
@@ -145,10 +139,7 @@ pub async fn delete_session(
 ) -> Result<Response<DeleteSessionResponse>, Status> {
     let start = Instant::now();
 
-    let auth = state
-        .capability_checker
-        .require_capability(&request, capabilities::GENAI_SESSION_DELETE)
-        .await?;
+    let ctx = extract_tenant_context(&request)?;
 
     let req = request.into_inner();
 
@@ -164,7 +155,7 @@ pub async fn delete_session(
 
     let success = match state
         .db
-        .delete_session(&auth.tenant_id, &req.session_id)
+        .delete_session(&ctx.app_id, &req.session_id)
         .await
     {
         Ok(deleted) => deleted,
@@ -196,15 +187,12 @@ pub async fn get_usage(
 ) -> Result<Response<GetUsageResponse>, Status> {
     let start = Instant::now();
 
-    let auth = state
-        .capability_checker
-        .require_capability(&request, capabilities::GENAI_USAGE_READ)
-        .await?;
+    let ctx = extract_tenant_context(&request)?;
 
     let req = request.into_inner();
 
     let span = tracing::Span::current();
-    span.record("tenant_id", &auth.tenant_id);
+    span.record("tenant_id", &ctx.app_id);
     if let Some(ref uid) = req.user_id {
         span.record("user_id", uid);
     }
@@ -236,7 +224,7 @@ pub async fn get_usage(
     let records = match state
         .db
         .get_usage(
-            &auth.tenant_id,
+            &ctx.app_id,
             req.user_id.as_deref(),
             start_time,
             end_time,
@@ -287,10 +275,7 @@ pub async fn list_models(
 ) -> Result<Response<ListModelsResponse>, Status> {
     let start = Instant::now();
 
-    let _auth = state
-        .capability_checker
-        .require_capability(&request, capabilities::GENAI_MODELS_READ)
-        .await?;
+    let _ctx = extract_tenant_context(&request)?;
 
     tracing::debug!("Listing available models");
 

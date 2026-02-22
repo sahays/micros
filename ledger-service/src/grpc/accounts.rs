@@ -1,11 +1,10 @@
 //! gRPC handlers for account operations.
 
-use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::proto::{
     AccountType as ProtoAccountType, CreateAccountRequest, CreateAccountResponse,
     GetAccountRequest, GetAccountResponse, ListAccountsRequest, ListAccountsResponse,
 };
-use crate::grpc::service::{account_to_proto, parse_tenant_id};
+use crate::grpc::service::account_to_proto;
 use crate::models::{AccountType, CreateAccount};
 use crate::services::Database;
 use rust_decimal::Decimal;
@@ -15,18 +14,14 @@ use tracing::{info, instrument, warn};
 use uuid::Uuid;
 
 #[instrument(
-    skip(db, capability_checker, request),
+    skip(db, request),
     fields(service = "ledger-service", method = "CreateAccount")
 )]
 pub async fn create_account(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<CreateAccountRequest>,
 ) -> Result<Response<CreateAccountResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::LEDGER_ACCOUNT_CREATE)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
 
@@ -83,18 +78,14 @@ pub async fn create_account(
 }
 
 #[instrument(
-    skip(db, capability_checker, request),
+    skip(db, request),
     fields(service = "ledger-service", method = "GetAccount")
 )]
 pub async fn get_account(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetAccountRequest>,
 ) -> Result<Response<GetAccountResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::LEDGER_ACCOUNT_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
 
@@ -123,18 +114,14 @@ pub async fn get_account(
 }
 
 #[instrument(
-    skip(db, capability_checker, request),
+    skip(db, request),
     fields(service = "ledger-service", method = "ListAccounts")
 )]
 pub async fn list_accounts(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListAccountsRequest>,
 ) -> Result<Response<ListAccountsResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::LEDGER_ACCOUNT_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
 

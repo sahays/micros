@@ -315,8 +315,6 @@ services:
       - RUST_LOG=${RUST_LOG:-billing_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
       # Invoicing Service Integration (gRPC)
       - INVOICING_SERVICE_URL=${INVOICING_SERVICE_URL:-http://invoicing-service:8081}
-      # Auth Service Integration
-      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
     logging:
       driver: "json-file"
       options:
@@ -359,8 +357,6 @@ services:
       - GENAI_SERVICE_URL=${GENAI_SERVICE_URL:-http://genai-service:8081}
       # Document Service Integration (gRPC)
       - DOCUMENT_SERVICE_URL=${DOCUMENT_SERVICE_URL:-http://document-service:8081}
-      # Auth Service Integration
-      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
     logging:
       driver: "json-file"
       options:
@@ -397,8 +393,6 @@ services:
       - DATABASE_MIN_CONNECTIONS=${LEDGER_DATABASE_MIN_CONNECTIONS:-2}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - RUST_LOG=${RUST_LOG:-ledger_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
-      # Auth Service Integration
-      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
     logging:
       driver: "json-file"
       options:
@@ -435,8 +429,6 @@ services:
       - DATABASE_MIN_CONNECTIONS=${INVOICING_DATABASE_MIN_CONNECTIONS:-2}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - RUST_LOG=${RUST_LOG:-invoicing_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
-      # Auth Service Integration
-      - AUTH_SERVICE_URL=${AUTH_SERVICE_URL:-http://auth-service:3001}
     logging:
       driver: "json-file"
       options:

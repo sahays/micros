@@ -1,6 +1,5 @@
 //! gRPC handlers for refund operations.
 
-use crate::grpc::capability_check::{capabilities, CapabilityMetadata};
 use crate::grpc::helpers::{
     check_razorpay_configured, datetime_to_timestamp, extract_tenant_context,
 };
@@ -16,13 +15,6 @@ pub async fn initiate_refund(
     state: &AppState,
     request: Request<InitiateRefundRequest>,
 ) -> Result<Response<InitiateRefundResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_REFUND_CREATE)
-            .await?;
-    }
-
     check_razorpay_configured(&state.razorpay)?;
 
     let tenant = extract_tenant_context(&request)?;
@@ -31,7 +23,7 @@ pub async fn initiate_refund(
     // Validate payment exists and is completed
     let payment = state
         .repository
-        .get_transaction_in_tenant(&tenant.app_id, &tenant.org_id, &req.payment_id)
+        .get_transaction_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.payment_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch payment");
@@ -51,7 +43,7 @@ pub async fn initiate_refund(
     let payment_amount_paise = payment.amount_paise;
     let prior_refunds = state
         .repository
-        .sum_refunds_for_payment(&tenant.app_id, &tenant.org_id, &req.payment_id)
+        .sum_refunds_for_payment(&tenant.app_id, &tenant.tenant_id, &req.payment_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to sum prior refunds");
@@ -115,7 +107,7 @@ pub async fn initiate_refund(
     let refund = models::Refund {
         id: Uuid::new_v4().to_string(),
         app_id: tenant.app_id.clone(),
-        org_id: tenant.org_id.clone(),
+        tenant_id: tenant.tenant_id.clone(),
         razorpay_refund_id: rz_response.id,
         payment_id: req.payment_id.clone(),
         amount: refund_amount,
@@ -147,7 +139,7 @@ pub async fn initiate_refund(
         .repository
         .update_transaction_status_in_tenant(
             &tenant.app_id,
-            &tenant.org_id,
+            &tenant.tenant_id,
             &req.payment_id,
             new_tx_status,
         )
@@ -166,19 +158,12 @@ pub async fn get_refund(
     state: &AppState,
     request: Request<GetRefundRequest>,
 ) -> Result<Response<GetRefundResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_REFUND_READ)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
     let refund = state
         .repository
-        .get_refund_in_tenant(&tenant.app_id, &tenant.org_id, &req.refund_id)
+        .get_refund_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.refund_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch refund");
@@ -195,13 +180,6 @@ pub async fn list_refunds(
     state: &AppState,
     request: Request<ListRefundsRequest>,
 ) -> Result<Response<ListRefundsResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_REFUND_READ)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
@@ -213,7 +191,7 @@ pub async fn list_refunds(
         .repository
         .list_refunds_in_tenant(
             &tenant.app_id,
-            &tenant.org_id,
+            &tenant.tenant_id,
             req.payment_id.as_deref(),
             status_filter,
             limit,
@@ -235,7 +213,7 @@ fn refund_to_proto(r: models::Refund) -> Refund {
     Refund {
         id: r.id,
         app_id: r.app_id,
-        org_id: r.org_id,
+        tenant_id: r.tenant_id,
         razorpay_refund_id: r.razorpay_refund_id,
         payment_id: r.payment_id,
         amount: r.amount,

@@ -86,7 +86,7 @@ pub async fn create_order(
 ) -> Result<(StatusCode, Json<CreateOrderResponse>), AppError> {
     tracing::info!(
         app_id = %tenant.app_id,
-        org_id = %tenant.org_id,
+        tenant_id = %tenant.tenant_id,
         amount = payload.amount,
         currency = %payload.currency,
         "Creating Razorpay order"
@@ -119,7 +119,7 @@ pub async fn create_order(
     let transaction = Transaction {
         id: Uuid::new_v4(),
         app_id: tenant.app_id.clone(),
-        org_id: tenant.org_id.clone(),
+        tenant_id: tenant.tenant_id.clone(),
         user_id: tenant.user_id.clone(),
         amount_paise: payload.amount,
         currency: payload.currency.clone(),
@@ -169,14 +169,14 @@ pub async fn verify_payment(
         razorpay_order_id = %payload.razorpay_order_id,
         razorpay_payment_id = %payload.razorpay_payment_id,
         app_id = %tenant.app_id,
-        org_id = %tenant.org_id,
+        tenant_id = %tenant.tenant_id,
         "Verifying Razorpay payment"
     );
 
     // Fetch transaction within tenant scope
     let transaction = state
         .repository
-        .get_transaction_in_tenant(&tenant.app_id, &tenant.org_id, payload.transaction_id)
+        .get_transaction_in_tenant(&tenant.app_id, &tenant.tenant_id, payload.transaction_id)
         .await?
         .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Transaction not found")))?;
 
@@ -225,7 +225,7 @@ pub async fn verify_payment(
         .repository
         .update_transaction_status_in_tenant(
             &tenant.app_id,
-            &tenant.org_id,
+            &tenant.tenant_id,
             payload.transaction_id,
             new_status.clone(),
         )
@@ -423,7 +423,7 @@ pub async fn get_transaction(
 ) -> Result<Json<TransactionResponse>, AppError> {
     let transaction = state
         .repository
-        .get_transaction_in_tenant(&tenant.app_id, &tenant.org_id, transaction_id)
+        .get_transaction_in_tenant(&tenant.app_id, &tenant.tenant_id, transaction_id)
         .await?
         .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Transaction not found")))?;
 

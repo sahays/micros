@@ -181,8 +181,8 @@ message Document {
   string id = 1;
   // Application ID.
   string app_id = 2;
-  // Organization ID.
-  string org_id = 3;
+  // Tenant ID.
+  string tenant_id = 3;
   // Owner user ID.
   string owner_id = 4;
   // Original filename.

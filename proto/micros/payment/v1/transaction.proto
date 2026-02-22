@@ -44,8 +44,8 @@ message Transaction {
   // Application ID (tenant).
   string app_id = 2;
 
-  // Organization ID within the application.
-  string org_id = 3;
+  // Tenant ID within the application.
+  string tenant_id = 3;
 
   // User who initiated this transaction (optional).
   optional string user_id = 4;

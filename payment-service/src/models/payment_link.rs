@@ -6,7 +6,7 @@ pub struct PaymentLink {
     #[serde(rename = "_id")]
     pub id: String,
     pub app_id: String,
-    pub org_id: String,
+    pub tenant_id: String,
     pub razorpay_payment_link_id: String,
     pub amount: u64,
     pub currency: String,

@@ -13,13 +13,13 @@ impl PaymentRepository {
     pub async fn get_transfer_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         id: &str,
     ) -> Result<Option<Transfer>> {
         let filter = doc! {
             "_id": id,
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
         Ok(self.transfer_collection.find_one(filter, None).await?)
     }
@@ -53,14 +53,14 @@ impl PaymentRepository {
     pub async fn update_transfer_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         id: &str,
         update: mongodb::bson::Document,
     ) -> Result<()> {
         let filter = doc! {
             "_id": id,
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
         self.transfer_collection
             .update_one(filter, doc! { "$set": update }, None)
@@ -72,7 +72,7 @@ impl PaymentRepository {
     pub async fn list_transfers_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         linked_account_id: Option<&str>,
         payment_id: Option<&str>,
         status_filter: Option<TransferStatus>,
@@ -84,7 +84,7 @@ impl PaymentRepository {
 
         let mut filter = doc! {
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
 
         if let Some(la_id) = linked_account_id {

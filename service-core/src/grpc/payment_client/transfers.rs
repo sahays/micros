@@ -17,7 +17,7 @@ impl PaymentClient {
     pub async fn create_transfer_from_payment(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         payment_id: &str,
         linked_account_id: &str,
@@ -35,7 +35,7 @@ impl PaymentClient {
             on_hold_until,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.create_transfer_from_payment(request).await?;
 
         response
@@ -49,7 +49,7 @@ impl PaymentClient {
     pub async fn create_transfer_from_order(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         order_id: &str,
         linked_account_id: &str,
@@ -65,7 +65,7 @@ impl PaymentClient {
             on_hold,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.create_transfer_from_order(request).await?;
 
         response
@@ -78,7 +78,7 @@ impl PaymentClient {
     pub async fn create_direct_transfer(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         linked_account_id: &str,
         amount: u64,
@@ -90,7 +90,7 @@ impl PaymentClient {
             currency: currency.to_string(),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.create_direct_transfer(request).await?;
 
         response
@@ -103,7 +103,7 @@ impl PaymentClient {
     pub async fn reverse_transfer(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         transfer_id: &str,
         amount: u64,
@@ -113,7 +113,7 @@ impl PaymentClient {
             amount,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.reverse_transfer(request).await?;
 
         response
@@ -126,7 +126,7 @@ impl PaymentClient {
     pub async fn get_transfer(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         transfer_id: &str,
     ) -> Result<Transfer, tonic::Status> {
@@ -134,7 +134,7 @@ impl PaymentClient {
             transfer_id: transfer_id.to_string(),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.get_transfer(request).await?;
 
         response
@@ -148,7 +148,7 @@ impl PaymentClient {
     pub async fn list_transfers(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         linked_account_id: Option<String>,
         payment_id: Option<String>,
@@ -164,7 +164,7 @@ impl PaymentClient {
             offset,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.list_transfers(request).await?;
         let inner = response.into_inner();
 
@@ -175,7 +175,7 @@ impl PaymentClient {
     pub async fn hold_transfer_settlement(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         transfer_id: &str,
         on_hold_until: Option<prost_types::Timestamp>,
@@ -185,7 +185,7 @@ impl PaymentClient {
             on_hold_until,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.hold_transfer_settlement(request).await?;
 
         response
@@ -198,7 +198,7 @@ impl PaymentClient {
     pub async fn release_transfer_settlement(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         transfer_id: &str,
     ) -> Result<Transfer, tonic::Status> {
@@ -206,7 +206,7 @@ impl PaymentClient {
             transfer_id: transfer_id.to_string(),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.release_transfer_settlement(request).await?;
 
         response
@@ -219,7 +219,7 @@ impl PaymentClient {
     pub async fn request_on_demand_settlement(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         linked_account_id: Option<String>,
         amount: u64,
@@ -231,7 +231,7 @@ impl PaymentClient {
             currency: currency.to_string(),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.request_on_demand_settlement(request).await?;
 
         response
@@ -244,7 +244,7 @@ impl PaymentClient {
     pub async fn get_settlement(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         settlement_id: &str,
     ) -> Result<Settlement, tonic::Status> {
@@ -252,7 +252,7 @@ impl PaymentClient {
             settlement_id: settlement_id.to_string(),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.get_settlement(request).await?;
 
         response
@@ -266,7 +266,7 @@ impl PaymentClient {
     pub async fn list_settlements(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         linked_account_id: Option<String>,
         status: Option<SettlementStatus>,
@@ -282,7 +282,7 @@ impl PaymentClient {
             offset,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.list_settlements(request).await?;
         let inner = response.into_inner();
 

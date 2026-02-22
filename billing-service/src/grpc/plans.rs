@@ -1,6 +1,5 @@
 //! Plan management gRPC handlers.
 
-use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::helpers::*;
 use crate::grpc::proto::*;
 use crate::models::BillingInterval;
@@ -11,13 +10,9 @@ use tonic::{Request, Response, Status};
 
 pub async fn create_plan(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<CreatePlanRequest>,
 ) -> Result<Response<CreatePlanResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_PLAN_CREATE)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     tracing::info!(tenant_id = %tenant_id, name = %req.name, "Creating plan");
@@ -83,13 +78,9 @@ pub async fn create_plan(
 
 pub async fn get_plan(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetPlanRequest>,
 ) -> Result<Response<GetPlanResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_PLAN_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let plan_id = parse_uuid(&req.plan_id)?;
@@ -116,13 +107,9 @@ pub async fn get_plan(
 
 pub async fn update_plan(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<UpdatePlanRequest>,
 ) -> Result<Response<UpdatePlanResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_PLAN_UPDATE)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let plan_id = parse_uuid(&req.plan_id)?;
@@ -179,13 +166,9 @@ pub async fn update_plan(
 
 pub async fn list_plans(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListPlansRequest>,
 ) -> Result<Response<ListPlansResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_PLAN_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     tracing::debug!(tenant_id = %tenant_id, "Listing plans");
@@ -226,13 +209,9 @@ pub async fn list_plans(
 
 pub async fn archive_plan(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ArchivePlanRequest>,
 ) -> Result<Response<ArchivePlanResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_PLAN_UPDATE)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let plan_id = parse_uuid(&req.plan_id)?;

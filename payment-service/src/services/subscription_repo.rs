@@ -14,13 +14,13 @@ impl PaymentRepository {
     pub async fn get_plan_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         id: &str,
     ) -> Result<Option<RazorpayPlan>> {
         let filter = doc! {
             "_id": id,
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
         Ok(self.plan_collection.find_one(filter, None).await?)
     }
@@ -28,7 +28,7 @@ impl PaymentRepository {
     pub async fn list_plans_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         limit: i64,
         offset: u64,
     ) -> Result<(Vec<RazorpayPlan>, i64)> {
@@ -37,7 +37,7 @@ impl PaymentRepository {
 
         let filter = doc! {
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
 
         let total_count = self
@@ -70,13 +70,13 @@ impl PaymentRepository {
     pub async fn get_subscription_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         id: &str,
     ) -> Result<Option<RazorpaySubscription>> {
         let filter = doc! {
             "_id": id,
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
         Ok(self.subscription_collection.find_one(filter, None).await?)
     }
@@ -110,14 +110,14 @@ impl PaymentRepository {
     pub async fn update_subscription_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         id: &str,
         update: mongodb::bson::Document,
     ) -> Result<()> {
         let filter = doc! {
             "_id": id,
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
         self.subscription_collection
             .update_one(filter, doc! { "$set": update }, None)
@@ -144,7 +144,7 @@ impl PaymentRepository {
     pub async fn list_subscriptions_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         customer_id: Option<&str>,
         plan_id: Option<&str>,
         status_filter: Option<SubscriptionStatus>,
@@ -156,7 +156,7 @@ impl PaymentRepository {
 
         let mut filter = doc! {
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
 
         if let Some(cid) = customer_id {

@@ -29,7 +29,6 @@ COPY notification-service ./notification-service
 COPY payment-service ./payment-service
 COPY reconciliation-service ./reconciliation-service
 COPY service-core ./service-core
-COPY workflow-tests ./workflow-tests
 COPY proto ./proto
 RUN cargo chef prepare --recipe-path recipe.json
 
@@ -52,7 +51,6 @@ COPY notification-service ./notification-service
 COPY payment-service ./payment-service
 COPY reconciliation-service ./reconciliation-service
 COPY service-core ./service-core
-COPY workflow-tests ./workflow-tests
 COPY proto ./proto
 
 # Build all service binaries in one compilation

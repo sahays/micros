@@ -1,6 +1,5 @@
 //! gRPC module for invoicing-service.
 
-pub mod capability_check;
 pub mod helpers;
 mod invoice_lifecycle;
 mod invoices;

@@ -20,7 +20,7 @@ use uuid::Uuid;
 pub struct ProcessingJob {
     pub document_id: String,
     pub app_id: String,
-    pub org_id: String,
+    pub tenant_id: String,
     pub owner_id: String,
     pub mime_type: String,
     pub storage_key: String,
@@ -244,7 +244,7 @@ impl Worker {
         // We create a placeholder document just for the processor interface
         let document = Document::new(
             job.app_id.clone(),
-            job.org_id.clone(),
+            job.tenant_id.clone(),
             job.owner_id.clone(),
             "temp".to_string(),
             job.mime_type.clone(),

@@ -24,18 +24,18 @@ pub fn extract_tenant_context(
         .map(String::from)
         .ok_or_else(|| Status::unauthenticated("Missing x-app-id header"))?;
 
-    let org_id = metadata
-        .get("x-org-id")
+    let tenant_id = metadata
+        .get("x-tenant-id")
         .and_then(|v| v.to_str().ok())
         .map(String::from)
-        .ok_or_else(|| Status::unauthenticated("Missing x-org-id header"))?;
+        .ok_or_else(|| Status::unauthenticated("Missing x-tenant-id header"))?;
 
     let user_id = metadata
         .get("x-user-id")
         .and_then(|v| v.to_str().ok())
         .map(String::from);
 
-    Ok(TenantContext::new(app_id, org_id, user_id))
+    Ok(TenantContext::new(app_id, tenant_id, user_id))
 }
 
 /// Convert MongoDB DateTime to protobuf Timestamp.
@@ -52,7 +52,7 @@ pub fn transaction_to_proto(t: Transaction) -> ProtoTransaction {
     ProtoTransaction {
         id: t.id.to_string(),
         app_id: t.app_id,
-        org_id: t.org_id,
+        tenant_id: t.tenant_id,
         user_id: t.user_id,
         amount_paise: t.amount_paise,
         currency: t.currency,

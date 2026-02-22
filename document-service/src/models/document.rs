@@ -24,8 +24,8 @@ pub struct Document {
     pub id: String,
     /// Application ID (maps to registered client in auth-service)
     pub app_id: String,
-    /// Organization ID within the application
-    pub org_id: String,
+    /// Tenant ID within the application (org/club/school)
+    pub tenant_id: String,
     /// User who owns this document
     pub owner_id: String,
     pub original_name: String,
@@ -44,7 +44,7 @@ pub struct Document {
 impl Document {
     pub fn new(
         app_id: String,
-        org_id: String,
+        tenant_id: String,
         owner_id: String,
         original_name: String,
         mime_type: String,
@@ -55,7 +55,7 @@ impl Document {
         Self {
             id: Uuid::new_v4().to_string(),
             app_id,
-            org_id,
+            tenant_id,
             owner_id,
             original_name,
             mime_type,

@@ -1,6 +1,5 @@
 //! BillingService gRPC implementation.
 
-use crate::grpc::capability_check::CapabilityChecker;
 use crate::grpc::proto::billing_service_server::BillingService;
 use crate::grpc::proto::*;
 use crate::services::Database;
@@ -12,16 +11,12 @@ use crate::grpc::{billing_cycles, billing_runs, charges, plans, subscriptions, u
 /// BillingService implementation.
 pub struct BillingServiceImpl {
     db: Arc<Database>,
-    capability_checker: Arc<CapabilityChecker>,
 }
 
 impl BillingServiceImpl {
     /// Create a new BillingServiceImpl.
-    pub fn new(db: Arc<Database>, capability_checker: Arc<CapabilityChecker>) -> Self {
-        Self {
-            db,
-            capability_checker,
-        }
+    pub fn new(db: Arc<Database>) -> Self {
+        Self { db }
     }
 }
 
@@ -36,7 +31,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<CreatePlanRequest>,
     ) -> Result<Response<CreatePlanResponse>, Status> {
-        plans::create_plan(&self.db, &self.capability_checker, request).await
+        plans::create_plan(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "GetPlan"))]
@@ -44,7 +39,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<GetPlanRequest>,
     ) -> Result<Response<GetPlanResponse>, Status> {
-        plans::get_plan(&self.db, &self.capability_checker, request).await
+        plans::get_plan(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "UpdatePlan"))]
@@ -52,7 +47,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<UpdatePlanRequest>,
     ) -> Result<Response<UpdatePlanResponse>, Status> {
-        plans::update_plan(&self.db, &self.capability_checker, request).await
+        plans::update_plan(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "ListPlans"))]
@@ -60,7 +55,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<ListPlansRequest>,
     ) -> Result<Response<ListPlansResponse>, Status> {
-        plans::list_plans(&self.db, &self.capability_checker, request).await
+        plans::list_plans(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "ArchivePlan"))]
@@ -68,7 +63,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<ArchivePlanRequest>,
     ) -> Result<Response<ArchivePlanResponse>, Status> {
-        plans::archive_plan(&self.db, &self.capability_checker, request).await
+        plans::archive_plan(&self.db, request).await
     }
 
     // =========================================================================
@@ -80,7 +75,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<CreateSubscriptionRequest>,
     ) -> Result<Response<CreateSubscriptionResponse>, Status> {
-        subscriptions::create_subscription(&self.db, &self.capability_checker, request).await
+        subscriptions::create_subscription(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "GetSubscription"))]
@@ -88,7 +83,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<GetSubscriptionRequest>,
     ) -> Result<Response<GetSubscriptionResponse>, Status> {
-        subscriptions::get_subscription(&self.db, &self.capability_checker, request).await
+        subscriptions::get_subscription(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "ListSubscriptions"))]
@@ -96,7 +91,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<ListSubscriptionsRequest>,
     ) -> Result<Response<ListSubscriptionsResponse>, Status> {
-        subscriptions::list_subscriptions(&self.db, &self.capability_checker, request).await
+        subscriptions::list_subscriptions(&self.db, request).await
     }
 
     // =========================================================================
@@ -108,7 +103,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<ActivateSubscriptionRequest>,
     ) -> Result<Response<ActivateSubscriptionResponse>, Status> {
-        subscriptions::activate_subscription(&self.db, &self.capability_checker, request).await
+        subscriptions::activate_subscription(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "PauseSubscription"))]
@@ -116,7 +111,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<PauseSubscriptionRequest>,
     ) -> Result<Response<PauseSubscriptionResponse>, Status> {
-        subscriptions::pause_subscription(&self.db, &self.capability_checker, request).await
+        subscriptions::pause_subscription(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "ResumeSubscription"))]
@@ -124,7 +119,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<ResumeSubscriptionRequest>,
     ) -> Result<Response<ResumeSubscriptionResponse>, Status> {
-        subscriptions::resume_subscription(&self.db, &self.capability_checker, request).await
+        subscriptions::resume_subscription(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "CancelSubscription"))]
@@ -132,7 +127,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<CancelSubscriptionRequest>,
     ) -> Result<Response<CancelSubscriptionResponse>, Status> {
-        subscriptions::cancel_subscription(&self.db, &self.capability_checker, request).await
+        subscriptions::cancel_subscription(&self.db, request).await
     }
 
     // =========================================================================
@@ -144,7 +139,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<ChangePlanRequest>,
     ) -> Result<Response<ChangePlanResponse>, Status> {
-        subscriptions::change_plan(&self.db, &self.capability_checker, request).await
+        subscriptions::change_plan(&self.db, request).await
     }
 
     // =========================================================================
@@ -156,7 +151,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<RecordUsageRequest>,
     ) -> Result<Response<RecordUsageResponse>, Status> {
-        usage::record_usage(&self.db, &self.capability_checker, request).await
+        usage::record_usage(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "GetUsage"))]
@@ -164,7 +159,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<GetUsageRequest>,
     ) -> Result<Response<GetUsageResponse>, Status> {
-        usage::get_usage(&self.db, &self.capability_checker, request).await
+        usage::get_usage(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "ListUsage"))]
@@ -172,7 +167,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<ListUsageRequest>,
     ) -> Result<Response<ListUsageResponse>, Status> {
-        usage::list_usage(&self.db, &self.capability_checker, request).await
+        usage::list_usage(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "GetUsageSummary"))]
@@ -180,7 +175,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<GetUsageSummaryRequest>,
     ) -> Result<Response<GetUsageSummaryResponse>, Status> {
-        usage::get_usage_summary(&self.db, &self.capability_checker, request).await
+        usage::get_usage_summary(&self.db, request).await
     }
 
     // =========================================================================
@@ -192,7 +187,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<GetBillingCycleRequest>,
     ) -> Result<Response<GetBillingCycleResponse>, Status> {
-        billing_cycles::get_billing_cycle(&self.db, &self.capability_checker, request).await
+        billing_cycles::get_billing_cycle(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "ListBillingCycles"))]
@@ -200,7 +195,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<ListBillingCyclesRequest>,
     ) -> Result<Response<ListBillingCyclesResponse>, Status> {
-        billing_cycles::list_billing_cycles(&self.db, &self.capability_checker, request).await
+        billing_cycles::list_billing_cycles(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "AdvanceBillingCycle"))]
@@ -208,7 +203,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<AdvanceBillingCycleRequest>,
     ) -> Result<Response<AdvanceBillingCycleResponse>, Status> {
-        billing_cycles::advance_billing_cycle(&self.db, &self.capability_checker, request).await
+        billing_cycles::advance_billing_cycle(&self.db, request).await
     }
 
     // =========================================================================
@@ -220,7 +215,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<GetChargeRequest>,
     ) -> Result<Response<GetChargeResponse>, Status> {
-        charges::get_charge(&self.db, &self.capability_checker, request).await
+        charges::get_charge(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "ListCharges"))]
@@ -228,7 +223,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<ListChargesRequest>,
     ) -> Result<Response<ListChargesResponse>, Status> {
-        charges::list_charges(&self.db, &self.capability_checker, request).await
+        charges::list_charges(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "CreateOneTimeCharge"))]
@@ -236,7 +231,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<CreateOneTimeChargeRequest>,
     ) -> Result<Response<CreateOneTimeChargeResponse>, Status> {
-        charges::create_one_time_charge(&self.db, &self.capability_checker, request).await
+        charges::create_one_time_charge(&self.db, request).await
     }
 
     // =========================================================================
@@ -248,7 +243,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<RunBillingRequest>,
     ) -> Result<Response<RunBillingResponse>, Status> {
-        billing_runs::run_billing(&self.db, &self.capability_checker, request).await
+        billing_runs::run_billing(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "RunBillingForSubscription"))]
@@ -256,8 +251,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<RunBillingForSubscriptionRequest>,
     ) -> Result<Response<RunBillingForSubscriptionResponse>, Status> {
-        billing_runs::run_billing_for_subscription(&self.db, &self.capability_checker, request)
-            .await
+        billing_runs::run_billing_for_subscription(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "GetBillingRun"))]
@@ -265,7 +259,7 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<GetBillingRunRequest>,
     ) -> Result<Response<GetBillingRunResponse>, Status> {
-        billing_runs::get_billing_run(&self.db, &self.capability_checker, request).await
+        billing_runs::get_billing_run(&self.db, request).await
     }
 
     #[tracing::instrument(skip(self, request), fields(method = "ListBillingRuns"))]
@@ -273,6 +267,6 @@ impl BillingService for BillingServiceImpl {
         &self,
         request: Request<ListBillingRunsRequest>,
     ) -> Result<Response<ListBillingRunsResponse>, Status> {
-        billing_runs::list_billing_runs(&self.db, &self.capability_checker, request).await
+        billing_runs::list_billing_runs(&self.db, request).await
     }
 }

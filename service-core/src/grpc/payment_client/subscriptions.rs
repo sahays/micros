@@ -21,7 +21,7 @@ impl PaymentClient {
     pub async fn create_razorpay_plan(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         name: &str,
         description: &str,
@@ -39,7 +39,7 @@ impl PaymentClient {
             interval,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.create_razorpay_plan(request).await?;
 
         response
@@ -52,7 +52,7 @@ impl PaymentClient {
     pub async fn get_razorpay_plan(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         plan_id: &str,
     ) -> Result<RazorpayPlan, tonic::Status> {
@@ -60,7 +60,7 @@ impl PaymentClient {
             plan_id: plan_id.to_string(),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.get_razorpay_plan(request).await?;
 
         response
@@ -73,14 +73,14 @@ impl PaymentClient {
     pub async fn list_razorpay_plans(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         limit: i32,
         offset: i32,
     ) -> Result<(Vec<RazorpayPlan>, i64), tonic::Status> {
         let request = ListRazorpayPlansRequest { limit, offset };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.list_razorpay_plans(request).await?;
         let inner = response.into_inner();
 
@@ -92,7 +92,7 @@ impl PaymentClient {
     pub async fn create_razorpay_subscription(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         plan_id: &str,
         customer_id: Option<String>,
@@ -106,7 +106,7 @@ impl PaymentClient {
             notes_json,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.create_razorpay_subscription(request).await?;
 
         response
@@ -119,7 +119,7 @@ impl PaymentClient {
     pub async fn get_razorpay_subscription(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         subscription_id: &str,
     ) -> Result<RazorpaySubscription, tonic::Status> {
@@ -127,7 +127,7 @@ impl PaymentClient {
             subscription_id: subscription_id.to_string(),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.get_razorpay_subscription(request).await?;
 
         response
@@ -141,7 +141,7 @@ impl PaymentClient {
     pub async fn list_razorpay_subscriptions(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         customer_id: Option<String>,
         plan_id: Option<String>,
@@ -157,7 +157,7 @@ impl PaymentClient {
             offset,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.list_razorpay_subscriptions(request).await?;
         let inner = response.into_inner();
 
@@ -168,7 +168,7 @@ impl PaymentClient {
     pub async fn pause_razorpay_subscription(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         subscription_id: &str,
     ) -> Result<RazorpaySubscription, tonic::Status> {
@@ -176,7 +176,7 @@ impl PaymentClient {
             subscription_id: subscription_id.to_string(),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.pause_razorpay_subscription(request).await?;
 
         response
@@ -189,7 +189,7 @@ impl PaymentClient {
     pub async fn resume_razorpay_subscription(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         subscription_id: &str,
     ) -> Result<RazorpaySubscription, tonic::Status> {
@@ -197,7 +197,7 @@ impl PaymentClient {
             subscription_id: subscription_id.to_string(),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.resume_razorpay_subscription(request).await?;
 
         response
@@ -210,7 +210,7 @@ impl PaymentClient {
     pub async fn cancel_razorpay_subscription(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         subscription_id: &str,
         cancel_at_cycle_end: bool,
@@ -220,7 +220,7 @@ impl PaymentClient {
             cancel_at_cycle_end,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.cancel_razorpay_subscription(request).await?;
 
         response
@@ -233,7 +233,7 @@ impl PaymentClient {
     pub async fn update_razorpay_subscription(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         subscription_id: &str,
         plan_id: Option<String>,
@@ -245,7 +245,7 @@ impl PaymentClient {
             total_count,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.update_razorpay_subscription(request).await?;
 
         response
@@ -259,7 +259,7 @@ impl PaymentClient {
     pub async fn create_payment_link(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         amount: u64,
         currency: &str,
@@ -279,7 +279,7 @@ impl PaymentClient {
             expire_by_seconds,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.create_payment_link(request).await?;
 
         response
@@ -292,7 +292,7 @@ impl PaymentClient {
     pub async fn get_payment_link(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         payment_link_id: &str,
     ) -> Result<PaymentLink, tonic::Status> {
@@ -300,7 +300,7 @@ impl PaymentClient {
             payment_link_id: payment_link_id.to_string(),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.get_payment_link(request).await?;
 
         response
@@ -313,7 +313,7 @@ impl PaymentClient {
     pub async fn cancel_payment_link(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         payment_link_id: &str,
     ) -> Result<PaymentLink, tonic::Status> {
@@ -321,7 +321,7 @@ impl PaymentClient {
             payment_link_id: payment_link_id.to_string(),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.cancel_payment_link(request).await?;
 
         response
@@ -334,7 +334,7 @@ impl PaymentClient {
     pub async fn list_payment_links(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         status: Option<PaymentLinkStatus>,
         limit: i32,
@@ -346,7 +346,7 @@ impl PaymentClient {
             offset,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.list_payment_links(request).await?;
         let inner = response.into_inner();
 
@@ -358,7 +358,7 @@ impl PaymentClient {
     pub async fn initiate_refund(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         payment_id: &str,
         amount: u64,
@@ -374,7 +374,7 @@ impl PaymentClient {
             reverse_all_transfers,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.initiate_refund(request).await?;
 
         response
@@ -387,7 +387,7 @@ impl PaymentClient {
     pub async fn get_refund(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         refund_id: &str,
     ) -> Result<Refund, tonic::Status> {
@@ -395,7 +395,7 @@ impl PaymentClient {
             refund_id: refund_id.to_string(),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.get_refund(request).await?;
 
         response
@@ -409,7 +409,7 @@ impl PaymentClient {
     pub async fn list_refunds(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         payment_id: Option<String>,
         status: Option<RefundStatus>,
@@ -423,7 +423,7 @@ impl PaymentClient {
             offset,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.list_refunds(request).await?;
         let inner = response.into_inner();
 
@@ -435,7 +435,7 @@ impl PaymentClient {
     pub async fn record_direct_upi_payment(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         amount_paise: u64,
         currency: &str,
@@ -451,7 +451,7 @@ impl PaymentClient {
             notes,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.record_direct_upi_payment(request).await?;
 
         response
@@ -465,7 +465,7 @@ impl PaymentClient {
     pub async fn record_offline_payment(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         amount_paise: u64,
         currency: &str,
@@ -481,7 +481,7 @@ impl PaymentClient {
             notes,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.record_offline_payment(request).await?;
 
         response

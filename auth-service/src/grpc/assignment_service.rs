@@ -1,6 +1,6 @@
 //! gRPC implementation of AssignmentService.
 
-use crate::grpc::capability_check::require_capability;
+use crate::grpc::capability_check::extract_auth_context;
 use crate::grpc::proto::auth::{
     assignment_service_server::AssignmentService, Assignment as ProtoAssignment,
     CreateAssignmentRequest, CreateAssignmentResponse, EndAssignmentRequest, EndAssignmentResponse,
@@ -39,8 +39,7 @@ impl AssignmentService for AssignmentServiceImpl {
         &self,
         request: Request<CreateAssignmentRequest>,
     ) -> Result<Response<CreateAssignmentResponse>, Status> {
-        // Require org.assignment:create capability
-        let _auth = require_capability(&self.state, &request, "org.assignment:create").await?;
+        let _auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 
@@ -124,8 +123,7 @@ impl AssignmentService for AssignmentServiceImpl {
         &self,
         request: Request<EndAssignmentRequest>,
     ) -> Result<Response<EndAssignmentResponse>, Status> {
-        // Require org.assignment:end capability
-        let _auth = require_capability(&self.state, &request, "org.assignment:end").await?;
+        let _auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 
@@ -147,8 +145,7 @@ impl AssignmentService for AssignmentServiceImpl {
         &self,
         request: Request<ListUserAssignmentsRequest>,
     ) -> Result<Response<ListUserAssignmentsResponse>, Status> {
-        // Require org.assignment:read capability
-        let _auth = require_capability(&self.state, &request, "org.assignment:read").await?;
+        let _auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 

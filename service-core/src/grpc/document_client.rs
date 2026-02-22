@@ -71,7 +71,7 @@ impl DocumentClient {
     pub async fn upload_document(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: &str,
         filename: String,
         mime_type: String,
@@ -87,7 +87,7 @@ impl DocumentClient {
             .insert("x-app-id", app_id.parse().unwrap());
         request
             .metadata_mut()
-            .insert("x-org-id", org_id.parse().unwrap());
+            .insert("x-tenant-id", tenant_id.parse().unwrap());
         request
             .metadata_mut()
             .insert("x-user-id", user_id.parse().unwrap());
@@ -104,7 +104,7 @@ impl DocumentClient {
     pub async fn download_document(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: &str,
         document_id: String,
     ) -> Result<(String, String, Vec<u8>), tonic::Status> {
@@ -116,7 +116,7 @@ impl DocumentClient {
             .insert("x-app-id", app_id.parse().unwrap());
         request
             .metadata_mut()
-            .insert("x-org-id", org_id.parse().unwrap());
+            .insert("x-tenant-id", tenant_id.parse().unwrap());
         request
             .metadata_mut()
             .insert("x-user-id", user_id.parse().unwrap());
@@ -135,7 +135,7 @@ impl DocumentClient {
     pub async fn get_document(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: &str,
         document_id: String,
     ) -> Result<GetDocumentResponse, tonic::Status> {
@@ -145,7 +145,7 @@ impl DocumentClient {
             .insert("x-app-id", app_id.parse().unwrap());
         request
             .metadata_mut()
-            .insert("x-org-id", org_id.parse().unwrap());
+            .insert("x-tenant-id", tenant_id.parse().unwrap());
         request
             .metadata_mut()
             .insert("x-user-id", user_id.parse().unwrap());
@@ -159,7 +159,7 @@ impl DocumentClient {
     pub async fn list_documents(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: &str,
         status: Option<i32>,
         mime_type: Option<String>,
@@ -177,7 +177,7 @@ impl DocumentClient {
             .insert("x-app-id", app_id.parse().unwrap());
         request
             .metadata_mut()
-            .insert("x-org-id", org_id.parse().unwrap());
+            .insert("x-tenant-id", tenant_id.parse().unwrap());
         request
             .metadata_mut()
             .insert("x-user-id", user_id.parse().unwrap());
@@ -194,7 +194,7 @@ impl DocumentClient {
     pub async fn delete_document(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: &str,
         document_id: String,
     ) -> Result<DeleteDocumentResponse, tonic::Status> {
@@ -204,7 +204,7 @@ impl DocumentClient {
             .insert("x-app-id", app_id.parse().unwrap());
         request
             .metadata_mut()
-            .insert("x-org-id", org_id.parse().unwrap());
+            .insert("x-tenant-id", tenant_id.parse().unwrap());
         request
             .metadata_mut()
             .insert("x-user-id", user_id.parse().unwrap());
@@ -221,7 +221,7 @@ impl DocumentClient {
     pub async fn process_document(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: &str,
         document_id: String,
         pdf_options: Option<PdfOptions>,
@@ -235,7 +235,7 @@ impl DocumentClient {
             .insert("x-app-id", app_id.parse().unwrap());
         request
             .metadata_mut()
-            .insert("x-org-id", org_id.parse().unwrap());
+            .insert("x-tenant-id", tenant_id.parse().unwrap());
         request
             .metadata_mut()
             .insert("x-user-id", user_id.parse().unwrap());
@@ -248,7 +248,7 @@ impl DocumentClient {
     pub async fn get_processing_status(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: &str,
         document_id: String,
     ) -> Result<GetProcessingStatusResponse, tonic::Status> {
@@ -258,7 +258,7 @@ impl DocumentClient {
             .insert("x-app-id", app_id.parse().unwrap());
         request
             .metadata_mut()
-            .insert("x-org-id", org_id.parse().unwrap());
+            .insert("x-tenant-id", tenant_id.parse().unwrap());
         request
             .metadata_mut()
             .insert("x-user-id", user_id.parse().unwrap());

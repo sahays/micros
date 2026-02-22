@@ -27,8 +27,8 @@ message Refund {
   // Application ID (tenant).
   string app_id = 2;
 
-  // Organization ID within the application.
-  string org_id = 3;
+  // Tenant ID within the application.
+  string tenant_id = 3;
 
   // Razorpay refund ID.
   string razorpay_refund_id = 4;

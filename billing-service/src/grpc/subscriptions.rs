@@ -1,6 +1,5 @@
 //! Subscription management gRPC handlers.
 
-use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::helpers::*;
 use crate::grpc::proto::*;
 use crate::models::{
@@ -15,13 +14,9 @@ use tonic::{Request, Response, Status};
 
 pub async fn create_subscription(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<CreateSubscriptionRequest>,
 ) -> Result<Response<CreateSubscriptionResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_SUBSCRIPTION_CREATE)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     tracing::info!(
@@ -89,13 +84,9 @@ pub async fn create_subscription(
 
 pub async fn get_subscription(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetSubscriptionRequest>,
 ) -> Result<Response<GetSubscriptionResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_SUBSCRIPTION_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let subscription_id = parse_uuid(&req.subscription_id)?;
@@ -143,13 +134,9 @@ pub async fn get_subscription(
 
 pub async fn list_subscriptions(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListSubscriptionsRequest>,
 ) -> Result<Response<ListSubscriptionsResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_SUBSCRIPTION_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     tracing::debug!(tenant_id = %tenant_id, "Listing subscriptions");
@@ -202,13 +189,9 @@ pub async fn list_subscriptions(
 
 pub async fn activate_subscription(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ActivateSubscriptionRequest>,
 ) -> Result<Response<ActivateSubscriptionResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_SUBSCRIPTION_MANAGE)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let subscription_id = parse_uuid(&req.subscription_id)?;
@@ -251,13 +234,9 @@ pub async fn activate_subscription(
 
 pub async fn pause_subscription(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<PauseSubscriptionRequest>,
 ) -> Result<Response<PauseSubscriptionResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_SUBSCRIPTION_MANAGE)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let subscription_id = parse_uuid(&req.subscription_id)?;
@@ -300,13 +279,9 @@ pub async fn pause_subscription(
 
 pub async fn resume_subscription(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ResumeSubscriptionRequest>,
 ) -> Result<Response<ResumeSubscriptionResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_SUBSCRIPTION_MANAGE)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let subscription_id = parse_uuid(&req.subscription_id)?;
@@ -349,13 +324,9 @@ pub async fn resume_subscription(
 
 pub async fn cancel_subscription(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<CancelSubscriptionRequest>,
 ) -> Result<Response<CancelSubscriptionResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_SUBSCRIPTION_MANAGE)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let subscription_id = parse_uuid(&req.subscription_id)?;
@@ -417,13 +388,9 @@ pub async fn cancel_subscription(
 #[allow(clippy::too_many_arguments)]
 pub async fn change_plan(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ChangePlanRequest>,
 ) -> Result<Response<ChangePlanResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_SUBSCRIPTION_CHANGE)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let subscription_id = parse_uuid(&req.subscription_id)?;

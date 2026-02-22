@@ -6,7 +6,7 @@
 use crate::config::NotificationConfig;
 use crate::grpc::{
     proto::{notification_service_server::NotificationServiceServer, FILE_DESCRIPTOR_SET},
-    CapabilityChecker, NotificationGrpcService,
+    NotificationGrpcService,
 };
 use service_core::grpc::proto::common::app_registry_service_server::AppRegistryServiceServer;
 use crate::services::{
@@ -29,7 +29,6 @@ pub struct AppState {
     pub email_provider: Arc<dyn EmailProvider>,
     pub sms_provider: Arc<dyn SmsProvider>,
     pub push_provider: Arc<dyn PushProvider>,
-    pub capability_checker: CapabilityChecker,
 }
 
 /// State for health check endpoints.
@@ -145,25 +144,12 @@ impl Application {
             Arc::new(MockPushProvider::new(true))
         };
 
-        // Initialize capability checker
-        let capability_checker =
-            CapabilityChecker::new(config.auth.auth_service_endpoint.as_deref())
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to initialize capability checker: {}", e);
-                    AppError::from(std::io::Error::other(format!(
-                        "Capability checker initialization error: {}",
-                        e
-                    )))
-                })?;
-
         let state = AppState {
             config: config.clone(),
             db,
             email_provider,
             sms_provider,
             push_provider,
-            capability_checker,
         };
 
         // Bind HTTP listener (port 0 = random port for testing)

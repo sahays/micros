@@ -1,6 +1,5 @@
 //! Charge gRPC handlers.
 
-use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::helpers::*;
 use crate::grpc::proto::*;
 use crate::models::{ChargeType, CreateCharge, ListChargesFilter, SubscriptionStatus};
@@ -11,13 +10,9 @@ use tonic::{Request, Response, Status};
 
 pub async fn get_charge(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetChargeRequest>,
 ) -> Result<Response<GetChargeResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_CYCLE_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let charge_id = parse_uuid(&req.charge_id)?;
@@ -39,13 +34,9 @@ pub async fn get_charge(
 
 pub async fn list_charges(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListChargesRequest>,
 ) -> Result<Response<ListChargesResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_CYCLE_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let cycle_id = parse_uuid(&req.cycle_id)?;
@@ -87,13 +78,9 @@ pub async fn list_charges(
 
 pub async fn create_one_time_charge(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<CreateOneTimeChargeRequest>,
 ) -> Result<Response<CreateOneTimeChargeResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_CHARGE_CREATE)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let subscription_id = parse_uuid(&req.subscription_id)?;

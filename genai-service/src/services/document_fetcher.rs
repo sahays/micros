@@ -15,11 +15,11 @@ use tonic::transport::Channel;
 
 /// Tenant context for document-service gRPC requests.
 ///
-/// All document-service RPCs require tenant headers (x-app-id, x-org-id, x-user-id).
+/// All document-service RPCs require tenant headers (x-app-id, x-tenant-id, x-user-id).
 #[derive(Debug, Clone)]
 pub struct TenantContext {
     pub app_id: String,
-    pub org_id: String,
+    pub tenant_id: String,
     pub user_id: String,
 }
 
@@ -40,11 +40,11 @@ impl TenantContext {
         })?;
         metadata.insert("x-app-id", app_val);
 
-        let org_val = self.org_id.parse().map_err(|e| {
-            tracing::warn!(header = "x-org-id", value = %self.org_id, error = %e, "Invalid metadata header value");
-            DocumentFetcherError::ConnectionError(format!("Invalid x-org-id header value '{}': {}", self.org_id, e))
+        let tenant_val = self.tenant_id.parse().map_err(|e| {
+            tracing::warn!(header = "x-tenant-id", value = %self.tenant_id, error = %e, "Invalid metadata header value");
+            DocumentFetcherError::ConnectionError(format!("Invalid x-tenant-id header value '{}': {}", self.tenant_id, e))
         })?;
-        metadata.insert("x-org-id", org_val);
+        metadata.insert("x-tenant-id", tenant_val);
 
         let user_val = self.user_id.parse().map_err(|e| {
             tracing::warn!(header = "x-user-id", value = %self.user_id, error = %e, "Invalid metadata header value");

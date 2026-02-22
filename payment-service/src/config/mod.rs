@@ -12,7 +12,6 @@ pub struct Config {
     pub signature: ServiceSignatureConfig,
     pub upi: UpiConfig,
     pub razorpay: RazorpayConfig,
-    pub auth: AuthConfig,
     pub feature_flags: FeatureFlagsConfig,
     pub service_name: String,
 }
@@ -21,13 +20,6 @@ pub struct Config {
 pub struct FeatureFlagsConfig {
     pub razorpay_route_enabled: bool,
     pub razorpay_subscriptions_enabled: bool,
-}
-
-#[derive(Deserialize, Clone, Debug)]
-pub struct AuthConfig {
-    /// When set, enables capability enforcement via auth-service.
-    /// Leave empty to use BFF trust model.
-    pub auth_service_endpoint: Option<String>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -145,11 +137,6 @@ impl Config {
                 key_secret: Secret::new(razorpay_key_secret),
                 webhook_secret: Secret::new(razorpay_webhook_secret),
                 api_base_url: razorpay_api_base_url,
-            },
-            auth: AuthConfig {
-                // When set, capability enforcement is enabled via auth-service.
-                // Leave empty/unset for BFF trust model (default).
-                auth_service_endpoint: env::var("AUTH_SERVICE_ENDPOINT").ok(),
             },
             feature_flags: FeatureFlagsConfig {
                 razorpay_route_enabled,

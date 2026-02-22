@@ -37,11 +37,11 @@ pub fn extract_tenant_context(
         .map(String::from)
         .ok_or_else(|| Status::unauthenticated("Missing x-app-id header"))?;
 
-    let org_id = metadata
-        .get("x-org-id")
+    let tenant_id = metadata
+        .get("x-tenant-id")
         .and_then(|v| v.to_str().ok())
         .map(String::from)
-        .ok_or_else(|| Status::unauthenticated("Missing x-org-id header"))?;
+        .ok_or_else(|| Status::unauthenticated("Missing x-tenant-id header"))?;
 
     let user_id = metadata
         .get("x-user-id")
@@ -51,7 +51,7 @@ pub fn extract_tenant_context(
 
     Ok(TenantContext {
         app_id,
-        org_id,
+        tenant_id,
         user_id,
     })
 }
@@ -87,7 +87,7 @@ pub fn document_to_proto(doc: &Document) -> ProtoDocument {
     ProtoDocument {
         id: doc.id.clone(),
         app_id: doc.app_id.clone(),
-        org_id: doc.org_id.clone(),
+        tenant_id: doc.tenant_id.clone(),
         owner_id: doc.owner_id.clone(),
         original_name: doc.original_name.clone(),
         mime_type: doc.mime_type.clone(),

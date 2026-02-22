@@ -66,7 +66,7 @@ impl PaymentClient {
         &self,
         mut request: Request<T>,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
     ) -> Request<T> {
         request
@@ -74,7 +74,7 @@ impl PaymentClient {
             .insert("x-app-id", app_id.parse().unwrap());
         request
             .metadata_mut()
-            .insert("x-org-id", org_id.parse().unwrap());
+            .insert("x-tenant-id", tenant_id.parse().unwrap());
         if let Some(uid) = user_id {
             request
                 .metadata_mut()

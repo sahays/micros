@@ -2,20 +2,16 @@
 //!
 //! This module provides shared gRPC infrastructure including:
 //! - Error conversion between `AppError` and `tonic::Status`
-//! - Interceptors for trace context propagation
+//! - Interceptors for trace context propagation and tenant context extraction
 //! - Health check service implementation
 //! - Server builder utilities
 //! - Retry utilities for service-to-service calls
-//! - Auth service client for service-to-service communication
 //! - Notification service client for service-to-service communication
 //! - Document service client for service-to-service communication
 //! - Payment service client for service-to-service communication
 //! - Ledger service client for service-to-service communication
-//! - Capability checking infrastructure for authorization
 
 pub mod app_registry;
-pub mod auth_client;
-pub mod capability_checker;
 pub mod document_client;
 pub mod error;
 pub mod genai_client;
@@ -64,10 +60,6 @@ pub mod proto {
 }
 
 pub use app_registry::{AppRegistry, AppRegistryServiceImpl};
-pub use auth_client::{AuthClient, AuthClientConfig};
-pub use capability_checker::{
-    AuthContext, CapabilityChecker, CapabilityMetadata, extract_bearer_token, extract_org_node_id,
-};
 pub use document_client::{
     DocumentClient, DocumentClientConfig, DocumentProto, DocumentStatusProto,
     ProcessingMetadataProto,
@@ -78,8 +70,9 @@ pub use genai_client::{
 };
 pub use health::{HealthComponents, HealthReporter, HealthStatus, create_health_service};
 pub use interceptors::{
-    APP_ID_KEY, TENANT_ID_KEY, extract_app_id, extract_request_id, extract_tenant_id,
-    inject_app_id, inject_tenant_id,
+    APP_ID_KEY, TENANT_ID_KEY, TenantContext, USER_ID_KEY, extract_app_id, extract_app_id_uuid,
+    extract_request_id, extract_tenant_context, extract_tenant_id, extract_user_id, inject_app_id,
+    inject_tenant_id, inject_user_id,
 };
 pub use ledger_client::{LedgerClient, LedgerClientConfig, TransactionEntry};
 pub use notification_client::{

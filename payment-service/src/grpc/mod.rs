@@ -1,4 +1,3 @@
-pub mod capability_check;
 pub mod customers;
 pub mod direct_payments;
 pub mod helpers;
@@ -11,7 +10,6 @@ pub mod subscriptions;
 pub mod transfers;
 pub mod webhooks;
 
-pub use capability_check::{capabilities, CapabilityChecker};
 pub use payment_service::PaymentGrpcService;
 
 // Include generated proto code

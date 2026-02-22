@@ -13,13 +13,13 @@ impl PaymentRepository {
     pub async fn get_customer_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         id: &str,
     ) -> Result<Option<RazorpayCustomer>> {
         let filter = doc! {
             "_id": id,
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
         Ok(self.customer_collection.find_one(filter, None).await?)
     }
@@ -27,12 +27,12 @@ impl PaymentRepository {
     pub async fn get_customer_by_user_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: &str,
     ) -> Result<Option<RazorpayCustomer>> {
         let filter = doc! {
             "app_id": app_id,
-            "org_id": org_id,
+            "tenant_id": tenant_id,
             "user_id": user_id
         };
         Ok(self.customer_collection.find_one(filter, None).await?)
@@ -41,14 +41,14 @@ impl PaymentRepository {
     pub async fn update_customer_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         id: &str,
         update: mongodb::bson::Document,
     ) -> Result<()> {
         let filter = doc! {
             "_id": id,
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
         self.customer_collection
             .update_one(filter, doc! { "$set": update }, None)
@@ -59,7 +59,7 @@ impl PaymentRepository {
     pub async fn list_customers_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         limit: i64,
         offset: u64,
     ) -> Result<(Vec<RazorpayCustomer>, i64)> {
@@ -68,7 +68,7 @@ impl PaymentRepository {
 
         let filter = doc! {
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
 
         let total_count = self

@@ -16,7 +16,7 @@ pub async fn generate_qr(
 ) -> Result<Json<QrGenerateResponse>, StatusCode> {
     tracing::info!(
         app_id = %tenant.app_id,
-        org_id = %tenant.org_id,
+        tenant_id = %tenant.tenant_id,
         user_id = ?tenant.user_id,
         amount_paise = payload.amount_paise,
         "Generating UPI QR code"

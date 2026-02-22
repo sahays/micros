@@ -13,13 +13,13 @@ impl PaymentRepository {
     pub async fn get_refund_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         id: &str,
     ) -> Result<Option<Refund>> {
         let filter = doc! {
             "_id": id,
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
         Ok(self.refund_collection.find_one(filter, None).await?)
     }
@@ -53,7 +53,7 @@ impl PaymentRepository {
     pub async fn list_refunds_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         payment_id: Option<&str>,
         status_filter: Option<RefundStatus>,
         limit: i64,
@@ -64,7 +64,7 @@ impl PaymentRepository {
 
         let mut filter = doc! {
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
 
         if let Some(pid) = payment_id {
@@ -95,14 +95,14 @@ impl PaymentRepository {
     pub async fn sum_refunds_for_payment(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         payment_id: &str,
     ) -> Result<u64> {
         use futures::TryStreamExt;
 
         let filter = doc! {
             "app_id": app_id,
-            "org_id": org_id,
+            "tenant_id": tenant_id,
             "payment_id": payment_id,
             "status": { "$ne": "FAILED" }
         };

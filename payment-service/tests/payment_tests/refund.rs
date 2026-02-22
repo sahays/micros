@@ -1,4 +1,4 @@
-use crate::common::embedded::{TestApp, TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID};
+use crate::common::embedded::{TestApp, TEST_APP_ID, TEST_TENANT_ID, TEST_USER_ID};
 use serial_test::serial;
 use service_core::grpc::proto::payment::{RefundSpeed, TransactionStatus};
 use wiremock::matchers::{method, path_regex};
@@ -24,7 +24,7 @@ async fn create_completed_payment(
 ) -> String {
     // Create transaction
     let tx = client
-        .create_transaction(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), 10000, "INR")
+        .create_transaction(TEST_APP_ID, TEST_TENANT_ID, Some(TEST_USER_ID), 10000, "INR")
         .await
         .expect("Failed to create transaction");
 
@@ -66,7 +66,7 @@ async fn initiate_full_refund_updates_transaction_to_refunded() {
     let refund = client
         .initiate_refund(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             &payment_id,
             0,
@@ -83,7 +83,7 @@ async fn initiate_full_refund_updates_transaction_to_refunded() {
 
     // Verify the transaction was updated to Refunded
     let tx = client
-        .get_transaction(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), &payment_id)
+        .get_transaction(TEST_APP_ID, TEST_TENANT_ID, Some(TEST_USER_ID), &payment_id)
         .await
         .expect("Failed to get transaction");
 
@@ -118,7 +118,7 @@ async fn initiate_partial_refund_updates_transaction_to_partially_refunded() {
     let refund = client
         .initiate_refund(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             &payment_id,
             5000,
@@ -133,7 +133,7 @@ async fn initiate_partial_refund_updates_transaction_to_partially_refunded() {
 
     // Verify the transaction was updated to PartiallyRefunded
     let tx = client
-        .get_transaction(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), &payment_id)
+        .get_transaction(TEST_APP_ID, TEST_TENANT_ID, Some(TEST_USER_ID), &payment_id)
         .await
         .expect("Failed to get transaction");
 
@@ -153,7 +153,7 @@ async fn refund_exceeds_available_amount_returns_invalid_argument() {
     let result = client
         .initiate_refund(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             &payment_id,
             20000, // More than the 10000 paise payment
@@ -176,14 +176,14 @@ async fn refund_non_completed_payment_returns_failed_precondition() {
 
     // Create a transaction (status = Created, not Completed)
     let tx = client
-        .create_transaction(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), 10000, "INR")
+        .create_transaction(TEST_APP_ID, TEST_TENANT_ID, Some(TEST_USER_ID), 10000, "INR")
         .await
         .expect("Failed to create transaction");
 
     let result = client
         .initiate_refund(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             &tx.id,
             0,
@@ -207,7 +207,7 @@ async fn get_refund_not_found() {
     let result = client
         .get_refund(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "nonexistent-id",
         )
@@ -227,7 +227,7 @@ async fn list_refunds_empty() {
     let (refunds, total) = client
         .list_refunds(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             None,
             None,

@@ -1,6 +1,6 @@
 //! Tenant context middleware for multi-tenancy support.
 //!
-//! Extracts tenant information (app_id, org_id, user_id) from request headers.
+//! Extracts tenant information (app_id, tenant_id, user_id) from request headers.
 //! These headers are set by the BFF (secure-frontend) after authenticating the user
 //! and validating their tenant membership.
 //!
@@ -19,18 +19,18 @@ use service_core::error::AppError;
 pub struct TenantContext {
     /// Application ID (maps to registered client in auth-service)
     pub app_id: String,
-    /// Organization ID within the application
-    pub org_id: String,
+    /// Tenant ID within the application (org/club/school)
+    pub tenant_id: String,
     /// User ID who is making the request
     pub user_id: String,
 }
 
 impl TenantContext {
     /// Create a new tenant context.
-    pub fn new(app_id: String, org_id: String, user_id: String) -> Self {
+    pub fn new(app_id: String, tenant_id: String, user_id: String) -> Self {
         Self {
             app_id,
-            org_id,
+            tenant_id,
             user_id,
         }
     }
@@ -55,14 +55,14 @@ where
                 ))
             })?;
 
-        // Extract org_id from X-Org-ID header
-        let org_id = parts
+        // Extract tenant_id from X-Tenant-ID header
+        let tenant_id = parts
             .headers
-            .get("X-Org-ID")
+            .get("X-Tenant-ID")
             .and_then(|v| v.to_str().ok())
             .ok_or_else(|| {
                 AppError::AuthError(anyhow::anyhow!(
-                    "Missing X-Org-ID header (required from BFF)"
+                    "Missing X-Tenant-ID header (required from BFF)"
                 ))
             })?;
 
@@ -80,12 +80,12 @@ where
         // Add to tracing span for observability
         let span = tracing::Span::current();
         span.record("app_id", app_id);
-        span.record("org_id", org_id);
+        span.record("tenant_id", tenant_id);
         span.record("user_id", user_id);
 
         Ok(TenantContext::new(
             app_id.to_string(),
-            org_id.to_string(),
+            tenant_id.to_string(),
             user_id.to_string(),
         ))
     }

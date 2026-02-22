@@ -12,8 +12,8 @@ message TokenClaims {
   // Application/Tenant ID.
   string app_id = 2;
 
-  // Organization ID.
-  string org_id = 3;
+  // Tenant ID.
+  string tenant_id = 3;
 
   // User's email.
   string email = 4;

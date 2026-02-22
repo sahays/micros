@@ -14,7 +14,6 @@ pub struct ReconciliationConfig {
     pub ledger_service: LedgerServiceConfig,
     pub genai_service: GenaiServiceConfig,
     pub document_service: DocumentServiceConfig,
-    pub auth: AuthConfig,
 }
 
 #[derive(Debug, Clone)]
@@ -37,11 +36,6 @@ pub struct GenaiServiceConfig {
 #[derive(Debug, Clone)]
 pub struct DocumentServiceConfig {
     pub url: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct AuthConfig {
-    pub auth_service_endpoint: String,
 }
 
 impl ReconciliationConfig {
@@ -79,10 +73,6 @@ impl ReconciliationConfig {
             document_service: DocumentServiceConfig {
                 url: env::var("DOCUMENT_SERVICE_URL")
                     .unwrap_or_else(|_| "http://document-service:3001".to_string()),
-            },
-            auth: AuthConfig {
-                auth_service_endpoint: env::var("AUTH_SERVICE_ENDPOINT")
-                    .unwrap_or_else(|_| "http://auth-service:3001".to_string()),
             },
         })
     }

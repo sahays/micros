@@ -1,7 +1,7 @@
 use genai_service::config::GenaiConfig;
 use genai_service::grpc::{
     proto::{gen_ai_service_server::GenAiServiceServer, FILE_DESCRIPTOR_SET},
-    CapabilityChecker, GenaiGrpcService,
+    GenaiGrpcService,
 };
 use service_core::grpc::proto::common::app_registry_service_server::AppRegistryServiceServer;
 use genai_service::services::providers::gemini::{GeminiConfig, GeminiTextProvider};
@@ -162,20 +162,11 @@ async fn main() -> std::io::Result<()> {
         "Initialized text provider"
     );
 
-    // Initialize capability checker
-    let capability_checker = CapabilityChecker::new(config.auth.auth_service_endpoint.as_deref())
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Failed to initialize capability checker");
-            std::io::Error::other(format!("Capability checker initialization error: {}", e))
-        })?;
-
     let state = AppState {
         config: config.clone(),
         db: db.clone(),
         text_provider,
         document_fetcher,
-        capability_checker,
     };
 
     let health_state = HealthState { db };

@@ -40,7 +40,7 @@ impl PaymentRepository {
     pub async fn init_indexes(&self) -> Result<()> {
         // Transaction indexes
         let tenant_tx_index = IndexModel::builder()
-            .keys(doc! { "app_id": 1, "org_id": 1, "_id": 1 })
+            .keys(doc! { "app_id": 1, "tenant_id": 1, "_id": 1 })
             .options(
                 IndexOptions::builder()
                     .name("tenant_transaction_idx".to_string())
@@ -49,7 +49,7 @@ impl PaymentRepository {
             .build();
 
         let user_tx_index = IndexModel::builder()
-            .keys(doc! { "app_id": 1, "org_id": 1, "user_id": 1 })
+            .keys(doc! { "app_id": 1, "tenant_id": 1, "user_id": 1 })
             .options(
                 IndexOptions::builder()
                     .name("tenant_user_transaction_idx".to_string())
@@ -58,7 +58,7 @@ impl PaymentRepository {
             .build();
 
         let status_tx_index = IndexModel::builder()
-            .keys(doc! { "app_id": 1, "org_id": 1, "status": 1 })
+            .keys(doc! { "app_id": 1, "tenant_id": 1, "status": 1 })
             .options(
                 IndexOptions::builder()
                     .name("tenant_status_transaction_idx".to_string())
@@ -67,7 +67,7 @@ impl PaymentRepository {
             .build();
 
         let external_ref_tx_index = IndexModel::builder()
-            .keys(doc! { "app_id": 1, "org_id": 1, "external_reference": 1 })
+            .keys(doc! { "app_id": 1, "tenant_id": 1, "external_reference": 1 })
             .options(
                 IndexOptions::builder()
                     .name("tenant_external_ref_transaction_idx".to_string())
@@ -90,7 +90,7 @@ impl PaymentRepository {
 
         // Payment method indexes
         let tenant_pm_index = IndexModel::builder()
-            .keys(doc! { "app_id": 1, "org_id": 1 })
+            .keys(doc! { "app_id": 1, "tenant_id": 1 })
             .options(
                 IndexOptions::builder()
                     .name("tenant_payment_method_idx".to_string())
@@ -104,7 +104,7 @@ impl PaymentRepository {
 
         // Linked account indexes
         let tenant_la_index = IndexModel::builder()
-            .keys(doc! { "app_id": 1, "org_id": 1 })
+            .keys(doc! { "app_id": 1, "tenant_id": 1 })
             .options(
                 IndexOptions::builder()
                     .name("tenant_linked_account_idx".to_string())
@@ -128,7 +128,7 @@ impl PaymentRepository {
 
         // Customer indexes
         let tenant_customer_index = IndexModel::builder()
-            .keys(doc! { "app_id": 1, "org_id": 1, "user_id": 1 })
+            .keys(doc! { "app_id": 1, "tenant_id": 1, "user_id": 1 })
             .options(
                 IndexOptions::builder()
                     .name("tenant_user_customer_idx".to_string())
@@ -143,7 +143,7 @@ impl PaymentRepository {
 
         // Transfer indexes
         let tenant_transfer_index = IndexModel::builder()
-            .keys(doc! { "app_id": 1, "org_id": 1, "status": 1 })
+            .keys(doc! { "app_id": 1, "tenant_id": 1, "status": 1 })
             .options(
                 IndexOptions::builder()
                     .name("tenant_status_transfer_idx".to_string())
@@ -167,7 +167,7 @@ impl PaymentRepository {
 
         // Settlement indexes
         let tenant_settlement_index = IndexModel::builder()
-            .keys(doc! { "app_id": 1, "org_id": 1, "status": 1 })
+            .keys(doc! { "app_id": 1, "tenant_id": 1, "status": 1 })
             .options(
                 IndexOptions::builder()
                     .name("tenant_status_settlement_idx".to_string())
@@ -191,7 +191,7 @@ impl PaymentRepository {
 
         // Plan indexes
         let tenant_plan_index = IndexModel::builder()
-            .keys(doc! { "app_id": 1, "org_id": 1 })
+            .keys(doc! { "app_id": 1, "tenant_id": 1 })
             .options(
                 IndexOptions::builder()
                     .name("tenant_plan_idx".to_string())
@@ -205,7 +205,7 @@ impl PaymentRepository {
 
         // Subscription indexes
         let tenant_sub_index = IndexModel::builder()
-            .keys(doc! { "app_id": 1, "org_id": 1, "status": 1 })
+            .keys(doc! { "app_id": 1, "tenant_id": 1, "status": 1 })
             .options(
                 IndexOptions::builder()
                     .name("tenant_status_subscription_idx".to_string())
@@ -229,7 +229,7 @@ impl PaymentRepository {
 
         // Payment link indexes
         let tenant_pl_index = IndexModel::builder()
-            .keys(doc! { "app_id": 1, "org_id": 1, "status": 1 })
+            .keys(doc! { "app_id": 1, "tenant_id": 1, "status": 1 })
             .options(
                 IndexOptions::builder()
                     .name("tenant_status_payment_link_idx".to_string())
@@ -253,7 +253,7 @@ impl PaymentRepository {
 
         // Refund indexes
         let tenant_refund_index = IndexModel::builder()
-            .keys(doc! { "app_id": 1, "org_id": 1, "payment_id": 1 })
+            .keys(doc! { "app_id": 1, "tenant_id": 1, "payment_id": 1 })
             .options(
                 IndexOptions::builder()
                     .name("tenant_payment_refund_idx".to_string())
@@ -292,17 +292,17 @@ impl PaymentRepository {
         Ok(transaction)
     }
 
-    /// Get a transaction by ID within a specific tenant (app_id, org_id).
+    /// Get a transaction by ID within a specific tenant (app_id, tenant_id).
     pub async fn get_transaction_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         id: &str,
     ) -> Result<Option<Transaction>> {
         let filter = doc! {
             "_id": id,
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
         let transaction = self.transaction_collection.find_one(filter, None).await?;
         Ok(transaction)
@@ -330,14 +330,14 @@ impl PaymentRepository {
     pub async fn update_transaction_status_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         id: &str,
         status: TransactionStatus,
     ) -> Result<()> {
         let filter = doc! {
             "_id": id,
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
         let update = doc! {
             "$set": {
@@ -362,7 +362,7 @@ impl PaymentRepository {
     pub async fn list_transactions_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         status_filter: Option<TransactionStatus>,
         limit: i64,
         offset: u64,
@@ -372,7 +372,7 @@ impl PaymentRepository {
 
         let mut filter = doc! {
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
 
         if let Some(status) = status_filter {
@@ -406,12 +406,12 @@ impl PaymentRepository {
     pub async fn get_transaction_by_external_ref(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         external_reference: &str,
     ) -> Result<Option<Transaction>> {
         let filter = doc! {
             "app_id": app_id,
-            "org_id": org_id,
+            "tenant_id": tenant_id,
             "external_reference": external_reference
         };
         let transaction = self.transaction_collection.find_one(filter, None).await?;

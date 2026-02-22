@@ -1,6 +1,5 @@
 //! gRPC handlers for transfer operations.
 
-use crate::grpc::capability_check::{capabilities, CapabilityMetadata};
 use crate::grpc::helpers::{
     check_feature_flag, check_razorpay_configured, datetime_to_timestamp, extract_tenant_context,
 };
@@ -16,13 +15,6 @@ pub async fn create_transfer_from_payment(
     state: &AppState,
     request: Request<CreateTransferFromPaymentRequest>,
 ) -> Result<Response<CreateTransferFromPaymentResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_TRANSFER_CREATE)
-            .await?;
-    }
-
     check_feature_flag(
         state.config.feature_flags.razorpay_route_enabled,
         "Razorpay Route",
@@ -35,7 +27,7 @@ pub async fn create_transfer_from_payment(
     // Validate payment exists and is completed
     let payment = state
         .repository
-        .get_transaction_in_tenant(&tenant.app_id, &tenant.org_id, &req.payment_id)
+        .get_transaction_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.payment_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch payment");
@@ -52,7 +44,7 @@ pub async fn create_transfer_from_payment(
     // Validate linked account exists and is activated
     let account = state
         .repository
-        .get_linked_account_in_tenant(&tenant.app_id, &tenant.org_id, &req.linked_account_id)
+        .get_linked_account_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.linked_account_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch linked account");
@@ -111,7 +103,7 @@ pub async fn create_transfer_from_payment(
     let transfer = models::Transfer {
         id: Uuid::new_v4().to_string(),
         app_id: tenant.app_id.clone(),
-        org_id: tenant.org_id.clone(),
+        tenant_id: tenant.tenant_id.clone(),
         razorpay_transfer_id: rz_transfer.id,
         payment_id: Some(req.payment_id),
         order_id: None,
@@ -147,13 +139,6 @@ pub async fn create_transfer_from_order(
     state: &AppState,
     request: Request<CreateTransferFromOrderRequest>,
 ) -> Result<Response<CreateTransferFromOrderResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_TRANSFER_CREATE)
-            .await?;
-    }
-
     check_feature_flag(
         state.config.feature_flags.razorpay_route_enabled,
         "Razorpay Route",
@@ -165,7 +150,7 @@ pub async fn create_transfer_from_order(
 
     let account = state
         .repository
-        .get_linked_account_in_tenant(&tenant.app_id, &tenant.org_id, &req.linked_account_id)
+        .get_linked_account_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.linked_account_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch linked account");
@@ -192,7 +177,7 @@ pub async fn create_transfer_from_order(
     let transfer = models::Transfer {
         id: Uuid::new_v4().to_string(),
         app_id: tenant.app_id.clone(),
-        org_id: tenant.org_id.clone(),
+        tenant_id: tenant.tenant_id.clone(),
         razorpay_transfer_id: format!("trf_pending_{}", Uuid::new_v4()),
         payment_id: None,
         order_id: Some(req.order_id),
@@ -226,13 +211,6 @@ pub async fn create_direct_transfer(
     state: &AppState,
     request: Request<CreateDirectTransferRequest>,
 ) -> Result<Response<CreateDirectTransferResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_TRANSFER_CREATE)
-            .await?;
-    }
-
     check_feature_flag(
         state.config.feature_flags.razorpay_route_enabled,
         "Razorpay Route",
@@ -244,7 +222,7 @@ pub async fn create_direct_transfer(
 
     let account = state
         .repository
-        .get_linked_account_in_tenant(&tenant.app_id, &tenant.org_id, &req.linked_account_id)
+        .get_linked_account_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.linked_account_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch linked account");
@@ -277,7 +255,7 @@ pub async fn create_direct_transfer(
     let transfer = models::Transfer {
         id: Uuid::new_v4().to_string(),
         app_id: tenant.app_id.clone(),
-        org_id: tenant.org_id.clone(),
+        tenant_id: tenant.tenant_id.clone(),
         razorpay_transfer_id: rz_response.id,
         payment_id: None,
         order_id: None,
@@ -311,13 +289,6 @@ pub async fn reverse_transfer(
     state: &AppState,
     request: Request<ReverseTransferRequest>,
 ) -> Result<Response<ReverseTransferResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_TRANSFER_REVERSE)
-            .await?;
-    }
-
     check_feature_flag(
         state.config.feature_flags.razorpay_route_enabled,
         "Razorpay Route",
@@ -329,7 +300,7 @@ pub async fn reverse_transfer(
 
     let transfer = state
         .repository
-        .get_transfer_in_tenant(&tenant.app_id, &tenant.org_id, &req.transfer_id)
+        .get_transfer_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.transfer_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch transfer");
@@ -369,7 +340,7 @@ pub async fn reverse_transfer(
     };
     state
         .repository
-        .update_transfer_in_tenant(&tenant.app_id, &tenant.org_id, &req.transfer_id, update)
+        .update_transfer_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.transfer_id, update)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to update transfer");
@@ -378,7 +349,7 @@ pub async fn reverse_transfer(
 
     let updated = state
         .repository
-        .get_transfer_in_tenant(&tenant.app_id, &tenant.org_id, &req.transfer_id)
+        .get_transfer_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.transfer_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch updated transfer");
@@ -395,19 +366,12 @@ pub async fn get_transfer(
     state: &AppState,
     request: Request<GetTransferRequest>,
 ) -> Result<Response<GetTransferResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_TRANSFER_READ)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
     let transfer = state
         .repository
-        .get_transfer_in_tenant(&tenant.app_id, &tenant.org_id, &req.transfer_id)
+        .get_transfer_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.transfer_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch transfer");
@@ -424,13 +388,6 @@ pub async fn list_transfers(
     state: &AppState,
     request: Request<ListTransfersRequest>,
 ) -> Result<Response<ListTransfersResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_TRANSFER_READ)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
@@ -442,7 +399,7 @@ pub async fn list_transfers(
         .repository
         .list_transfers_in_tenant(
             &tenant.app_id,
-            &tenant.org_id,
+            &tenant.tenant_id,
             req.linked_account_id.as_deref(),
             req.payment_id.as_deref(),
             status_filter,
@@ -465,13 +422,6 @@ pub async fn hold_transfer_settlement(
     state: &AppState,
     request: Request<HoldTransferSettlementRequest>,
 ) -> Result<Response<HoldTransferSettlementResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_TRANSFER_HOLD)
-            .await?;
-    }
-
     check_feature_flag(
         state.config.feature_flags.razorpay_route_enabled,
         "Razorpay Route",
@@ -483,7 +433,7 @@ pub async fn hold_transfer_settlement(
 
     let transfer = state
         .repository
-        .get_transfer_in_tenant(&tenant.app_id, &tenant.org_id, &req.transfer_id)
+        .get_transfer_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.transfer_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch transfer");
@@ -510,7 +460,7 @@ pub async fn hold_transfer_settlement(
     };
     state
         .repository
-        .update_transfer_in_tenant(&tenant.app_id, &tenant.org_id, &req.transfer_id, update)
+        .update_transfer_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.transfer_id, update)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to update transfer");
@@ -519,7 +469,7 @@ pub async fn hold_transfer_settlement(
 
     let updated = state
         .repository
-        .get_transfer_in_tenant(&tenant.app_id, &tenant.org_id, &req.transfer_id)
+        .get_transfer_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.transfer_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch transfer");
@@ -536,13 +486,6 @@ pub async fn release_transfer_settlement(
     state: &AppState,
     request: Request<ReleaseTransferSettlementRequest>,
 ) -> Result<Response<ReleaseTransferSettlementResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_TRANSFER_HOLD)
-            .await?;
-    }
-
     check_feature_flag(
         state.config.feature_flags.razorpay_route_enabled,
         "Razorpay Route",
@@ -554,7 +497,7 @@ pub async fn release_transfer_settlement(
 
     let transfer = state
         .repository
-        .get_transfer_in_tenant(&tenant.app_id, &tenant.org_id, &req.transfer_id)
+        .get_transfer_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.transfer_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch transfer");
@@ -582,7 +525,7 @@ pub async fn release_transfer_settlement(
     };
     state
         .repository
-        .update_transfer_in_tenant(&tenant.app_id, &tenant.org_id, &req.transfer_id, update)
+        .update_transfer_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.transfer_id, update)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to update transfer");
@@ -591,7 +534,7 @@ pub async fn release_transfer_settlement(
 
     let updated = state
         .repository
-        .get_transfer_in_tenant(&tenant.app_id, &tenant.org_id, &req.transfer_id)
+        .get_transfer_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.transfer_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch transfer");
@@ -608,7 +551,7 @@ fn transfer_to_proto(t: models::Transfer) -> Transfer {
     Transfer {
         id: t.id,
         app_id: t.app_id,
-        org_id: t.org_id,
+        tenant_id: t.tenant_id,
         razorpay_transfer_id: t.razorpay_transfer_id,
         payment_id: t.payment_id,
         order_id: t.order_id,

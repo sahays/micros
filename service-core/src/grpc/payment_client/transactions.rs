@@ -16,7 +16,7 @@ impl PaymentClient {
     pub async fn create_transaction(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         amount_paise: u64,
         currency: &str,
@@ -26,7 +26,7 @@ impl PaymentClient {
             currency: currency.to_string(),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.create_transaction(request).await?;
 
         response
@@ -39,7 +39,7 @@ impl PaymentClient {
     pub async fn get_transaction(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         transaction_id: &str,
     ) -> Result<Transaction, tonic::Status> {
@@ -47,7 +47,7 @@ impl PaymentClient {
             transaction_id: transaction_id.to_string(),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.get_transaction(request).await?;
 
         response
@@ -60,7 +60,7 @@ impl PaymentClient {
     pub async fn update_transaction_status(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         transaction_id: &str,
         status: TransactionStatus,
@@ -70,7 +70,7 @@ impl PaymentClient {
             status: status.into(),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         self.client.update_transaction_status(request).await?;
 
         Ok(())
@@ -80,7 +80,7 @@ impl PaymentClient {
     pub async fn list_transactions(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         status: Option<TransactionStatus>,
         limit: i32,
@@ -92,7 +92,7 @@ impl PaymentClient {
             offset,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.list_transactions(request).await?;
         let inner = response.into_inner();
 
@@ -104,7 +104,7 @@ impl PaymentClient {
     pub async fn create_razorpay_order(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         amount: u64,
         currency: &str,
@@ -118,7 +118,7 @@ impl PaymentClient {
             notes_json,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.create_razorpay_order(request).await?;
 
         Ok(response.into_inner())
@@ -129,7 +129,7 @@ impl PaymentClient {
     pub async fn verify_razorpay_payment(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         transaction_id: &str,
         razorpay_order_id: &str,
@@ -143,7 +143,7 @@ impl PaymentClient {
             razorpay_signature: razorpay_signature.to_string(),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.verify_razorpay_payment(request).await?;
 
         Ok(response.into_inner())
@@ -154,7 +154,7 @@ impl PaymentClient {
     pub async fn generate_upi_qr(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         amount_paise: u64,
         description: Option<String>,
@@ -170,7 +170,7 @@ impl PaymentClient {
             merchant_name,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.generate_upi_qr(request).await?;
 
         Ok(response.into_inner())

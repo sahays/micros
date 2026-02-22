@@ -1,6 +1,6 @@
 //! gRPC implementation of AuditService.
 
-use crate::grpc::capability_check::require_capability;
+use crate::grpc::capability_check::extract_auth_context;
 use crate::grpc::proto::auth::{
     audit_service_server::AuditService, AuditEvent as ProtoAuditEvent, ListAuditEventsRequest,
     ListAuditEventsResponse,
@@ -37,8 +37,7 @@ impl AuditService for AuditServiceImpl {
         &self,
         request: Request<ListAuditEventsRequest>,
     ) -> Result<Response<ListAuditEventsResponse>, Status> {
-        // Require audit:read capability
-        let _auth = require_capability(&self.state, &request, "audit:read").await?;
+        let _auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 

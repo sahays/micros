@@ -1,13 +1,11 @@
 //! gRPC module for reconciliation-service.
 
 mod bank_accounts;
-pub mod capability_check;
 mod matching;
 mod reconciliation;
 mod service;
 mod statements;
 
-pub use capability_check::{capabilities, CapabilityChecker};
 pub use service::ReconciliationServiceImpl;
 
 /// Generated protobuf code.

@@ -1,6 +1,5 @@
 //! gRPC handlers for subscription operations.
 
-use crate::grpc::capability_check::{capabilities, CapabilityMetadata};
 use crate::grpc::helpers::{
     check_feature_flag, check_razorpay_configured, datetime_to_timestamp, extract_tenant_context,
 };
@@ -16,13 +15,6 @@ pub async fn create_razorpay_plan(
     state: &AppState,
     request: Request<CreateRazorpayPlanRequest>,
 ) -> Result<Response<CreateRazorpayPlanResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_PLAN_CREATE)
-            .await?;
-    }
-
     check_feature_flag(
         state.config.feature_flags.razorpay_subscriptions_enabled,
         "Razorpay Subscriptions",
@@ -60,7 +52,7 @@ pub async fn create_razorpay_plan(
     let plan = models::RazorpayPlan {
         id: Uuid::new_v4().to_string(),
         app_id: tenant.app_id.clone(),
-        org_id: tenant.org_id.clone(),
+        tenant_id: tenant.tenant_id.clone(),
         razorpay_plan_id: rz_response.id,
         name: req.name,
         description: req.description,
@@ -89,19 +81,12 @@ pub async fn get_razorpay_plan(
     state: &AppState,
     request: Request<GetRazorpayPlanRequest>,
 ) -> Result<Response<GetRazorpayPlanResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_PLAN_READ)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
     let plan = state
         .repository
-        .get_plan_in_tenant(&tenant.app_id, &tenant.org_id, &req.plan_id)
+        .get_plan_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.plan_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch plan");
@@ -118,13 +103,6 @@ pub async fn list_razorpay_plans(
     state: &AppState,
     request: Request<ListRazorpayPlansRequest>,
 ) -> Result<Response<ListRazorpayPlansResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_PLAN_READ)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
@@ -133,7 +111,7 @@ pub async fn list_razorpay_plans(
 
     let (plans, total_count) = state
         .repository
-        .list_plans_in_tenant(&tenant.app_id, &tenant.org_id, limit, offset)
+        .list_plans_in_tenant(&tenant.app_id, &tenant.tenant_id, limit, offset)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to list plans");
@@ -150,13 +128,6 @@ pub async fn create_razorpay_subscription(
     state: &AppState,
     request: Request<CreateRazorpaySubscriptionRequest>,
 ) -> Result<Response<CreateRazorpaySubscriptionResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_SUBSCRIPTION_CREATE)
-            .await?;
-    }
-
     check_feature_flag(
         state.config.feature_flags.razorpay_subscriptions_enabled,
         "Razorpay Subscriptions",
@@ -169,7 +140,7 @@ pub async fn create_razorpay_subscription(
     // Validate plan exists
     let plan = state
         .repository
-        .get_plan_in_tenant(&tenant.app_id, &tenant.org_id, &req.plan_id)
+        .get_plan_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.plan_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch plan");
@@ -202,7 +173,7 @@ pub async fn create_razorpay_subscription(
     let subscription = models::RazorpaySubscription {
         id: Uuid::new_v4().to_string(),
         app_id: tenant.app_id.clone(),
-        org_id: tenant.org_id.clone(),
+        tenant_id: tenant.tenant_id.clone(),
         razorpay_subscription_id: rz_response.id,
         plan_id: req.plan_id,
         customer_id: req.customer_id,
@@ -234,19 +205,12 @@ pub async fn get_razorpay_subscription(
     state: &AppState,
     request: Request<GetRazorpaySubscriptionRequest>,
 ) -> Result<Response<GetRazorpaySubscriptionResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_SUBSCRIPTION_READ)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
     let sub = state
         .repository
-        .get_subscription_in_tenant(&tenant.app_id, &tenant.org_id, &req.subscription_id)
+        .get_subscription_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.subscription_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch subscription");
@@ -263,13 +227,6 @@ pub async fn list_razorpay_subscriptions(
     state: &AppState,
     request: Request<ListRazorpaySubscriptionsRequest>,
 ) -> Result<Response<ListRazorpaySubscriptionsResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_SUBSCRIPTION_READ)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
@@ -281,7 +238,7 @@ pub async fn list_razorpay_subscriptions(
         .repository
         .list_subscriptions_in_tenant(
             &tenant.app_id,
-            &tenant.org_id,
+            &tenant.tenant_id,
             req.customer_id.as_deref(),
             req.plan_id.as_deref(),
             status_filter,
@@ -304,13 +261,6 @@ pub async fn pause_razorpay_subscription(
     state: &AppState,
     request: Request<PauseRazorpaySubscriptionRequest>,
 ) -> Result<Response<PauseRazorpaySubscriptionResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_SUBSCRIPTION_MANAGE)
-            .await?;
-    }
-
     check_feature_flag(
         state.config.feature_flags.razorpay_subscriptions_enabled,
         "Razorpay Subscriptions",
@@ -322,7 +272,7 @@ pub async fn pause_razorpay_subscription(
 
     let sub = state
         .repository
-        .get_subscription_in_tenant(&tenant.app_id, &tenant.org_id, &req.subscription_id)
+        .get_subscription_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.subscription_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch subscription");
@@ -353,7 +303,7 @@ pub async fn pause_razorpay_subscription(
 
     let updated = state
         .repository
-        .get_subscription_in_tenant(&tenant.app_id, &tenant.org_id, &req.subscription_id)
+        .get_subscription_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.subscription_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch subscription");
@@ -370,13 +320,6 @@ pub async fn resume_razorpay_subscription(
     state: &AppState,
     request: Request<ResumeRazorpaySubscriptionRequest>,
 ) -> Result<Response<ResumeRazorpaySubscriptionResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_SUBSCRIPTION_MANAGE)
-            .await?;
-    }
-
     check_feature_flag(
         state.config.feature_flags.razorpay_subscriptions_enabled,
         "Razorpay Subscriptions",
@@ -388,7 +331,7 @@ pub async fn resume_razorpay_subscription(
 
     let sub = state
         .repository
-        .get_subscription_in_tenant(&tenant.app_id, &tenant.org_id, &req.subscription_id)
+        .get_subscription_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.subscription_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch subscription");
@@ -419,7 +362,7 @@ pub async fn resume_razorpay_subscription(
 
     let updated = state
         .repository
-        .get_subscription_in_tenant(&tenant.app_id, &tenant.org_id, &req.subscription_id)
+        .get_subscription_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.subscription_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch subscription");
@@ -436,13 +379,6 @@ pub async fn cancel_razorpay_subscription(
     state: &AppState,
     request: Request<CancelRazorpaySubscriptionRequest>,
 ) -> Result<Response<CancelRazorpaySubscriptionResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_SUBSCRIPTION_MANAGE)
-            .await?;
-    }
-
     check_feature_flag(
         state.config.feature_flags.razorpay_subscriptions_enabled,
         "Razorpay Subscriptions",
@@ -454,7 +390,7 @@ pub async fn cancel_razorpay_subscription(
 
     let sub = state
         .repository
-        .get_subscription_in_tenant(&tenant.app_id, &tenant.org_id, &req.subscription_id)
+        .get_subscription_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.subscription_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch subscription");
@@ -485,7 +421,7 @@ pub async fn cancel_razorpay_subscription(
 
     let updated = state
         .repository
-        .get_subscription_in_tenant(&tenant.app_id, &tenant.org_id, &req.subscription_id)
+        .get_subscription_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.subscription_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch subscription");
@@ -502,13 +438,6 @@ pub async fn update_razorpay_subscription(
     state: &AppState,
     request: Request<UpdateRazorpaySubscriptionRequest>,
 ) -> Result<Response<UpdateRazorpaySubscriptionResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_SUBSCRIPTION_MANAGE)
-            .await?;
-    }
-
     check_feature_flag(
         state.config.feature_flags.razorpay_subscriptions_enabled,
         "Razorpay Subscriptions",
@@ -520,7 +449,7 @@ pub async fn update_razorpay_subscription(
 
     let sub = state
         .repository
-        .get_subscription_in_tenant(&tenant.app_id, &tenant.org_id, &req.subscription_id)
+        .get_subscription_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.subscription_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch subscription");
@@ -552,7 +481,7 @@ pub async fn update_razorpay_subscription(
 
     state
         .repository
-        .update_subscription_in_tenant(&tenant.app_id, &tenant.org_id, &req.subscription_id, update)
+        .update_subscription_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.subscription_id, update)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to update subscription");
@@ -561,7 +490,7 @@ pub async fn update_razorpay_subscription(
 
     let updated = state
         .repository
-        .get_subscription_in_tenant(&tenant.app_id, &tenant.org_id, &req.subscription_id)
+        .get_subscription_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.subscription_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch subscription");
@@ -578,7 +507,7 @@ fn plan_to_proto(p: models::RazorpayPlan) -> RazorpayPlan {
     RazorpayPlan {
         id: p.id,
         app_id: p.app_id,
-        org_id: p.org_id,
+        tenant_id: p.tenant_id,
         razorpay_plan_id: p.razorpay_plan_id,
         name: p.name,
         description: p.description,
@@ -594,7 +523,7 @@ fn subscription_to_proto(s: models::RazorpaySubscription) -> RazorpaySubscriptio
     RazorpaySubscription {
         id: s.id,
         app_id: s.app_id,
-        org_id: s.org_id,
+        tenant_id: s.tenant_id,
         razorpay_subscription_id: s.razorpay_subscription_id,
         plan_id: s.plan_id,
         customer_id: s.customer_id,

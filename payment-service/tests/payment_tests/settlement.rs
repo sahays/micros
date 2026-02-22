@@ -1,4 +1,4 @@
-use crate::common::embedded::{TestApp, TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID};
+use crate::common::embedded::{TestApp, TEST_APP_ID, TEST_TENANT_ID, TEST_USER_ID};
 use serial_test::serial;
 use wiremock::matchers::{method, path_regex};
 use wiremock::{Mock, ResponseTemplate};
@@ -31,7 +31,7 @@ async fn request_on_demand_settlement_via_grpc() {
     let settlement = client
         .request_on_demand_settlement(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             None,
             100000,
@@ -56,7 +56,7 @@ async fn get_settlement_not_found() {
     let result = client
         .get_settlement(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "nonexistent-id",
         )
@@ -82,7 +82,7 @@ async fn get_settlement_after_create() {
     let created = client
         .request_on_demand_settlement(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             None,
             100000,
@@ -92,7 +92,7 @@ async fn get_settlement_after_create() {
         .expect("Failed to request settlement");
 
     let fetched = client
-        .get_settlement(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), &created.id)
+        .get_settlement(TEST_APP_ID, TEST_TENANT_ID, Some(TEST_USER_ID), &created.id)
         .await
         .expect("Failed to get settlement");
 
@@ -110,7 +110,7 @@ async fn list_settlements_empty() {
     let (settlements, total) = client
         .list_settlements(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             None,
             None,

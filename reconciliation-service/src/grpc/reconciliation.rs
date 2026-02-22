@@ -1,6 +1,5 @@
 //! Reconciliation process and adjustment gRPC handlers.
 
-use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::proto::*;
 use crate::services::Database;
 use service_core::grpc::LedgerClient;
@@ -9,19 +8,17 @@ use tonic::{Request, Response, Status};
 
 pub async fn start_reconciliation(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     ledger_client: &Option<Arc<LedgerClient>>,
     request: Request<StartReconciliationRequest>,
 ) -> Result<Response<StartReconciliationResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_START)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
 
     // Validate bank account exists and belongs to tenant
     let bank_account = db
-        .get_bank_account(&_auth.tenant_id, &req.bank_account_id)
+        .get_bank_account(&app_id, &req.bank_account_id)
         .await
         .map_err(|e| Status::internal(format!("Failed to get bank account: {}", e)))?
         .ok_or_else(|| Status::not_found("Bank account not found"))?;
@@ -30,7 +27,7 @@ pub async fn start_reconciliation(
     let expected_balance = if let Some(ref ledger_client) = ledger_client {
         match ledger_client
             .get_balance(
-                &_auth.tenant_id,
+                &app_id,
                 &bank_account.ledger_account_id.to_string(),
                 Some(&req.period_end),
             )
@@ -63,7 +60,7 @@ pub async fn start_reconciliation(
 
     let reconciliation = db
         .start_reconciliation(
-            &_auth.tenant_id,
+            &app_id,
             &req.bank_account_id,
             &req.period_start,
             &req.period_end,
@@ -81,16 +78,14 @@ pub async fn start_reconciliation(
 
 pub async fn get_reconciliation(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetReconciliationRequest>,
 ) -> Result<Response<GetReconciliationResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_READ)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     let reconciliation = db
-        .get_reconciliation(&_auth.tenant_id, &req.reconciliation_id)
+        .get_reconciliation(&app_id, &req.reconciliation_id)
         .await
         .map_err(|e| Status::internal(format!("Failed to get reconciliation: {}", e)))?
         .ok_or_else(|| Status::not_found("Reconciliation not found"))?;
@@ -102,17 +97,15 @@ pub async fn get_reconciliation(
 
 pub async fn list_reconciliations(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListReconciliationsRequest>,
 ) -> Result<Response<ListReconciliationsResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_READ)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     let (reconciliations, next_token) = db
         .list_reconciliations(
-            &_auth.tenant_id,
+            &app_id,
             &req.bank_account_id,
             req.page_size,
             req.page_token.as_deref(),
@@ -128,16 +121,14 @@ pub async fn list_reconciliations(
 
 pub async fn complete_reconciliation(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<CompleteReconciliationRequest>,
 ) -> Result<Response<CompleteReconciliationResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_COMPLETE)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     let reconciliation = db
-        .complete_reconciliation(&_auth.tenant_id, &req.reconciliation_id)
+        .complete_reconciliation(&app_id, &req.reconciliation_id)
         .await
         .map_err(|e| {
             Status::internal(format!("Failed to complete reconciliation: {}", e))
@@ -150,15 +141,13 @@ pub async fn complete_reconciliation(
 
 pub async fn abandon_reconciliation(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<AbandonReconciliationRequest>,
 ) -> Result<Response<AbandonReconciliationResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_ABANDON)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
-    db.abandon_reconciliation(&_auth.tenant_id, &req.reconciliation_id)
+    db.abandon_reconciliation(&app_id, &req.reconciliation_id)
         .await
         .map_err(|e| {
             Status::internal(format!("Failed to abandon reconciliation: {}", e))
@@ -171,12 +160,10 @@ pub async fn abandon_reconciliation(
 
 pub async fn create_adjustment(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<CreateAdjustmentRequest>,
 ) -> Result<Response<CreateAdjustmentResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_ADJUSTMENT_CREATE)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
 
@@ -191,7 +178,7 @@ pub async fn create_adjustment(
 
     // Validate reconciliation exists and is in progress
     let reconciliation = db
-        .get_reconciliation(&_auth.tenant_id, &req.reconciliation_id)
+        .get_reconciliation(&app_id, &req.reconciliation_id)
         .await
         .map_err(|e| Status::internal(format!("Failed to get reconciliation: {}", e)))?
         .ok_or_else(|| Status::not_found("Reconciliation not found"))?;
@@ -212,7 +199,7 @@ pub async fn create_adjustment(
 
     let adjustment = db
         .create_adjustment(
-            &_auth.tenant_id,
+            &app_id,
             &req.reconciliation_id,
             adjustment_type,
             &req.description,
@@ -230,17 +217,15 @@ pub async fn create_adjustment(
 
 pub async fn list_adjustments(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListAdjustmentsRequest>,
 ) -> Result<Response<ListAdjustmentsResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_ADJUSTMENT_READ)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     let (adjustments, next_token) = db
         .list_adjustments(
-            &_auth.tenant_id,
+            &app_id,
             &req.reconciliation_id,
             req.page_size,
             req.page_token.as_deref(),

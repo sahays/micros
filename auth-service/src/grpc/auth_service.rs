@@ -3,7 +3,7 @@
 use service_core::grpc::IntoStatus;
 use tonic::{Request, Response, Status};
 
-use crate::grpc::capability_check::require_auth;
+use crate::grpc::capability_check::extract_auth_context;
 use crate::grpc::proto::auth::{
     auth_service_server::AuthService, ChangePasswordRequest, ChangePasswordResponse, LoginRequest,
     LoginResponse, LogoutRequest, RefreshRequest, RefreshResponse, RegisterRequest,
@@ -146,7 +146,7 @@ impl AuthService for AuthServiceImpl {
                 let proto_claims = super::proto::auth::TokenClaims {
                     sub: claims.sub,
                     app_id: claims.app_id,
-                    org_id: claims.org_id,
+                    tenant_id: claims.tenant_id,
                     email: claims.email,
                     jti: claims.jti,
                     token_type: "access".to_string(),
@@ -297,7 +297,7 @@ impl AuthService for AuthServiceImpl {
         &self,
         request: Request<ChangePasswordRequest>,
     ) -> Result<Response<ChangePasswordResponse>, Status> {
-        let auth_ctx = require_auth(&self.state, &request).await?;
+        let auth_ctx = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 

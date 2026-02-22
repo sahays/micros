@@ -1,6 +1,5 @@
 //! gRPC handlers for linked account operations.
 
-use crate::grpc::capability_check::{capabilities, CapabilityMetadata};
 use crate::grpc::helpers::{
     check_feature_flag, check_razorpay_configured, datetime_to_timestamp, extract_tenant_context,
 };
@@ -16,16 +15,6 @@ pub async fn create_linked_account(
     state: &AppState,
     request: Request<CreateLinkedAccountRequest>,
 ) -> Result<Response<CreateLinkedAccountResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(
-                &metadata,
-                capabilities::PAYMENT_LINKED_ACCOUNT_CREATE,
-            )
-            .await?;
-    }
-
     check_feature_flag(
         state.config.feature_flags.razorpay_route_enabled,
         "Razorpay Route",
@@ -38,7 +27,7 @@ pub async fn create_linked_account(
     // Check if org already has a linked account
     if let Some(_existing) = state
         .repository
-        .get_linked_account_by_org_in_tenant(&tenant.app_id, &tenant.org_id)
+        .get_linked_account_by_org_in_tenant(&tenant.app_id, &tenant.tenant_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to check existing linked account");
@@ -83,7 +72,7 @@ pub async fn create_linked_account(
     let account = models::LinkedAccount {
         id: Uuid::new_v4().to_string(),
         app_id: tenant.app_id.clone(),
-        org_id: tenant.org_id.clone(),
+        tenant_id: tenant.tenant_id.clone(),
         razorpay_account_id: rz_response.id,
         name: req.name,
         email: req.email,
@@ -129,19 +118,12 @@ pub async fn get_linked_account(
     state: &AppState,
     request: Request<GetLinkedAccountRequest>,
 ) -> Result<Response<GetLinkedAccountResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_LINKED_ACCOUNT_READ)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
     let account = state
         .repository
-        .get_linked_account_in_tenant(&tenant.app_id, &tenant.org_id, &req.linked_account_id)
+        .get_linked_account_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.linked_account_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch linked account");
@@ -158,16 +140,6 @@ pub async fn update_linked_account(
     state: &AppState,
     request: Request<UpdateLinkedAccountRequest>,
 ) -> Result<Response<UpdateLinkedAccountResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(
-                &metadata,
-                capabilities::PAYMENT_LINKED_ACCOUNT_UPDATE,
-            )
-            .await?;
-    }
-
     check_feature_flag(
         state.config.feature_flags.razorpay_route_enabled,
         "Razorpay Route",
@@ -188,7 +160,7 @@ pub async fn update_linked_account(
         .repository
         .update_linked_account_in_tenant(
             &tenant.app_id,
-            &tenant.org_id,
+            &tenant.tenant_id,
             &req.linked_account_id,
             update,
         )
@@ -200,7 +172,7 @@ pub async fn update_linked_account(
 
     let account = state
         .repository
-        .get_linked_account_in_tenant(&tenant.app_id, &tenant.org_id, &req.linked_account_id)
+        .get_linked_account_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.linked_account_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch updated linked account");
@@ -217,13 +189,6 @@ pub async fn list_linked_accounts(
     state: &AppState,
     request: Request<ListLinkedAccountsRequest>,
 ) -> Result<Response<ListLinkedAccountsResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_LINKED_ACCOUNT_READ)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
@@ -235,7 +200,7 @@ pub async fn list_linked_accounts(
         .repository
         .list_linked_accounts_in_tenant(
             &tenant.app_id,
-            &tenant.org_id,
+            &tenant.tenant_id,
             status_filter,
             limit,
             offset,
@@ -256,13 +221,6 @@ pub async fn update_commission_config(
     state: &AppState,
     request: Request<UpdateCommissionConfigRequest>,
 ) -> Result<Response<UpdateCommissionConfigResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_COMMISSION_MANAGE)
-            .await?;
-    }
-
     check_feature_flag(
         state.config.feature_flags.razorpay_route_enabled,
         "Razorpay Route",
@@ -295,7 +253,7 @@ pub async fn update_commission_config(
         .repository
         .update_linked_account_in_tenant(
             &tenant.app_id,
-            &tenant.org_id,
+            &tenant.tenant_id,
             &req.linked_account_id,
             update,
         )
@@ -307,7 +265,7 @@ pub async fn update_commission_config(
 
     let account = state
         .repository
-        .get_linked_account_in_tenant(&tenant.app_id, &tenant.org_id, &req.linked_account_id)
+        .get_linked_account_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.linked_account_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch updated linked account");
@@ -324,7 +282,7 @@ fn linked_account_to_proto(a: models::LinkedAccount) -> LinkedAccount {
     LinkedAccount {
         id: a.id,
         app_id: a.app_id,
-        org_id: a.org_id,
+        tenant_id: a.tenant_id,
         razorpay_account_id: a.razorpay_account_id,
         name: a.name,
         email: a.email,

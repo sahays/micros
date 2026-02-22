@@ -1,4 +1,4 @@
-use crate::common::embedded::{TestApp, TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID};
+use crate::common::embedded::{TestApp, TEST_APP_ID, TEST_TENANT_ID, TEST_USER_ID};
 use serial_test::serial;
 use service_core::grpc::proto::payment::PaymentLinkStatus;
 use wiremock::matchers::{method, path_regex};
@@ -45,7 +45,7 @@ async fn create_payment_link_via_grpc() {
     let link = client
         .create_payment_link(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             10000,
             "INR",
@@ -76,7 +76,7 @@ async fn get_payment_link_not_found() {
     let result = client
         .get_payment_link(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "nonexistent-id",
         )
@@ -104,7 +104,7 @@ async fn get_payment_link_after_create() {
     let created = client
         .create_payment_link(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             10000,
             "INR",
@@ -118,7 +118,7 @@ async fn get_payment_link_after_create() {
         .expect("Failed to create payment link");
 
     let fetched = client
-        .get_payment_link(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), &created.id)
+        .get_payment_link(TEST_APP_ID, TEST_TENANT_ID, Some(TEST_USER_ID), &created.id)
         .await
         .expect("Failed to get payment link");
 
@@ -150,7 +150,7 @@ async fn cancel_payment_link_created_status() {
     let created = client
         .create_payment_link(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             10000,
             "INR",
@@ -164,7 +164,7 @@ async fn cancel_payment_link_created_status() {
         .expect("Failed to create payment link");
 
     let cancelled = client
-        .cancel_payment_link(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), &created.id)
+        .cancel_payment_link(TEST_APP_ID, TEST_TENANT_ID, Some(TEST_USER_ID), &created.id)
         .await
         .expect("Failed to cancel payment link");
 
@@ -189,7 +189,7 @@ async fn list_payment_links_by_status() {
     client
         .create_payment_link(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             10000,
             "INR",
@@ -204,7 +204,7 @@ async fn list_payment_links_by_status() {
 
     // List all
     let (links, total) = client
-        .list_payment_links(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), None, 10, 0)
+        .list_payment_links(TEST_APP_ID, TEST_TENANT_ID, Some(TEST_USER_ID), None, 10, 0)
         .await
         .expect("Failed to list payment links");
 
@@ -215,7 +215,7 @@ async fn list_payment_links_by_status() {
     let (links, total) = client
         .list_payment_links(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             Some(PaymentLinkStatus::Paid),
             10,

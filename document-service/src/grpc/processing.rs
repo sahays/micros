@@ -25,7 +25,7 @@ pub async fn process_document(
             doc! {
                 "_id": &req.document_id,
                 "app_id": &tenant.app_id,
-                "org_id": &tenant.org_id
+                "tenant_id": &tenant.tenant_id
             },
             None,
         )
@@ -57,7 +57,7 @@ pub async fn process_document(
         let job = ProcessingJob {
             document_id: document.id.clone(),
             app_id: document.app_id.clone(),
-            org_id: document.org_id.clone(),
+            tenant_id: document.tenant_id.clone(),
             owner_id: document.owner_id.clone(),
             mime_type: document.mime_type.clone(),
             storage_key: document.storage_key.clone(),
@@ -94,7 +94,7 @@ pub async fn get_processing_status(
             doc! {
                 "_id": &req.document_id,
                 "app_id": &tenant.app_id,
-                "org_id": &tenant.org_id
+                "tenant_id": &tenant.tenant_id
             },
             None,
         )

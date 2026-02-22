@@ -1,6 +1,5 @@
 //! Matching rules and transaction matching gRPC handlers.
 
-use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::proto::*;
 use crate::services::Database;
 use service_core::grpc::LedgerClient;
@@ -9,12 +8,10 @@ use tonic::{Request, Response, Status};
 
 pub async fn create_matching_rule(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<CreateMatchingRuleRequest>,
 ) -> Result<Response<CreateMatchingRuleResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_RULE_CREATE)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
 
@@ -38,7 +35,7 @@ pub async fn create_matching_rule(
 
     let rule = db
         .create_matching_rule(
-            &_auth.tenant_id,
+            &app_id,
             &req.name,
             &req.description_pattern,
             match_type,
@@ -55,16 +52,14 @@ pub async fn create_matching_rule(
 
 pub async fn get_matching_rule(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetMatchingRuleRequest>,
 ) -> Result<Response<GetMatchingRuleResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_RULE_READ)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     let rule = db
-        .get_matching_rule(&_auth.tenant_id, &req.rule_id)
+        .get_matching_rule(&app_id, &req.rule_id)
         .await
         .map_err(|e| Status::internal(format!("Failed to get matching rule: {}", e)))?
         .ok_or_else(|| Status::not_found("Matching rule not found"))?;
@@ -76,17 +71,15 @@ pub async fn get_matching_rule(
 
 pub async fn list_matching_rules(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListMatchingRulesRequest>,
 ) -> Result<Response<ListMatchingRulesResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_RULE_READ)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     let (rules, next_token) = db
         .list_matching_rules(
-            &_auth.tenant_id,
+            &app_id,
             req.page_size,
             req.page_token.as_deref(),
             req.active_only.unwrap_or(false),
@@ -102,12 +95,10 @@ pub async fn list_matching_rules(
 
 pub async fn update_matching_rule(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<UpdateMatchingRuleRequest>,
 ) -> Result<Response<UpdateMatchingRuleResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_RULE_UPDATE)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     let match_type = req
@@ -130,7 +121,7 @@ pub async fn update_matching_rule(
 
     let rule = db
         .update_matching_rule(
-            &_auth.tenant_id,
+            &app_id,
             &req.rule_id,
             req.name.as_deref(),
             req.description_pattern.as_deref(),
@@ -150,15 +141,13 @@ pub async fn update_matching_rule(
 
 pub async fn delete_matching_rule(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<DeleteMatchingRuleRequest>,
 ) -> Result<Response<DeleteMatchingRuleResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_RULE_DELETE)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
-    db.delete_matching_rule(&_auth.tenant_id, &req.rule_id)
+    db.delete_matching_rule(&app_id, &req.rule_id)
         .await
         .map_err(|e| Status::internal(format!("Failed to delete matching rule: {}", e)))?;
 
@@ -167,12 +156,12 @@ pub async fn delete_matching_rule(
 
 pub async fn match_transaction(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<MatchTransactionRequest>,
 ) -> Result<Response<MatchTransactionResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_MATCH_CREATE)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
+    let user_id = service_core::grpc::extract_user_id(&request)
+        .unwrap_or_default();
 
     let req = request.into_inner();
 
@@ -185,7 +174,7 @@ pub async fn match_transaction(
 
     // Verify the bank transaction exists and belongs to tenant
     let bank_txn = db
-        .get_bank_transaction(&_auth.tenant_id, &req.bank_transaction_id)
+        .get_bank_transaction(&app_id, &req.bank_transaction_id)
         .await
         .map_err(|e| Status::internal(format!("Failed to get transaction: {}", e)))?
         .ok_or_else(|| Status::not_found("Bank transaction not found"))?;
@@ -207,11 +196,11 @@ pub async fn match_transaction(
 
     let matches = db
         .match_transaction(
-            &_auth.tenant_id,
+            &app_id,
             &req.bank_transaction_id,
             &req.ledger_entry_ids,
             "manual",
-            &_auth.user_id,
+            &user_id,
         )
         .await
         .map_err(|e| {
@@ -225,18 +214,16 @@ pub async fn match_transaction(
 
 pub async fn unmatch_transaction(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<UnmatchTransactionRequest>,
 ) -> Result<Response<UnmatchTransactionResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_MATCH_DELETE)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
 
     // Verify the bank transaction exists and belongs to tenant
     let bank_txn = db
-        .get_bank_transaction(&_auth.tenant_id, &req.bank_transaction_id)
+        .get_bank_transaction(&app_id, &req.bank_transaction_id)
         .await
         .map_err(|e| Status::internal(format!("Failed to get transaction: {}", e)))?
         .ok_or_else(|| Status::not_found("Bank transaction not found"))?;
@@ -255,7 +242,7 @@ pub async fn unmatch_transaction(
         "Unmatching transaction"
     );
 
-    db.unmatch_transaction(&_auth.tenant_id, &req.bank_transaction_id)
+    db.unmatch_transaction(&app_id, &req.bank_transaction_id)
         .await
         .map_err(|e| {
             Status::internal(format!("Failed to unmatch transaction: {}", e))
@@ -266,16 +253,14 @@ pub async fn unmatch_transaction(
 
 pub async fn exclude_transaction(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ExcludeTransactionRequest>,
 ) -> Result<Response<ExcludeTransactionResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_EXCLUDE)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     db.exclude_transaction(
-        &_auth.tenant_id,
+        &app_id,
         &req.bank_transaction_id,
         req.reason.as_deref(),
     )
@@ -288,13 +273,11 @@ pub async fn exclude_transaction(
 #[allow(clippy::too_many_arguments)]
 pub async fn get_candidate_entries(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     ledger_client: &Option<Arc<LedgerClient>>,
     request: Request<GetCandidateEntriesRequest>,
 ) -> Result<Response<GetCandidateEntriesResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_TRANSACTION_READ)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     let date_range_days = req.date_range_days.unwrap_or(7) as i64;
@@ -302,20 +285,20 @@ pub async fn get_candidate_entries(
 
     // Get the bank transaction to find its date and amount
     let bank_txn = db
-        .get_bank_transaction(&_auth.tenant_id, &req.bank_transaction_id)
+        .get_bank_transaction(&app_id, &req.bank_transaction_id)
         .await
         .map_err(|e| Status::internal(format!("Failed to get transaction: {}", e)))?
         .ok_or_else(|| Status::not_found("Bank transaction not found"))?;
 
     // Get the bank account to find the linked ledger account
     let statement = db
-        .get_statement_by_transaction(&_auth.tenant_id, &req.bank_transaction_id)
+        .get_statement_by_transaction(&app_id, &req.bank_transaction_id)
         .await
         .map_err(|e| Status::internal(format!("Failed to get statement: {}", e)))?
         .ok_or_else(|| Status::internal("Statement not found for transaction"))?;
 
     let bank_account = db
-        .get_bank_account(&_auth.tenant_id, &statement.bank_account_id.to_string())
+        .get_bank_account(&app_id, &statement.bank_account_id.to_string())
         .await
         .map_err(|e| Status::internal(format!("Failed to get bank account: {}", e)))?
         .ok_or_else(|| Status::internal("Bank account not found"))?;
@@ -348,7 +331,7 @@ pub async fn get_candidate_entries(
     // Query ledger transactions for this account
     let ledger_response = ledger_client
         .list_transactions(
-            &_auth.tenant_id,
+            &app_id,
             Some(&bank_account.ledger_account_id.to_string()),
             Some(&start_date.format("%Y-%m-%d").to_string()),
             Some(&end_date.format("%Y-%m-%d").to_string()),
@@ -437,12 +420,10 @@ pub async fn get_candidate_entries(
 }
 
 pub async fn get_ai_suggestions(
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetAiSuggestionsRequest>,
 ) -> Result<Response<GetAiSuggestionsResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_AI_SUGGEST)
-        .await?;
+    let _app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     // TODO: Integrate with genai-service for AI suggestions
     let _req = request.into_inner();
@@ -453,12 +434,10 @@ pub async fn get_ai_suggestions(
 }
 
 pub async fn confirm_suggestion(
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ConfirmSuggestionRequest>,
 ) -> Result<Response<ConfirmSuggestionResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_AI_CONFIRM)
-        .await?;
+    let _app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     // TODO: Implement suggestion confirmation
     let _req = request.into_inner();
@@ -467,12 +446,10 @@ pub async fn confirm_suggestion(
 }
 
 pub async fn reject_suggestion(
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<RejectSuggestionRequest>,
 ) -> Result<Response<RejectSuggestionResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_AI_CONFIRM)
-        .await?;
+    let _app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     // TODO: Implement suggestion rejection
     let _req = request.into_inner();

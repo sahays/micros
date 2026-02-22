@@ -1,4 +1,4 @@
-use crate::common::embedded::{TestApp, TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID};
+use crate::common::embedded::{TestApp, TEST_APP_ID, TEST_TENANT_ID, TEST_USER_ID};
 use serial_test::serial;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, ResponseTemplate};
@@ -30,7 +30,7 @@ async fn create_customer_via_grpc() {
     let customer = client
         .create_customer(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "Test User",
             "test@example.com",
@@ -63,7 +63,7 @@ async fn create_customer_duplicate_returns_already_exists() {
     client
         .create_customer(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "Test User",
             "test@example.com",
@@ -76,7 +76,7 @@ async fn create_customer_duplicate_returns_already_exists() {
     let result = client
         .create_customer(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "Test User 2",
             "test2@example.com",
@@ -98,7 +98,7 @@ async fn get_customer_not_found() {
     let result = client
         .get_customer(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "nonexistent-id",
         )
@@ -124,7 +124,7 @@ async fn get_customer_after_create() {
     let created = client
         .create_customer(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "Test User",
             "test@example.com",
@@ -134,7 +134,7 @@ async fn get_customer_after_create() {
         .expect("Failed to create customer");
 
     let fetched = client
-        .get_customer(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), &created.id)
+        .get_customer(TEST_APP_ID, TEST_TENANT_ID, Some(TEST_USER_ID), &created.id)
         .await
         .expect("Failed to get customer");
 
@@ -160,7 +160,7 @@ async fn list_customers_pagination() {
     client
         .create_customer(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "Test User",
             "test@example.com",
@@ -170,7 +170,7 @@ async fn list_customers_pagination() {
         .expect("Failed to create customer");
 
     let (customers, total_count) = client
-        .list_customers(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), 10, 0)
+        .list_customers(TEST_APP_ID, TEST_TENANT_ID, Some(TEST_USER_ID), 10, 0)
         .await
         .expect("Failed to list customers");
 

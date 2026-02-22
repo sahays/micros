@@ -3,7 +3,7 @@
 use crate::config::BillingConfig;
 use crate::grpc::{
     proto::{billing_service_server::BillingServiceServer, FILE_DESCRIPTOR_SET},
-    BillingServiceImpl, CapabilityChecker,
+    BillingServiceImpl,
 };
 use service_core::grpc::proto::common::app_registry_service_server::AppRegistryServiceServer;
 use crate::services::Database;
@@ -26,7 +26,6 @@ use tracing::Level;
 pub struct AppState {
     pub config: BillingConfig,
     pub db: Arc<Database>,
-    pub capability_checker: Arc<CapabilityChecker>,
 }
 
 /// State for health check endpoints.
@@ -121,25 +120,9 @@ impl Application {
 
         let db = Arc::new(db);
 
-        // Create capability checker
-        let auth_endpoint = if config.auth.auth_service_endpoint.is_empty() {
-            None
-        } else {
-            Some(config.auth.auth_service_endpoint.as_str())
-        };
-        let capability_checker =
-            Arc::new(CapabilityChecker::new(auth_endpoint).await.map_err(|e| {
-                tracing::error!(error = %e, "Failed to create capability checker");
-                AppError::InternalError(anyhow::anyhow!(
-                    "Failed to create capability checker: {}",
-                    e
-                ))
-            })?);
-
         let state = AppState {
             config: config.clone(),
             db,
-            capability_checker,
         };
 
         // Bind HTTP listener
@@ -203,8 +186,7 @@ impl Application {
             .with_state(health_state);
 
         // Build gRPC server
-        let billing_service =
-            BillingServiceImpl::new(self.state.db.clone(), self.state.capability_checker.clone());
+        let billing_service = BillingServiceImpl::new(self.state.db.clone());
 
         // App registry (Redis-backed)
         let redis_url =

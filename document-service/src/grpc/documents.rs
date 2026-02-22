@@ -43,18 +43,18 @@ pub async fn upload_document(
 
     let size = file_data.len() as i64;
 
-    // Generate storage key: {app_id}/{org_id}/{document_id}.{ext}
+    // Generate storage key: {app_id}/{tenant_id}/{document_id}.{ext}
     let extension = std::path::Path::new(&filename)
         .extension()
         .and_then(|ext| ext.to_str())
         .unwrap_or("bin");
     let document_id = Uuid::new_v4().to_string();
-    let storage_key = format!("{}/{}/{}.{}", tenant.app_id, tenant.org_id, document_id, extension);
+    let storage_key = format!("{}/{}/{}.{}", tenant.app_id, tenant.tenant_id, document_id, extension);
 
     // Create document
     let mut document = Document::new(
         tenant.app_id,
-        tenant.org_id,
+        tenant.tenant_id,
         tenant.user_id,
         filename,
         mime_type,
@@ -117,7 +117,7 @@ pub async fn download_document(
             doc! {
                 "_id": &req.document_id,
                 "app_id": &tenant.app_id,
-                "org_id": &tenant.org_id
+                "tenant_id": &tenant.tenant_id
             },
             None,
         )
@@ -160,7 +160,7 @@ pub async fn get_document(
             doc! {
                 "_id": &req.document_id,
                 "app_id": &tenant.app_id,
-                "org_id": &tenant.org_id
+                "tenant_id": &tenant.tenant_id
             },
             None,
         )
@@ -187,7 +187,7 @@ pub async fn list_documents(
 
     let mut filter = doc! {
         "app_id": &tenant.app_id,
-        "org_id": &tenant.org_id,
+        "tenant_id": &tenant.tenant_id,
         "owner_id": &tenant.user_id
     };
 
@@ -259,7 +259,7 @@ pub async fn delete_document(
             doc! {
                 "_id": &req.document_id,
                 "app_id": &tenant.app_id,
-                "org_id": &tenant.org_id
+                "tenant_id": &tenant.tenant_id
             },
             None,
         )

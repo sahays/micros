@@ -295,7 +295,7 @@ pub async fn verify_otp_impl(
                 .generate_token_pair(
                     &user.user_id.to_string(),
                     &tenant_id.to_string(),
-                    "", // org_id filled from context
+                    "", // tenant_id filled from context
                     &user.email,
                 )
                 .map_err(|e| {

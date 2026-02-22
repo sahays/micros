@@ -6,7 +6,7 @@ pub struct Settlement {
     #[serde(rename = "_id")]
     pub id: String,
     pub app_id: String,
-    pub org_id: String,
+    pub tenant_id: String,
     pub razorpay_settlement_id: String,
     pub linked_account_id: Option<String>,
     pub amount: u64,

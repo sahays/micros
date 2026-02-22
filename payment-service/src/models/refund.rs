@@ -6,7 +6,7 @@ pub struct Refund {
     #[serde(rename = "_id")]
     pub id: String,
     pub app_id: String,
-    pub org_id: String,
+    pub tenant_id: String,
     pub razorpay_refund_id: String,
     pub payment_id: String,
     pub amount: u64,

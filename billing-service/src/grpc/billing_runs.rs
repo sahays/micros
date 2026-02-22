@@ -1,6 +1,5 @@
 //! Billing run gRPC handlers.
 
-use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::helpers::*;
 use crate::grpc::proto::*;
 use crate::models::{
@@ -14,13 +13,9 @@ use tonic::{Request, Response, Status};
 
 pub async fn run_billing(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<RunBillingRequest>,
 ) -> Result<Response<RunBillingResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_RUN_EXECUTE)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let run_type = BillingRunType::from_proto(req.run_type);
@@ -223,13 +218,9 @@ pub async fn run_billing(
 #[allow(clippy::too_many_arguments)]
 pub async fn run_billing_for_subscription(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<RunBillingForSubscriptionRequest>,
 ) -> Result<Response<RunBillingForSubscriptionResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_RUN_EXECUTE)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let subscription_id = parse_uuid(&req.subscription_id)?;
@@ -377,13 +368,9 @@ pub async fn run_billing_for_subscription(
 
 pub async fn get_billing_run(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetBillingRunRequest>,
 ) -> Result<Response<GetBillingRunResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_RUN_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let run_id = parse_uuid(&req.run_id)?;
@@ -415,13 +402,9 @@ pub async fn get_billing_run(
 
 pub async fn list_billing_runs(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListBillingRunsRequest>,
 ) -> Result<Response<ListBillingRunsResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_RUN_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     tracing::debug!(tenant_id = %tenant_id, "Listing billing runs");

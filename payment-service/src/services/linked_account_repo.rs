@@ -15,13 +15,13 @@ impl PaymentRepository {
     pub async fn get_linked_account_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         id: &str,
     ) -> Result<Option<LinkedAccount>> {
         let filter = doc! {
             "_id": id,
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
         Ok(self
             .linked_account_collection
@@ -32,11 +32,11 @@ impl PaymentRepository {
     pub async fn get_linked_account_by_org_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
     ) -> Result<Option<LinkedAccount>> {
         let filter = doc! {
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
         Ok(self
             .linked_account_collection
@@ -47,14 +47,14 @@ impl PaymentRepository {
     pub async fn update_linked_account_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         id: &str,
         update: mongodb::bson::Document,
     ) -> Result<()> {
         let filter = doc! {
             "_id": id,
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
         self.linked_account_collection
             .update_one(filter, doc! { "$set": update }, None)
@@ -83,7 +83,7 @@ impl PaymentRepository {
     pub async fn list_linked_accounts_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         status_filter: Option<LinkedAccountStatus>,
         limit: i64,
         offset: u64,
@@ -93,7 +93,7 @@ impl PaymentRepository {
 
         let mut filter = doc! {
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
 
         if let Some(status) = status_filter {

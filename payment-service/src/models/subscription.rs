@@ -6,7 +6,7 @@ pub struct RazorpayPlan {
     #[serde(rename = "_id")]
     pub id: String,
     pub app_id: String,
-    pub org_id: String,
+    pub tenant_id: String,
     pub razorpay_plan_id: String,
     pub name: String,
     pub description: String,
@@ -31,7 +31,7 @@ pub struct RazorpaySubscription {
     #[serde(rename = "_id")]
     pub id: String,
     pub app_id: String,
-    pub org_id: String,
+    pub tenant_id: String,
     pub razorpay_subscription_id: String,
     pub plan_id: String,
     pub customer_id: Option<String>,

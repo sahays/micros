@@ -1,6 +1,6 @@
 //! gRPC implementation of OrgService.
 
-use crate::grpc::capability_check::require_capability;
+use crate::grpc::capability_check::extract_auth_context;
 use crate::grpc::proto::auth::{
     org_service_server::OrgService, CreateOrgNodeRequest, CreateOrgNodeResponse,
     GetOrgNodeDescendantsRequest, GetOrgNodeDescendantsResponse, GetOrgNodeRequest,
@@ -91,8 +91,7 @@ impl OrgService for OrgServiceImpl {
         &self,
         request: Request<CreateOrgNodeRequest>,
     ) -> Result<Response<CreateOrgNodeResponse>, Status> {
-        // Require org.node:create capability
-        let _auth = require_capability(&self.state, &request, "org.node:create").await?;
+        let _auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 
@@ -158,8 +157,7 @@ impl OrgService for OrgServiceImpl {
         &self,
         request: Request<GetOrgNodeRequest>,
     ) -> Result<Response<GetOrgNodeResponse>, Status> {
-        // Require org.node:read capability
-        let _auth = require_capability(&self.state, &request, "org.node:read").await?;
+        let _auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 
@@ -183,8 +181,7 @@ impl OrgService for OrgServiceImpl {
         &self,
         request: Request<GetOrgNodeDescendantsRequest>,
     ) -> Result<Response<GetOrgNodeDescendantsResponse>, Status> {
-        // Require org.node:read capability
-        let _auth = require_capability(&self.state, &request, "org.node:read").await?;
+        let _auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 
@@ -217,8 +214,7 @@ impl OrgService for OrgServiceImpl {
         &self,
         request: Request<ListTenantOrgNodesRequest>,
     ) -> Result<Response<ListTenantOrgNodesResponse>, Status> {
-        // Require org.node:read capability
-        let _auth = require_capability(&self.state, &request, "org.node:read").await?;
+        let _auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 
@@ -251,8 +247,7 @@ impl OrgService for OrgServiceImpl {
         &self,
         request: Request<GetTenantOrgTreeRequest>,
     ) -> Result<Response<GetTenantOrgTreeResponse>, Status> {
-        // Require org.node:read capability
-        let _auth = require_capability(&self.state, &request, "org.node:read").await?;
+        let _auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 

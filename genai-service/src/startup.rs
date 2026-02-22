@@ -6,7 +6,7 @@
 use crate::config::GenaiConfig;
 use crate::grpc::{
     proto::{gen_ai_service_server::GenAiServiceServer, FILE_DESCRIPTOR_SET},
-    CapabilityChecker, GenaiGrpcService,
+    GenaiGrpcService,
 };
 use service_core::grpc::proto::common::app_registry_service_server::AppRegistryServiceServer;
 use crate::services::providers::gemini::{GeminiConfig, GeminiTextProvider};
@@ -27,7 +27,6 @@ pub struct AppState {
     pub db: GenaiDb,
     pub text_provider: Arc<dyn TextProvider>,
     pub document_fetcher: DocumentFetcher,
-    pub capability_checker: CapabilityChecker,
 }
 
 /// State for health check endpoints.
@@ -124,24 +123,11 @@ impl Application {
             "Initialized Gemini text provider (Vertex AI)"
         );
 
-        // Initialize capability checker
-        let capability_checker =
-            CapabilityChecker::new(config.auth.auth_service_endpoint.as_deref())
-                .await
-                .map_err(|e| {
-                    tracing::error!("Failed to initialize capability checker: {}", e);
-                    AppError::from(std::io::Error::other(format!(
-                        "Capability checker initialization error: {}",
-                        e
-                    )))
-                })?;
-
         let state = AppState {
             config: config.clone(),
             db,
             text_provider,
             document_fetcher,
-            capability_checker,
         };
 
         // Bind HTTP listener (port 0 = random port for testing)

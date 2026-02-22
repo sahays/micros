@@ -22,8 +22,8 @@ message PaymentLink {
   // Application ID (tenant).
   string app_id = 2;
 
-  // Organization ID within the application.
-  string org_id = 3;
+  // Tenant ID within the application.
+  string tenant_id = 3;
 
   // Razorpay payment link ID.
   string razorpay_payment_link_id = 4;

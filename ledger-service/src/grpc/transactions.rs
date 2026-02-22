@@ -1,11 +1,10 @@
 //! gRPC handlers for transaction operations.
 
-use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::proto::{
     GetTransactionRequest, GetTransactionResponse, ListTransactionsRequest,
     ListTransactionsResponse, PostTransactionRequest, PostTransactionResponse,
 };
-use crate::grpc::service::{entries_to_transaction, parse_tenant_id};
+use crate::grpc::service::entries_to_transaction;
 use crate::models::{Direction, PostEntry};
 use crate::services::Database;
 use chrono::NaiveDate;
@@ -17,18 +16,14 @@ use tracing::{info, instrument, warn};
 use uuid::Uuid;
 
 #[instrument(
-    skip(db, capability_checker, request),
+    skip(db, request),
     fields(service = "ledger-service", method = "PostTransaction")
 )]
 pub async fn post_transaction(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<PostTransactionRequest>,
 ) -> Result<Response<PostTransactionResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::LEDGER_TRANSACTION_CREATE)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
 
@@ -116,18 +111,14 @@ pub async fn post_transaction(
 }
 
 #[instrument(
-    skip(db, capability_checker, request),
+    skip(db, request),
     fields(service = "ledger-service", method = "GetTransaction")
 )]
 pub async fn get_transaction(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetTransactionRequest>,
 ) -> Result<Response<GetTransactionResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::LEDGER_TRANSACTION_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
 
@@ -154,18 +145,14 @@ pub async fn get_transaction(
 
 #[allow(clippy::too_many_lines)]
 #[instrument(
-    skip(db, capability_checker, request),
+    skip(db, request),
     fields(service = "ledger-service", method = "ListTransactions")
 )]
 pub async fn list_transactions(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListTransactionsRequest>,
 ) -> Result<Response<ListTransactionsResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::LEDGER_TRANSACTION_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
 

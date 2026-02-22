@@ -3,7 +3,7 @@
 use crate::config::ReconciliationConfig;
 use crate::grpc::{
     proto::{reconciliation_service_server::ReconciliationServiceServer, FILE_DESCRIPTOR_SET},
-    CapabilityChecker, ReconciliationServiceImpl,
+    ReconciliationServiceImpl,
 };
 use service_core::grpc::proto::common::app_registry_service_server::AppRegistryServiceServer;
 use crate::services::Database;
@@ -26,7 +26,6 @@ use tower_http::trace::TraceLayer;
 pub struct AppState {
     pub config: ReconciliationConfig,
     pub db: Arc<Database>,
-    pub capability_checker: Arc<CapabilityChecker>,
     pub ledger_client: Option<Arc<LedgerClient>>,
 }
 
@@ -125,21 +124,6 @@ impl Application {
 
         let db = Arc::new(db);
 
-        // Create capability checker
-        let auth_endpoint = if config.auth.auth_service_endpoint.is_empty() {
-            None
-        } else {
-            Some(config.auth.auth_service_endpoint.as_str())
-        };
-        let capability_checker =
-            Arc::new(CapabilityChecker::new(auth_endpoint).await.map_err(|e| {
-                tracing::error!(error = %e, "Failed to create capability checker");
-                AppError::InternalError(anyhow::anyhow!(
-                    "Failed to create capability checker: {}",
-                    e
-                ))
-            })?);
-
         // Create ledger client for account validation
         let ledger_client = if !config.ledger_service.url.is_empty() {
             match LedgerClient::connect(&config.ledger_service.url).await {
@@ -160,7 +144,6 @@ impl Application {
         let state = AppState {
             config: config.clone(),
             db,
-            capability_checker,
             ledger_client,
         };
 
@@ -227,7 +210,6 @@ impl Application {
         // Build gRPC server
         let reconciliation_service = ReconciliationServiceImpl::new(
             self.state.db.clone(),
-            self.state.capability_checker.clone(),
             self.state.ledger_client.clone(),
         );
 

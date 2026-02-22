@@ -3,7 +3,7 @@
 use crate::config::LedgerConfig;
 use crate::grpc::{
     proto::{ledger_service_server::LedgerServiceServer, FILE_DESCRIPTOR_SET},
-    CapabilityChecker, LedgerServiceImpl,
+    LedgerServiceImpl,
 };
 use service_core::grpc::proto::common::app_registry_service_server::AppRegistryServiceServer;
 use crate::services::Database;
@@ -25,7 +25,6 @@ use tower_http::trace::TraceLayer;
 pub struct AppState {
     pub config: LedgerConfig,
     pub db: Arc<Database>,
-    pub capability_checker: Arc<CapabilityChecker>,
 }
 
 /// State for health check endpoints.
@@ -120,25 +119,9 @@ impl Application {
 
         let db = Arc::new(db);
 
-        // Create capability checker
-        let auth_endpoint = if config.auth.auth_service_endpoint.is_empty() {
-            None
-        } else {
-            Some(config.auth.auth_service_endpoint.as_str())
-        };
-        let capability_checker =
-            Arc::new(CapabilityChecker::new(auth_endpoint).await.map_err(|e| {
-                tracing::error!(error = %e, "Failed to create capability checker");
-                AppError::InternalError(anyhow::anyhow!(
-                    "Failed to create capability checker: {}",
-                    e
-                ))
-            })?);
-
         let state = AppState {
             config: config.clone(),
             db,
-            capability_checker,
         };
 
         // Bind HTTP listener
@@ -202,7 +185,7 @@ impl Application {
             .with_state(health_state);
 
         // Build gRPC server
-        let ledger_service = LedgerServiceImpl::new(self.state.db, self.state.capability_checker);
+        let ledger_service = LedgerServiceImpl::new(self.state.db);
 
         // App registry (Redis-backed)
         let redis_url =

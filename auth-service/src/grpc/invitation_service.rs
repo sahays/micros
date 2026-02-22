@@ -1,6 +1,6 @@
 //! gRPC implementation of InvitationService.
 
-use crate::grpc::capability_check::require_capability;
+use crate::grpc::capability_check::extract_auth_context;
 use crate::grpc::proto::auth::{
     invitation_service_server::InvitationService, AcceptInvitationByPhoneRequest,
     AcceptInvitationByPhoneResponse, AcceptInvitationRequest, AcceptInvitationResponse,
@@ -54,8 +54,7 @@ impl InvitationService for InvitationServiceImpl {
         &self,
         request: Request<CreateInvitationRequest>,
     ) -> Result<Response<CreateInvitationResponse>, Status> {
-        // Require user:invite capability
-        let auth = require_capability(&self.state, &request, "user:invite").await?;
+        let auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 
@@ -143,7 +142,7 @@ impl InvitationService for InvitationServiceImpl {
 
         // Audit log
         let audit = AuditEvent::user_action(
-            auth.tenant_id,
+            auth.app_id,
             auth.user_id,
             AuditEventType::InvitationCreated,
             Some("invitation".to_string()),

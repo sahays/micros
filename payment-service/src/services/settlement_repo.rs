@@ -15,13 +15,13 @@ impl PaymentRepository {
     pub async fn get_settlement_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         id: &str,
     ) -> Result<Option<Settlement>> {
         let filter = doc! {
             "_id": id,
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
         Ok(self.settlement_collection.find_one(filter, None).await?)
     }
@@ -50,7 +50,7 @@ impl PaymentRepository {
     pub async fn list_settlements_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         linked_account_id: Option<&str>,
         status_filter: Option<SettlementStatus>,
         type_filter: Option<SettlementType>,
@@ -62,7 +62,7 @@ impl PaymentRepository {
 
         let mut filter = doc! {
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
 
         if let Some(la_id) = linked_account_id {

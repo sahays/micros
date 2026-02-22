@@ -1,6 +1,5 @@
 //! Usage tracking gRPC handlers.
 
-use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::helpers::*;
 use crate::grpc::proto::*;
 use crate::models::ListUsageFilter;
@@ -11,13 +10,9 @@ use tonic::{Request, Response, Status};
 
 pub async fn record_usage(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<RecordUsageRequest>,
 ) -> Result<Response<RecordUsageResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_USAGE_WRITE)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let subscription_id = parse_uuid(&req.subscription_id)?;
@@ -68,13 +63,9 @@ pub async fn record_usage(
 
 pub async fn get_usage(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetUsageRequest>,
 ) -> Result<Response<GetUsageResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_USAGE_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let record_id = parse_uuid(&req.record_id)?;
@@ -99,13 +90,9 @@ pub async fn get_usage(
 
 pub async fn list_usage(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListUsageRequest>,
 ) -> Result<Response<ListUsageResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_USAGE_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let subscription_id = parse_uuid(&req.subscription_id)?;
@@ -153,13 +140,9 @@ pub async fn list_usage(
 
 pub async fn get_usage_summary(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetUsageSummaryRequest>,
 ) -> Result<Response<GetUsageSummaryResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_USAGE_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let subscription_id = parse_uuid(&req.subscription_id)?;

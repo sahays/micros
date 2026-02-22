@@ -13,13 +13,13 @@ impl PaymentRepository {
     pub async fn get_payment_link_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         id: &str,
     ) -> Result<Option<PaymentLink>> {
         let filter = doc! {
             "_id": id,
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
         Ok(self.payment_link_collection.find_one(filter, None).await?)
     }
@@ -53,14 +53,14 @@ impl PaymentRepository {
     pub async fn update_payment_link_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         id: &str,
         update: mongodb::bson::Document,
     ) -> Result<()> {
         let filter = doc! {
             "_id": id,
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
         self.payment_link_collection
             .update_one(filter, doc! { "$set": update }, None)
@@ -71,7 +71,7 @@ impl PaymentRepository {
     pub async fn list_payment_links_in_tenant(
         &self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         status_filter: Option<PaymentLinkStatus>,
         limit: i64,
         offset: u64,
@@ -81,7 +81,7 @@ impl PaymentRepository {
 
         let mut filter = doc! {
             "app_id": app_id,
-            "org_id": org_id
+            "tenant_id": tenant_id
         };
 
         if let Some(status) = status_filter {

@@ -16,7 +16,7 @@ impl PaymentClient {
     pub async fn create_linked_account(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         name: &str,
         email: &str,
@@ -32,7 +32,7 @@ impl PaymentClient {
             commission,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.create_linked_account(request).await?;
 
         response
@@ -45,7 +45,7 @@ impl PaymentClient {
     pub async fn get_linked_account(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         linked_account_id: &str,
     ) -> Result<LinkedAccount, tonic::Status> {
@@ -53,7 +53,7 @@ impl PaymentClient {
             linked_account_id: linked_account_id.to_string(),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.get_linked_account(request).await?;
 
         response
@@ -66,7 +66,7 @@ impl PaymentClient {
     pub async fn update_linked_account(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         linked_account_id: &str,
         name: Option<String>,
@@ -78,7 +78,7 @@ impl PaymentClient {
             email,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.update_linked_account(request).await?;
 
         response
@@ -91,7 +91,7 @@ impl PaymentClient {
     pub async fn list_linked_accounts(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         status: Option<LinkedAccountStatus>,
         limit: i32,
@@ -103,7 +103,7 @@ impl PaymentClient {
             offset,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.list_linked_accounts(request).await?;
         let inner = response.into_inner();
 
@@ -114,7 +114,7 @@ impl PaymentClient {
     pub async fn update_commission_config(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         linked_account_id: &str,
         commission: CommissionConfig,
@@ -124,7 +124,7 @@ impl PaymentClient {
             commission: Some(commission),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.update_commission_config(request).await?;
 
         response
@@ -137,7 +137,7 @@ impl PaymentClient {
     pub async fn create_customer(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         name: &str,
         email: &str,
@@ -149,7 +149,7 @@ impl PaymentClient {
             phone,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.create_customer(request).await?;
 
         response
@@ -162,7 +162,7 @@ impl PaymentClient {
     pub async fn get_customer(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         customer_id: &str,
     ) -> Result<RazorpayCustomer, tonic::Status> {
@@ -170,7 +170,7 @@ impl PaymentClient {
             customer_id: customer_id.to_string(),
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.get_customer(request).await?;
 
         response
@@ -184,7 +184,7 @@ impl PaymentClient {
     pub async fn update_customer(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         customer_id: &str,
         name: Option<String>,
@@ -198,7 +198,7 @@ impl PaymentClient {
             phone,
         };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.update_customer(request).await?;
 
         response
@@ -211,14 +211,14 @@ impl PaymentClient {
     pub async fn list_customers(
         &mut self,
         app_id: &str,
-        org_id: &str,
+        tenant_id: &str,
         user_id: Option<&str>,
         limit: i32,
         offset: i32,
     ) -> Result<(Vec<RazorpayCustomer>, i64), tonic::Status> {
         let request = ListCustomersRequest { limit, offset };
 
-        let request = self.add_tenant_context(Request::new(request), app_id, org_id, user_id);
+        let request = self.add_tenant_context(Request::new(request), app_id, tenant_id, user_id);
         let response = self.client.list_customers(request).await?;
         let inner = response.into_inner();
 

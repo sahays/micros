@@ -28,7 +28,7 @@ pub struct CreateTransactionRequest {
 pub struct TransactionResponse {
     pub id: String,
     pub app_id: String,
-    pub org_id: String,
+    pub tenant_id: String,
     pub user_id: Option<String>,
     pub amount_paise: u64,
     pub currency: String,
@@ -43,7 +43,7 @@ impl From<Transaction> for TransactionResponse {
         Self {
             id: t.id.clone(),
             app_id: t.app_id,
-            org_id: t.org_id,
+            tenant_id: t.tenant_id,
             user_id: t.user_id,
             amount_paise: t.amount_paise,
             currency: t.currency,

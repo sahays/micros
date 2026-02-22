@@ -1,6 +1,5 @@
 //! Billing cycle gRPC handlers.
 
-use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::helpers::*;
 use crate::grpc::proto::*;
 use crate::models::{BillingCycleStatus, ListBillingCyclesFilter, ListChargesFilter};
@@ -10,13 +9,9 @@ use tonic::{Request, Response, Status};
 
 pub async fn get_billing_cycle(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetBillingCycleRequest>,
 ) -> Result<Response<GetBillingCycleResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_CYCLE_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let cycle_id = parse_uuid(&req.cycle_id)?;
@@ -51,13 +46,9 @@ pub async fn get_billing_cycle(
 
 pub async fn list_billing_cycles(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListBillingCyclesRequest>,
 ) -> Result<Response<ListBillingCyclesResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_CYCLE_READ)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let subscription_id = parse_uuid(&req.subscription_id)?;
@@ -102,13 +93,9 @@ pub async fn list_billing_cycles(
 
 pub async fn advance_billing_cycle(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<AdvanceBillingCycleRequest>,
 ) -> Result<Response<AdvanceBillingCycleResponse>, Status> {
-    let auth = capability_checker
-        .require_capability(&request, capabilities::BILLING_CYCLE_MANAGE)
-        .await?;
-    let tenant_id = parse_tenant_id(&auth)?;
+    let tenant_id = service_core::grpc::extract_app_id_uuid(&request)?;
 
     let req = request.into_inner();
     let subscription_id = parse_uuid(&req.subscription_id)?;

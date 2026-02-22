@@ -25,8 +25,8 @@ pub struct Transaction {
     pub id: String,
     /// Application ID (maps to registered client in auth-service)
     pub app_id: String,
-    /// Organization ID within the application
-    pub org_id: String,
+    /// Tenant ID within the application
+    pub tenant_id: String,
     /// User who initiated this transaction (if applicable)
     pub user_id: Option<String>,
     #[serde(
@@ -113,8 +113,8 @@ pub struct PaymentMethod {
     pub id: String,
     /// Application ID (maps to registered client in auth-service)
     pub app_id: String,
-    /// Organization ID within the application
-    pub org_id: String,
+    /// Tenant ID within the application
+    pub tenant_id: String,
     pub name: String,
     pub provider: String,
     pub is_active: bool,

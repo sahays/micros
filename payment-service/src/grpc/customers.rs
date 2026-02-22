@@ -1,6 +1,5 @@
 //! gRPC handlers for customer operations.
 
-use crate::grpc::capability_check::{capabilities, CapabilityMetadata};
 use crate::grpc::helpers::{
     check_razorpay_configured, datetime_to_timestamp, extract_tenant_context,
 };
@@ -16,13 +15,6 @@ pub async fn create_customer(
     state: &AppState,
     request: Request<CreateCustomerRequest>,
 ) -> Result<Response<CreateCustomerResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_CUSTOMER_CREATE)
-            .await?;
-    }
-
     check_razorpay_configured(&state.razorpay)?;
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
@@ -35,7 +27,7 @@ pub async fn create_customer(
     // Check for duplicate
     if let Some(_existing) = state
         .repository
-        .get_customer_by_user_in_tenant(&tenant.app_id, &tenant.org_id, &user_id)
+        .get_customer_by_user_in_tenant(&tenant.app_id, &tenant.tenant_id, &user_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to check existing customer");
@@ -66,7 +58,7 @@ pub async fn create_customer(
     let customer = models::RazorpayCustomer {
         id: Uuid::new_v4().to_string(),
         app_id: tenant.app_id.clone(),
-        org_id: tenant.org_id.clone(),
+        tenant_id: tenant.tenant_id.clone(),
         user_id,
         razorpay_customer_id: rz_response.id,
         name: req.name,
@@ -94,19 +86,12 @@ pub async fn get_customer(
     state: &AppState,
     request: Request<GetCustomerRequest>,
 ) -> Result<Response<GetCustomerResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_CUSTOMER_READ)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
     let customer = state
         .repository
-        .get_customer_in_tenant(&tenant.app_id, &tenant.org_id, &req.customer_id)
+        .get_customer_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.customer_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch customer");
@@ -123,13 +108,6 @@ pub async fn update_customer(
     state: &AppState,
     request: Request<UpdateCustomerRequest>,
 ) -> Result<Response<UpdateCustomerResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_CUSTOMER_UPDATE)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
@@ -146,7 +124,7 @@ pub async fn update_customer(
 
     state
         .repository
-        .update_customer_in_tenant(&tenant.app_id, &tenant.org_id, &req.customer_id, update)
+        .update_customer_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.customer_id, update)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to update customer");
@@ -155,7 +133,7 @@ pub async fn update_customer(
 
     let customer = state
         .repository
-        .get_customer_in_tenant(&tenant.app_id, &tenant.org_id, &req.customer_id)
+        .get_customer_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.customer_id)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to fetch customer");
@@ -172,13 +150,6 @@ pub async fn list_customers(
     state: &AppState,
     request: Request<ListCustomersRequest>,
 ) -> Result<Response<ListCustomersResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_CUSTOMER_READ)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
@@ -187,7 +158,7 @@ pub async fn list_customers(
 
     let (customers, total_count) = state
         .repository
-        .list_customers_in_tenant(&tenant.app_id, &tenant.org_id, limit, offset)
+        .list_customers_in_tenant(&tenant.app_id, &tenant.tenant_id, limit, offset)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to list customers");
@@ -204,7 +175,7 @@ fn customer_to_proto(c: models::RazorpayCustomer) -> RazorpayCustomer {
     RazorpayCustomer {
         id: c.id,
         app_id: c.app_id,
-        org_id: c.org_id,
+        tenant_id: c.tenant_id,
         user_id: c.user_id,
         razorpay_customer_id: c.razorpay_customer_id,
         name: c.name,

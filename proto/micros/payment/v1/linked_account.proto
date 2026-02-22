@@ -68,8 +68,8 @@ message LinkedAccount {
   // Application ID (tenant).
   string app_id = 2;
 
-  // Organization ID within the application.
-  string org_id = 3;
+  // Tenant ID within the application.
+  string tenant_id = 3;
 
   // Razorpay account ID.
   string razorpay_account_id = 4;

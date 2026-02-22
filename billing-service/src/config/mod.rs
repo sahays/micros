@@ -12,7 +12,6 @@ pub struct BillingConfig {
     pub log_level: String,
     pub database: DatabaseConfig,
     pub invoicing_service: InvoicingServiceConfig,
-    pub auth: AuthConfig,
 }
 
 #[derive(Debug, Clone)]
@@ -25,11 +24,6 @@ pub struct DatabaseConfig {
 #[derive(Debug, Clone)]
 pub struct InvoicingServiceConfig {
     pub url: String,
-}
-
-#[derive(Debug, Clone)]
-pub struct AuthConfig {
-    pub auth_service_endpoint: String,
 }
 
 impl BillingConfig {
@@ -59,10 +53,6 @@ impl BillingConfig {
             invoicing_service: InvoicingServiceConfig {
                 url: env::var("INVOICING_SERVICE_URL")
                     .unwrap_or_else(|_| "http://invoicing-service:3001".to_string()),
-            },
-            auth: AuthConfig {
-                auth_service_endpoint: env::var("AUTH_SERVICE_ENDPOINT")
-                    .unwrap_or_else(|_| "http://auth-service:3001".to_string()),
             },
         })
     }

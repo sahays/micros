@@ -10,7 +10,6 @@ members = [
     "payment-service",
     "reconciliation-service",
     "service-core",
-    "workflow-tests",
 ]
 
 [workspace.dependencies]

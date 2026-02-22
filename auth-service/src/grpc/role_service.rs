@@ -1,6 +1,6 @@
 //! gRPC implementation of RoleService.
 
-use crate::grpc::capability_check::require_capability;
+use crate::grpc::capability_check::extract_auth_context;
 use crate::grpc::proto::auth::{
     role_service_server::RoleService, AssignCapabilityRequest, AssignCapabilityResponse,
     Capability as ProtoCapability, CreateRoleRequest, CreateRoleResponse, DeleteRoleRequest,
@@ -61,8 +61,7 @@ impl RoleService for RoleServiceImpl {
         &self,
         request: Request<CreateRoleRequest>,
     ) -> Result<Response<CreateRoleResponse>, Status> {
-        // Require role:create capability
-        let auth = require_capability(&self.state, &request, "role:create").await?;
+        let auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 
@@ -93,7 +92,7 @@ impl RoleService for RoleServiceImpl {
 
         // Audit log
         let audit = AuditEvent::user_action(
-            auth.tenant_id,
+            auth.app_id,
             auth.user_id,
             AuditEventType::RoleCreated,
             Some("role".to_string()),
@@ -116,8 +115,7 @@ impl RoleService for RoleServiceImpl {
         &self,
         request: Request<GetRoleRequest>,
     ) -> Result<Response<GetRoleResponse>, Status> {
-        // Require role:read capability
-        let _auth = require_capability(&self.state, &request, "role:read").await?;
+        let _auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 
@@ -150,8 +148,7 @@ impl RoleService for RoleServiceImpl {
         &self,
         request: Request<ListTenantRolesRequest>,
     ) -> Result<Response<ListTenantRolesResponse>, Status> {
-        // Require role:read capability
-        let _auth = require_capability(&self.state, &request, "role:read").await?;
+        let _auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 
@@ -185,8 +182,7 @@ impl RoleService for RoleServiceImpl {
         &self,
         request: Request<GetRoleCapabilitiesRequest>,
     ) -> Result<Response<GetRoleCapabilitiesResponse>, Status> {
-        // Require role:read capability
-        let _auth = require_capability(&self.state, &request, "role:read").await?;
+        let _auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 
@@ -216,8 +212,7 @@ impl RoleService for RoleServiceImpl {
         &self,
         request: Request<AssignCapabilityRequest>,
     ) -> Result<Response<AssignCapabilityResponse>, Status> {
-        // Require role.capability:assign capability
-        let auth = require_capability(&self.state, &request, "role.capability:assign").await?;
+        let auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 
@@ -250,7 +245,7 @@ impl RoleService for RoleServiceImpl {
 
         // Audit log
         let audit = AuditEvent::user_action(
-            auth.tenant_id,
+            auth.app_id,
             auth.user_id,
             AuditEventType::CapabilityAssigned,
             Some("role".to_string()),
@@ -275,8 +270,7 @@ impl RoleService for RoleServiceImpl {
         &self,
         request: Request<ListCapabilitiesRequest>,
     ) -> Result<Response<ListCapabilitiesResponse>, Status> {
-        // Require capability:read capability
-        let _auth = require_capability(&self.state, &request, "capability:read").await?;
+        let _auth = extract_auth_context(&request)?;
 
         let capabilities = self
             .state
@@ -298,8 +292,7 @@ impl RoleService for RoleServiceImpl {
         &self,
         request: Request<GetCapabilityRequest>,
     ) -> Result<Response<GetCapabilityResponse>, Status> {
-        // Require capability:read capability
-        let _auth = require_capability(&self.state, &request, "capability:read").await?;
+        let _auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 
@@ -321,7 +314,7 @@ impl RoleService for RoleServiceImpl {
         &self,
         request: Request<DeleteRoleRequest>,
     ) -> Result<Response<DeleteRoleResponse>, Status> {
-        let auth = require_capability(&self.state, &request, "role:delete").await?;
+        let auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 
@@ -344,7 +337,7 @@ impl RoleService for RoleServiceImpl {
 
         // Audit log
         let audit = AuditEvent::user_action(
-            auth.tenant_id,
+            auth.app_id,
             auth.user_id,
             AuditEventType::RoleDeleted,
             Some("role".to_string()),
@@ -367,7 +360,7 @@ impl RoleService for RoleServiceImpl {
         &self,
         request: Request<RevokeCapabilityRequest>,
     ) -> Result<Response<RevokeCapabilityResponse>, Status> {
-        let auth = require_capability(&self.state, &request, "role.capability:revoke").await?;
+        let auth = extract_auth_context(&request)?;
 
         let req = request.into_inner();
 
@@ -399,7 +392,7 @@ impl RoleService for RoleServiceImpl {
 
         // Audit log
         let audit = AuditEvent::user_action(
-            auth.tenant_id,
+            auth.app_id,
             auth.user_id,
             AuditEventType::CapabilityRevoked,
             Some("role".to_string()),

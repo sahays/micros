@@ -35,8 +35,8 @@ message RazorpayPlan {
   // Application ID (tenant).
   string app_id = 2;
 
-  // Organization ID within the application.
-  string org_id = 3;
+  // Tenant ID within the application.
+  string tenant_id = 3;
 
   // Razorpay plan ID.
   string razorpay_plan_id = 4;
@@ -71,8 +71,8 @@ message RazorpaySubscription {
   // Application ID (tenant).
   string app_id = 2;
 
-  // Organization ID within the application.
-  string org_id = 3;
+  // Tenant ID within the application.
+  string tenant_id = 3;
 
   // Razorpay subscription ID.
   string razorpay_subscription_id = 4;

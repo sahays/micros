@@ -1,4 +1,4 @@
-use crate::common::embedded::{TestApp, TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID};
+use crate::common::embedded::{TestApp, TEST_APP_ID, TEST_TENANT_ID, TEST_USER_ID};
 use serial_test::serial;
 use service_core::grpc::proto::payment::PlanPeriod;
 use wiremock::matchers::{method, path_regex};
@@ -55,7 +55,7 @@ async fn create_plan_via_grpc() {
     let plan = client
         .create_razorpay_plan(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "Basic Plan",
             "Basic monthly plan",
@@ -84,7 +84,7 @@ async fn get_plan_not_found() {
     let result = client
         .get_razorpay_plan(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "nonexistent-id",
         )
@@ -121,7 +121,7 @@ async fn create_subscription_returns_short_url() {
     let plan = client
         .create_razorpay_plan(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "Basic Plan",
             "Basic monthly plan",
@@ -137,7 +137,7 @@ async fn create_subscription_returns_short_url() {
     let subscription = client
         .create_razorpay_subscription(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             &plan.id,
             None,
@@ -172,7 +172,7 @@ async fn list_plans_pagination() {
     client
         .create_razorpay_plan(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "Basic Plan",
             "Basic monthly plan",
@@ -185,7 +185,7 @@ async fn list_plans_pagination() {
         .expect("Failed to create plan");
 
     let (plans, total) = client
-        .list_razorpay_plans(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), 10, 0)
+        .list_razorpay_plans(TEST_APP_ID, TEST_TENANT_ID, Some(TEST_USER_ID), 10, 0)
         .await
         .expect("Failed to list plans");
 
@@ -203,7 +203,7 @@ async fn get_subscription_not_found() {
     let result = client
         .get_razorpay_subscription(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "nonexistent-id",
         )

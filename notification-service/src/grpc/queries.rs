@@ -1,4 +1,3 @@
-use crate::grpc::capability_check::capabilities;
 use crate::grpc::notification_service::{notification_to_proto, proto_to_channel, proto_to_status};
 use crate::grpc::proto::{
     GetNotificationRequest, GetNotificationResponse, ListNotificationsRequest,
@@ -12,11 +11,8 @@ pub async fn get_notification(
     state: &AppState,
     request: Request<GetNotificationRequest>,
 ) -> Result<Response<GetNotificationResponse>, Status> {
-    // Capability check - derive tenant_id from auth context
-    let auth = state
-        .capability_checker
-        .require_capability(&request, capabilities::NOTIFICATION_READ)
-        .await?;
+    // Extract tenant context from request metadata
+    let ctx = service_core::grpc::extract_tenant_context(&request)?;
 
     let req = request.into_inner();
 
@@ -26,7 +22,7 @@ pub async fn get_notification(
 
     let notification = state
         .db
-        .find_by_id(&auth.tenant_id, &req.notification_id)
+        .find_by_id(&ctx.tenant_id, &req.notification_id)
         .await
         .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
 
@@ -46,11 +42,8 @@ pub async fn list_notifications(
     state: &AppState,
     request: Request<ListNotificationsRequest>,
 ) -> Result<Response<ListNotificationsResponse>, Status> {
-    // Capability check - derive tenant_id from auth context
-    let auth = state
-        .capability_checker
-        .require_capability(&request, capabilities::NOTIFICATION_READ)
-        .await?;
+    // Extract tenant context from request metadata
+    let ctx = service_core::grpc::extract_tenant_context(&request)?;
 
     let req = request.into_inner();
 
@@ -70,7 +63,7 @@ pub async fn list_notifications(
 
     let notifications = state
         .db
-        .list(&auth.tenant_id, channel, status, limit, offset)
+        .list(&ctx.tenant_id, channel, status, limit, offset)
         .await
         .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
 

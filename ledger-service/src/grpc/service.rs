@@ -1,6 +1,5 @@
-//! LedgerService gRPC implementation — slim delegation layer.
+//! LedgerService gRPC implementation -- slim delegation layer.
 
-use crate::grpc::capability_check::CapabilityChecker;
 use crate::grpc::proto::{
     ledger_service_server::LedgerService, Account as ProtoAccount, CreateAccountRequest,
     CreateAccountResponse, Direction as ProtoDirection, GetAccountRequest, GetAccountResponse,
@@ -20,7 +19,7 @@ use uuid::Uuid;
 
 use super::{accounts, reporting, transactions};
 
-// ─── Shared helpers (used by handler modules) ────────────────────────────────
+// --- Shared helpers (used by handler modules) ---------------------------------
 
 /// Format a Decimal as a normalized string (remove trailing zeros).
 pub fn format_decimal(d: &Decimal) -> String {
@@ -31,13 +30,6 @@ pub fn format_decimal(d: &Decimal) -> String {
     } else {
         s
     }
-}
-
-/// Parse tenant_id from AuthContext.
-#[allow(clippy::result_large_err)]
-pub fn parse_tenant_id(auth: &crate::grpc::capability_check::AuthContext) -> Result<Uuid, Status> {
-    Uuid::parse_str(&auth.tenant_id)
-        .map_err(|_| Status::internal(format!("Invalid tenant_id: {}", auth.tenant_id)))
 }
 
 /// Convert domain Account to proto Account.
@@ -135,24 +127,20 @@ pub fn entries_to_transaction(
     }
 }
 
-// ─── Service struct ──────────────────────────────────────────────────────────
+// --- Service struct -----------------------------------------------------------
 
 /// LedgerService implementation.
 pub struct LedgerServiceImpl {
     db: Arc<Database>,
-    capability_checker: Arc<CapabilityChecker>,
 }
 
 impl LedgerServiceImpl {
-    pub fn new(db: Arc<Database>, capability_checker: Arc<CapabilityChecker>) -> Self {
-        Self {
-            db,
-            capability_checker,
-        }
+    pub fn new(db: Arc<Database>) -> Self {
+        Self { db }
     }
 }
 
-// ─── Trait delegation ────────────────────────────────────────────────────────
+// --- Trait delegation ---------------------------------------------------------
 
 #[tonic::async_trait]
 impl LedgerService for LedgerServiceImpl {
@@ -160,62 +148,62 @@ impl LedgerService for LedgerServiceImpl {
         &self,
         request: Request<CreateAccountRequest>,
     ) -> Result<Response<CreateAccountResponse>, Status> {
-        accounts::create_account(&self.db, &self.capability_checker, request).await
+        accounts::create_account(&self.db, request).await
     }
 
     async fn get_account(
         &self,
         request: Request<GetAccountRequest>,
     ) -> Result<Response<GetAccountResponse>, Status> {
-        accounts::get_account(&self.db, &self.capability_checker, request).await
+        accounts::get_account(&self.db, request).await
     }
 
     async fn list_accounts(
         &self,
         request: Request<ListAccountsRequest>,
     ) -> Result<Response<ListAccountsResponse>, Status> {
-        accounts::list_accounts(&self.db, &self.capability_checker, request).await
+        accounts::list_accounts(&self.db, request).await
     }
 
     async fn post_transaction(
         &self,
         request: Request<PostTransactionRequest>,
     ) -> Result<Response<PostTransactionResponse>, Status> {
-        transactions::post_transaction(&self.db, &self.capability_checker, request).await
+        transactions::post_transaction(&self.db, request).await
     }
 
     async fn get_transaction(
         &self,
         request: Request<GetTransactionRequest>,
     ) -> Result<Response<GetTransactionResponse>, Status> {
-        transactions::get_transaction(&self.db, &self.capability_checker, request).await
+        transactions::get_transaction(&self.db, request).await
     }
 
     async fn list_transactions(
         &self,
         request: Request<ListTransactionsRequest>,
     ) -> Result<Response<ListTransactionsResponse>, Status> {
-        transactions::list_transactions(&self.db, &self.capability_checker, request).await
+        transactions::list_transactions(&self.db, request).await
     }
 
     async fn get_balance(
         &self,
         request: Request<GetBalanceRequest>,
     ) -> Result<Response<GetBalanceResponse>, Status> {
-        reporting::get_balance(&self.db, &self.capability_checker, request).await
+        reporting::get_balance(&self.db, request).await
     }
 
     async fn get_balances(
         &self,
         request: Request<GetBalancesRequest>,
     ) -> Result<Response<GetBalancesResponse>, Status> {
-        reporting::get_balances(&self.db, &self.capability_checker, request).await
+        reporting::get_balances(&self.db, request).await
     }
 
     async fn get_statement(
         &self,
         request: Request<GetStatementRequest>,
     ) -> Result<Response<GetStatementResponse>, Status> {
-        reporting::get_statement(&self.db, &self.capability_checker, request).await
+        reporting::get_statement(&self.db, request).await
     }
 }

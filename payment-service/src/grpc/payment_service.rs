@@ -1,6 +1,5 @@
 //! gRPC implementation of PaymentService.
 
-use crate::grpc::capability_check::{capabilities, CapabilityMetadata};
 use crate::grpc::helpers::{
     extract_tenant_context, proto_to_status, status_to_proto, transaction_to_proto,
 };
@@ -68,16 +67,6 @@ impl PaymentService for PaymentGrpcService {
         &self,
         request: Request<CreateTransactionRequest>,
     ) -> Result<Response<CreateTransactionResponse>, Status> {
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(
-                    &metadata,
-                    capabilities::PAYMENT_TRANSACTION_CREATE,
-                )
-                .await?;
-        }
-
         let tenant = extract_tenant_context(&request)?;
         let req = request.into_inner();
 
@@ -90,7 +79,7 @@ impl PaymentService for PaymentGrpcService {
         let transaction = Transaction {
             id: transaction_id.clone(),
             app_id: tenant.app_id.clone(),
-            org_id: tenant.org_id.clone(),
+            tenant_id: tenant.tenant_id.clone(),
             user_id: tenant.user_id.clone(),
             amount_paise: req.amount_paise,
             currency: req.currency,
@@ -110,7 +99,7 @@ impl PaymentService for PaymentGrpcService {
         tracing::info!(
             transaction_id = %transaction_id,
             app_id = %tenant.app_id,
-            org_id = %tenant.org_id,
+            tenant_id = %tenant.tenant_id,
             amount_paise = req.amount_paise,
             "Creating transaction via gRPC"
         );
@@ -133,13 +122,6 @@ impl PaymentService for PaymentGrpcService {
         &self,
         request: Request<GetTransactionRequest>,
     ) -> Result<Response<GetTransactionResponse>, Status> {
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::PAYMENT_TRANSACTION_READ)
-                .await?;
-        }
-
         let tenant = extract_tenant_context(&request)?;
         let req = request.into_inner();
 
@@ -149,7 +131,7 @@ impl PaymentService for PaymentGrpcService {
         let transaction = self
             .state
             .repository
-            .get_transaction_in_tenant(&tenant.app_id, &tenant.org_id, &req.transaction_id)
+            .get_transaction_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.transaction_id)
             .await
             .map_err(|e| {
                 tracing::error!(error = %e, "Failed to fetch transaction");
@@ -166,16 +148,6 @@ impl PaymentService for PaymentGrpcService {
         &self,
         request: Request<UpdateTransactionStatusRequest>,
     ) -> Result<Response<UpdateTransactionStatusResponse>, Status> {
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(
-                    &metadata,
-                    capabilities::PAYMENT_TRANSACTION_UPDATE,
-                )
-                .await?;
-        }
-
         let tenant = extract_tenant_context(&request)?;
         let req = request.into_inner();
 
@@ -188,7 +160,7 @@ impl PaymentService for PaymentGrpcService {
         let _transaction = self
             .state
             .repository
-            .get_transaction_in_tenant(&tenant.app_id, &tenant.org_id, &req.transaction_id)
+            .get_transaction_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.transaction_id)
             .await
             .map_err(|e| {
                 tracing::error!(error = %e, "Failed to fetch transaction");
@@ -200,7 +172,7 @@ impl PaymentService for PaymentGrpcService {
             .repository
             .update_transaction_status_in_tenant(
                 &tenant.app_id,
-                &tenant.org_id,
+                &tenant.tenant_id,
                 &req.transaction_id,
                 new_status.clone(),
             )
@@ -217,13 +189,6 @@ impl PaymentService for PaymentGrpcService {
         &self,
         request: Request<ListTransactionsRequest>,
     ) -> Result<Response<ListTransactionsResponse>, Status> {
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::PAYMENT_TRANSACTION_READ)
-                .await?;
-        }
-
         let tenant = extract_tenant_context(&request)?;
         let req = request.into_inner();
 
@@ -236,7 +201,7 @@ impl PaymentService for PaymentGrpcService {
             .repository
             .list_transactions_in_tenant(
                 &tenant.app_id,
-                &tenant.org_id,
+                &tenant.tenant_id,
                 status_filter,
                 limit,
                 offset,
@@ -257,13 +222,6 @@ impl PaymentService for PaymentGrpcService {
         &self,
         request: Request<CreateRazorpayOrderRequest>,
     ) -> Result<Response<CreateRazorpayOrderResponse>, Status> {
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::PAYMENT_RAZORPAY_CREATE)
-                .await?;
-        }
-
         let tenant = extract_tenant_context(&request)?;
         let req = request.into_inner();
 
@@ -297,7 +255,7 @@ impl PaymentService for PaymentGrpcService {
         let transaction = Transaction {
             id: transaction_id.clone(),
             app_id: tenant.app_id.clone(),
-            org_id: tenant.org_id.clone(),
+            tenant_id: tenant.tenant_id.clone(),
             user_id: tenant.user_id.clone(),
             amount_paise: req.amount,
             currency: req.currency.clone(),
@@ -336,13 +294,6 @@ impl PaymentService for PaymentGrpcService {
         &self,
         request: Request<VerifyRazorpayPaymentRequest>,
     ) -> Result<Response<VerifyRazorpayPaymentResponse>, Status> {
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::PAYMENT_RAZORPAY_VERIFY)
-                .await?;
-        }
-
         let tenant = extract_tenant_context(&request)?;
         let req = request.into_inner();
 
@@ -352,7 +303,7 @@ impl PaymentService for PaymentGrpcService {
         let transaction = self
             .state
             .repository
-            .get_transaction_in_tenant(&tenant.app_id, &tenant.org_id, &req.transaction_id)
+            .get_transaction_in_tenant(&tenant.app_id, &tenant.tenant_id, &req.transaction_id)
             .await
             .map_err(|e| {
                 tracing::error!(error = %e, "Failed to fetch transaction");
@@ -397,7 +348,7 @@ impl PaymentService for PaymentGrpcService {
             .repository
             .update_transaction_status_in_tenant(
                 &tenant.app_id,
-                &tenant.org_id,
+                &tenant.tenant_id,
                 &req.transaction_id,
                 new_status.clone(),
             )
@@ -419,19 +370,12 @@ impl PaymentService for PaymentGrpcService {
         &self,
         request: Request<GenerateUpiQrRequest>,
     ) -> Result<Response<GenerateUpiQrResponse>, Status> {
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::PAYMENT_UPI_GENERATE)
-                .await?;
-        }
-
         let tenant = extract_tenant_context(&request)?;
         let req = request.into_inner();
 
         tracing::info!(
             app_id = %tenant.app_id,
-            org_id = %tenant.org_id,
+            tenant_id = %tenant.tenant_id,
             amount_paise = req.amount_paise,
             "Generating UPI QR via gRPC"
         );
@@ -475,13 +419,6 @@ impl PaymentService for PaymentGrpcService {
         &self,
         request: Request<HandleRazorpayWebhookRequest>,
     ) -> Result<Response<HandleRazorpayWebhookResponse>, Status> {
-        if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-            self.state
-                .capability_checker
-                .require_capability_from_metadata(&metadata, capabilities::PAYMENT_WEBHOOK_HANDLE)
-                .await?;
-        }
-
         let req = request.into_inner();
 
         let is_valid = self

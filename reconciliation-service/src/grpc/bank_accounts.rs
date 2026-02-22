@@ -1,6 +1,5 @@
 //! Bank account management gRPC handlers.
 
-use crate::grpc::capability_check::{capabilities, CapabilityChecker};
 use crate::grpc::proto::*;
 use crate::services::Database;
 use service_core::grpc::proto::ledger::AccountType as LedgerAccountType;
@@ -10,13 +9,11 @@ use tonic::{Request, Response, Status};
 
 pub async fn register_bank_account(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     ledger_client: &Option<Arc<LedgerClient>>,
     request: Request<RegisterBankAccountRequest>,
 ) -> Result<Response<RegisterBankAccountResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_BANK_ACCOUNT_CREATE)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     tracing::info!(
@@ -27,7 +24,7 @@ pub async fn register_bank_account(
 
     // Check for duplicate ledger_account_id
     let existing = db
-        .get_bank_account_by_ledger_id(&_auth.tenant_id, &req.ledger_account_id)
+        .get_bank_account_by_ledger_id(&app_id, &req.ledger_account_id)
         .await
         .map_err(|e| Status::internal(format!("Failed to check existing account: {}", e)))?;
 
@@ -40,7 +37,7 @@ pub async fn register_bank_account(
     // Validate ledger account exists and is asset type
     if let Some(ref ledger_client) = ledger_client {
         let ledger_response = ledger_client
-            .get_account(&_auth.tenant_id, &req.ledger_account_id)
+            .get_account(&app_id, &req.ledger_account_id)
             .await
             .map_err(|e| {
                 if e.code() == tonic::Code::NotFound {
@@ -72,7 +69,7 @@ pub async fn register_bank_account(
 
     let bank_account = db
         .create_bank_account(
-            &_auth.tenant_id,
+            &app_id,
             &req.ledger_account_id,
             &req.bank_name,
             &req.account_number_masked,
@@ -88,16 +85,14 @@ pub async fn register_bank_account(
 
 pub async fn get_bank_account(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<GetBankAccountRequest>,
 ) -> Result<Response<GetBankAccountResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_BANK_ACCOUNT_READ)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     let bank_account = db
-        .get_bank_account(&_auth.tenant_id, &req.bank_account_id)
+        .get_bank_account(&app_id, &req.bank_account_id)
         .await
         .map_err(|e| Status::internal(format!("Failed to get bank account: {}", e)))?
         .ok_or_else(|| Status::not_found("Bank account not found"))?;
@@ -109,16 +104,14 @@ pub async fn get_bank_account(
 
 pub async fn list_bank_accounts(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<ListBankAccountsRequest>,
 ) -> Result<Response<ListBankAccountsResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_BANK_ACCOUNT_READ)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     let (accounts, next_token) = db
-        .list_bank_accounts(&_auth.tenant_id, req.page_size, req.page_token.as_deref())
+        .list_bank_accounts(&app_id, req.page_size, req.page_token.as_deref())
         .await
         .map_err(|e| Status::internal(format!("Failed to list bank accounts: {}", e)))?;
 
@@ -130,17 +123,15 @@ pub async fn list_bank_accounts(
 
 pub async fn update_bank_account(
     db: &Arc<Database>,
-    capability_checker: &Arc<CapabilityChecker>,
     request: Request<UpdateBankAccountRequest>,
 ) -> Result<Response<UpdateBankAccountResponse>, Status> {
-    let _auth = capability_checker
-        .require_capability(&request, capabilities::RECONCILIATION_BANK_ACCOUNT_UPDATE)
-        .await?;
+    let app_id = service_core::grpc::extract_app_id(&request)
+        .ok_or_else(|| tonic::Status::unauthenticated("Missing x-app-id header"))?;
 
     let req = request.into_inner();
     let bank_account = db
         .update_bank_account(
-            &_auth.tenant_id,
+            &app_id,
             &req.bank_account_id,
             req.bank_name.as_deref(),
             req.account_number_masked.as_deref(),

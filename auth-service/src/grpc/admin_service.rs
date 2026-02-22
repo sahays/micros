@@ -213,7 +213,7 @@ impl AdminService for AdminServiceImpl {
             .generate_token_pair(
                 &admin_user_id.to_string(),
                 &tenant_id.to_string(),
-                "", // org_id - empty for now
+                "", // tenant_id - empty for now
                 &req.admin_email,
             )
             .map_err(|e| {

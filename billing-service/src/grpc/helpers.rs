@@ -28,12 +28,6 @@ pub fn parse_date(s: &str) -> Result<chrono::NaiveDate, Status> {
         .map_err(|_| Status::invalid_argument(format!("Invalid date: {}", s)))
 }
 
-#[allow(clippy::result_large_err)]
-pub fn parse_tenant_id(auth: &crate::grpc::capability_check::AuthContext) -> Result<Uuid, Status> {
-    Uuid::parse_str(&auth.tenant_id)
-        .map_err(|_| Status::internal(format!("Invalid tenant_id: {}", auth.tenant_id)))
-}
-
 pub fn datetime_to_timestamp(dt: chrono::DateTime<chrono::Utc>) -> Option<Timestamp> {
     Some(Timestamp {
         seconds: dt.timestamp(),

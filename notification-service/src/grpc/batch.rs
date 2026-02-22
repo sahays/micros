@@ -1,4 +1,3 @@
-use crate::grpc::capability_check::capabilities;
 use crate::grpc::notification_service::proto_to_push_platform;
 use crate::grpc::proto::{
     BatchNotification, BatchNotificationResult, NotificationChannel,
@@ -14,12 +13,9 @@ pub async fn send_batch(
     state: &AppState,
     request: Request<SendBatchRequest>,
 ) -> Result<Response<SendBatchResponse>, Status> {
-    // Capability check - derive tenant_id from auth context
-    let auth = state
-        .capability_checker
-        .require_capability(&request, capabilities::NOTIFICATION_BATCH_SEND)
-        .await?;
-    let tenant_id = auth.tenant_id.clone();
+    // Extract tenant context from request metadata
+    let ctx = service_core::grpc::extract_tenant_context(&request)?;
+    let tenant_id = ctx.tenant_id.clone();
 
     let req = request.into_inner();
 

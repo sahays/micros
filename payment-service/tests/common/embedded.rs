@@ -10,8 +10,8 @@
 //!          subscription_test, payment_link_test, linked_account_test
 
 use payment_service::config::{
-    AuthConfig, Config, DatabaseConfig, FeatureFlagsConfig, RazorpayConfig, RedisConfig,
-    ServerConfig, ServiceSignatureConfig, UpiConfig,
+    Config, DatabaseConfig, FeatureFlagsConfig, RazorpayConfig, RedisConfig, ServerConfig,
+    ServiceSignatureConfig, UpiConfig,
 };
 use payment_service::startup::Application;
 use secrecy::Secret;
@@ -23,7 +23,7 @@ use wiremock::MockServer;
 #[allow(dead_code)]
 pub const TEST_APP_ID: &str = "test-app";
 #[allow(dead_code)]
-pub const TEST_ORG_ID: &str = "test-org";
+pub const TEST_TENANT_ID: &str = "test-org";
 #[allow(dead_code)]
 pub const TEST_USER_ID: &str = "test-user";
 
@@ -142,9 +142,6 @@ impl TestApp {
                 key_secret: Secret::new("test_key_secret".to_string()),
                 webhook_secret: Secret::new("test_webhook_secret".to_string()),
                 api_base_url: format!("{}/v1", razorpay_mock.uri()),
-            },
-            auth: AuthConfig {
-                auth_service_endpoint: None,
             },
             feature_flags: FeatureFlagsConfig {
                 razorpay_route_enabled: true,

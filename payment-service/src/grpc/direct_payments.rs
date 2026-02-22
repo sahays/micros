@@ -1,6 +1,5 @@
 //! gRPC handlers for direct UPI and offline payment recording.
 
-use crate::grpc::capability_check::{capabilities, CapabilityMetadata};
 use crate::grpc::helpers::{extract_tenant_context, transaction_to_proto};
 use crate::grpc::proto::*;
 use crate::models::{PaymentChannel, PaymentMethodType, Transaction, TransactionStatus};
@@ -14,13 +13,6 @@ pub async fn record_direct_upi_payment(
     state: &AppState,
     request: Request<RecordDirectUpiPaymentRequest>,
 ) -> Result<Response<RecordDirectUpiPaymentResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_DIRECT_UPI_RECORD)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
@@ -38,7 +30,7 @@ pub async fn record_direct_upi_payment(
     // Check for duplicate UTR within tenant
     let existing = state
         .repository
-        .get_transaction_by_external_ref(&tenant.app_id, &tenant.org_id, &utr)
+        .get_transaction_by_external_ref(&tenant.app_id, &tenant.tenant_id, &utr)
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to check for duplicate UTR");
@@ -57,7 +49,7 @@ pub async fn record_direct_upi_payment(
     let transaction = Transaction {
         id: transaction_id.clone(),
         app_id: tenant.app_id.clone(),
-        org_id: tenant.org_id.clone(),
+        tenant_id: tenant.tenant_id.clone(),
         user_id: tenant.user_id.clone(),
         amount_paise: req.amount_paise,
         currency: req.currency.clone(),
@@ -77,7 +69,7 @@ pub async fn record_direct_upi_payment(
     tracing::info!(
         transaction_id = %transaction_id,
         app_id = %tenant.app_id,
-        org_id = %tenant.org_id,
+        tenant_id = %tenant.tenant_id,
         amount_paise = req.amount_paise,
         "Recording direct UPI payment"
     );
@@ -101,13 +93,6 @@ pub async fn record_offline_payment(
     state: &AppState,
     request: Request<RecordOfflinePaymentRequest>,
 ) -> Result<Response<RecordOfflinePaymentResponse>, Status> {
-    if let Some(metadata) = CapabilityMetadata::try_from_request(&request) {
-        state
-            .capability_checker
-            .require_capability_from_metadata(&metadata, capabilities::PAYMENT_OFFLINE_RECORD)
-            .await?;
-    }
-
     let tenant = extract_tenant_context(&request)?;
     let req = request.into_inner();
 
@@ -145,7 +130,7 @@ pub async fn record_offline_payment(
     if let Some(ref ext_ref) = external_reference {
         let existing = state
             .repository
-            .get_transaction_by_external_ref(&tenant.app_id, &tenant.org_id, ext_ref)
+            .get_transaction_by_external_ref(&tenant.app_id, &tenant.tenant_id, ext_ref)
             .await
             .map_err(|e| {
                 tracing::error!(error = %e, "Failed to check for duplicate external reference");
@@ -165,7 +150,7 @@ pub async fn record_offline_payment(
     let transaction = Transaction {
         id: transaction_id.clone(),
         app_id: tenant.app_id.clone(),
-        org_id: tenant.org_id.clone(),
+        tenant_id: tenant.tenant_id.clone(),
         user_id: tenant.user_id.clone(),
         amount_paise: req.amount_paise,
         currency: req.currency.clone(),
@@ -185,7 +170,7 @@ pub async fn record_offline_payment(
     tracing::info!(
         transaction_id = %transaction_id,
         app_id = %tenant.app_id,
-        org_id = %tenant.org_id,
+        tenant_id = %tenant.tenant_id,
         amount_paise = req.amount_paise,
         payment_method_type = ?transaction.payment_method_type,
         "Recording offline payment"

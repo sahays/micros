@@ -11,12 +11,6 @@ pub struct LedgerConfig {
     pub service_version: String,
     pub log_level: String,
     pub database: DatabaseConfig,
-    pub auth: AuthConfig,
-}
-
-#[derive(Debug, Clone)]
-pub struct AuthConfig {
-    pub auth_service_endpoint: String,
 }
 
 #[derive(Debug, Clone)]
@@ -48,9 +42,6 @@ impl LedgerConfig {
                     .ok()
                     .and_then(|s| s.parse().ok())
                     .unwrap_or(2),
-            },
-            auth: AuthConfig {
-                auth_service_endpoint: env::var("AUTH_SERVICE_ENDPOINT").unwrap_or_default(),
             },
         })
     }

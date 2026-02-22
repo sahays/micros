@@ -1,4 +1,4 @@
-use crate::common::embedded::{TestApp, TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID};
+use crate::common::embedded::{TestApp, TEST_APP_ID, TEST_TENANT_ID, TEST_USER_ID};
 use serial_test::serial;
 use wiremock::matchers::{method, path_regex};
 use wiremock::{Mock, ResponseTemplate};
@@ -44,7 +44,7 @@ async fn create_transfer_from_payment_requires_completed_payment() {
     let account = client
         .create_linked_account(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "Test Vendor",
             "vendor@example.com",
@@ -67,7 +67,7 @@ async fn create_transfer_from_payment_requires_completed_payment() {
 
     // Create a transaction (status = Created, not Completed)
     let tx = client
-        .create_transaction(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), 10000, "INR")
+        .create_transaction(TEST_APP_ID, TEST_TENANT_ID, Some(TEST_USER_ID), 10000, "INR")
         .await
         .expect("Failed to create transaction");
 
@@ -75,7 +75,7 @@ async fn create_transfer_from_payment_requires_completed_payment() {
     let result = client
         .create_transfer_from_payment(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             &tx.id,
             &account.id,
@@ -108,7 +108,7 @@ async fn create_direct_transfer_via_grpc() {
     let account = client
         .create_linked_account(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "Test Vendor",
             "vendor@example.com",
@@ -152,7 +152,7 @@ async fn create_direct_transfer_via_grpc() {
     let transfer = client
         .create_direct_transfer(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             &account.id,
             3000,
@@ -177,7 +177,7 @@ async fn get_transfer_not_found() {
     let result = client
         .get_transfer(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "nonexistent-id",
         )
@@ -197,7 +197,7 @@ async fn list_transfers_empty() {
     let (transfers, total) = client
         .list_transfers(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             None,
             None,

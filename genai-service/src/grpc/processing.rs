@@ -15,10 +15,10 @@ use crate::services::document_fetcher::TenantContext;
 use crate::services::providers::{DocumentContext, StreamChunk};
 use crate::startup::AppState;
 use futures::StreamExt;
+use service_core::grpc::extract_tenant_context;
 use std::time::Instant;
 use tonic::{Request, Response, Status};
 
-use super::capability_check::extract_org_node_id;
 use super::genai_service::ProcessStreamResult;
 
 #[tracing::instrument(
@@ -39,40 +39,22 @@ pub async fn process(
 ) -> Result<Response<ProcessResponse>, Status> {
     let start = Instant::now();
 
-    let auth = state
-        .capability_checker
-        .require_capability(
-            &request,
-            crate::grpc::capability_check::capabilities::GENAI_PROCESS,
-        )
-        .await?;
-
-    // Extract org_id from request metadata before consuming the request
-    let org_id = match extract_org_node_id(&request) {
-        Some(id) => id,
-        None => {
-            tracing::warn!(
-                tenant_id = %auth.tenant_id,
-                "Missing org_id in request metadata (x-org-id header), defaulting to empty string"
-            );
-            String::new()
-        }
-    };
+    let ctx = extract_tenant_context(&request)?;
 
     let req = request.into_inner();
     let request_id = uuid::Uuid::new_v4().to_string();
 
     // Build tenant context for document-service calls
     let tenant_context = TenantContext {
-        app_id: auth.tenant_id.clone(),
-        org_id,
-        user_id: auth.user_id.clone(),
+        app_id: ctx.app_id.clone(),
+        tenant_id: ctx.tenant_id.clone(),
+        user_id: ctx.user_id.clone(),
     };
 
     let span = tracing::Span::current();
     span.record("request_id", &request_id);
-    span.record("tenant_id", &auth.tenant_id);
-    span.record("user_id", &auth.user_id);
+    span.record("tenant_id", &ctx.app_id);
+    span.record("user_id", &ctx.user_id);
     span.record("prompt_len", req.prompt.len());
     span.record("doc_count", req.documents.len());
 
@@ -201,8 +183,8 @@ pub async fn process(
         let usage_record = UsageRecord::new(
             request_id.clone(),
             req.session_id.clone(),
-            auth.tenant_id.clone(),
-            auth.user_id.clone(),
+            ctx.app_id.clone(),
+            ctx.user_id.clone(),
             model.clone(),
             provider_response.input_tokens,
             provider_response.output_tokens,
@@ -250,40 +232,22 @@ pub async fn process_stream(
 ) -> Result<Response<ProcessStreamResult>, Status> {
     let start = Instant::now();
 
-    let auth = state
-        .capability_checker
-        .require_capability(
-            &request,
-            crate::grpc::capability_check::capabilities::GENAI_PROCESS,
-        )
-        .await?;
-
-    // Extract org_id from request metadata before consuming the request
-    let org_id = match extract_org_node_id(&request) {
-        Some(id) => id,
-        None => {
-            tracing::warn!(
-                tenant_id = %auth.tenant_id,
-                "Missing org_id in request metadata (x-org-id header), defaulting to empty string"
-            );
-            String::new()
-        }
-    };
+    let ctx = extract_tenant_context(&request)?;
 
     let req = request.into_inner();
     let request_id = uuid::Uuid::new_v4().to_string();
 
     // Build tenant context for document-service calls
     let tenant_context = TenantContext {
-        app_id: auth.tenant_id.clone(),
-        org_id,
-        user_id: auth.user_id.clone(),
+        app_id: ctx.app_id.clone(),
+        tenant_id: ctx.tenant_id.clone(),
+        user_id: ctx.user_id.clone(),
     };
 
     let span = tracing::Span::current();
     span.record("request_id", &request_id);
-    span.record("tenant_id", &auth.tenant_id);
-    span.record("user_id", &auth.user_id);
+    span.record("tenant_id", &ctx.app_id);
+    span.record("user_id", &ctx.user_id);
     span.record("prompt_len", req.prompt.len());
     span.record("doc_count", req.documents.len());
 

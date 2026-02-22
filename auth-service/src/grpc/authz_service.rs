@@ -1,5 +1,6 @@
 //! gRPC implementation of AuthzService.
 
+use crate::grpc::capability_check::extract_auth_context;
 use service_core::grpc::IntoStatus;
 use tonic::{Request, Response, Status};
 use uuid::Uuid;
@@ -21,79 +22,6 @@ impl AuthzServiceImpl {
     pub fn new(state: AppState) -> Self {
         Self { state }
     }
-
-    /// Extract user_id and tenant_id from request metadata.
-    /// For gRPC internal services, these are passed via metadata headers.
-    #[allow(clippy::result_large_err)]
-    fn extract_user_context(
-        &self,
-        request: &Request<impl std::fmt::Debug>,
-    ) -> Result<(Uuid, Uuid), Status> {
-        // Try to get from metadata first (for internal gRPC calls)
-        let metadata = request.metadata();
-
-        // Check for x-user-id header
-        let user_id = if let Some(user_id_value) = metadata.get("x-user-id") {
-            let user_id_str = user_id_value
-                .to_str()
-                .map_err(|_| Status::invalid_argument("Invalid x-user-id header"))?;
-            Uuid::parse_str(user_id_str)
-                .map_err(|_| Status::invalid_argument("Invalid user_id format"))?
-        } else if let Some(auth_value) = metadata.get("authorization") {
-            // Fallback: validate bearer token
-            let auth_str = auth_value
-                .to_str()
-                .map_err(|_| Status::unauthenticated("Invalid authorization header"))?;
-            let token = auth_str
-                .strip_prefix("Bearer ")
-                .ok_or_else(|| Status::unauthenticated("Invalid authorization header format"))?;
-
-            let claims = self
-                .state
-                .jwt
-                .validate_access_token(token)
-                .map_err(|e| Status::unauthenticated(format!("Invalid token: {}", e)))?;
-
-            Uuid::parse_str(&claims.sub)
-                .map_err(|_| Status::internal("Invalid user_id in token"))?
-        } else {
-            return Err(Status::unauthenticated(
-                "Missing x-user-id or authorization header",
-            ));
-        };
-
-        // Check for x-tenant-id header
-        let tenant_id = if let Some(tenant_id_value) = metadata.get("x-tenant-id") {
-            let tenant_id_str = tenant_id_value
-                .to_str()
-                .map_err(|_| Status::invalid_argument("Invalid x-tenant-id header"))?;
-            Uuid::parse_str(tenant_id_str)
-                .map_err(|_| Status::invalid_argument("Invalid tenant_id format"))?
-        } else if let Some(auth_value) = metadata.get("authorization") {
-            // Fallback: get from token
-            let auth_str = auth_value
-                .to_str()
-                .map_err(|_| Status::unauthenticated("Invalid authorization header"))?;
-            let token = auth_str
-                .strip_prefix("Bearer ")
-                .ok_or_else(|| Status::unauthenticated("Invalid authorization header format"))?;
-
-            let claims = self
-                .state
-                .jwt
-                .validate_access_token(token)
-                .map_err(|e| Status::unauthenticated(format!("Invalid token: {}", e)))?;
-
-            Uuid::parse_str(&claims.app_id)
-                .map_err(|_| Status::internal("Invalid tenant_id in token"))?
-        } else {
-            return Err(Status::unauthenticated(
-                "Missing x-tenant-id or authorization header",
-            ));
-        };
-
-        Ok((user_id, tenant_id))
-    }
 }
 
 #[tonic::async_trait]
@@ -102,7 +30,7 @@ impl AuthzService for AuthzServiceImpl {
         &self,
         request: Request<GetAuthContextRequest>,
     ) -> Result<Response<GetAuthContextResponse>, Status> {
-        let (user_id, tenant_id) = self.extract_user_context(&request)?;
+        let auth = extract_auth_context(&request)?;
         let req = request.into_inner();
 
         // Parse optional org_node_id
@@ -116,7 +44,7 @@ impl AuthzService for AuthzServiceImpl {
 
         // Call handler implementation
         let result =
-            context_handler::get_auth_context_impl(&self.state, user_id, tenant_id, org_node_id)
+            context_handler::get_auth_context_impl(&self.state, auth.user_id, auth.app_id, org_node_id)
                 .await
                 .map_err(|e| e.into_status())?;
 
@@ -146,7 +74,7 @@ impl AuthzService for AuthzServiceImpl {
         &self,
         request: Request<CheckCapabilityRequest>,
     ) -> Result<Response<CheckCapabilityResponse>, Status> {
-        let (user_id, _tenant_id) = self.extract_user_context(&request)?;
+        let auth = extract_auth_context(&request)?;
         let req = request.into_inner();
 
         // Parse org_node_id
@@ -156,7 +84,7 @@ impl AuthzService for AuthzServiceImpl {
         // Call handler implementation
         let result = context_handler::check_capability_impl(
             &self.state,
-            user_id,
+            auth.user_id,
             org_node_id,
             req.capability,
         )

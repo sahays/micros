@@ -1,4 +1,4 @@
-use crate::common::embedded::{TestApp, TEST_APP_ID, TEST_ORG_ID, TEST_USER_ID};
+use crate::common::embedded::{TestApp, TEST_APP_ID, TEST_TENANT_ID, TEST_USER_ID};
 use serial_test::serial;
 use service_core::grpc::proto::payment::{
     BankAccount, CommissionConfig, CommissionType, LegalInfo, LinkedAccountStatus,
@@ -51,7 +51,7 @@ async fn create_linked_account_via_grpc() {
     let account = client
         .create_linked_account(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "Test Vendor",
             "vendor@example.com",
@@ -79,7 +79,7 @@ async fn get_linked_account_not_found() {
     let result = client
         .get_linked_account(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "nonexistent-id",
         )
@@ -105,7 +105,7 @@ async fn get_linked_account_after_create() {
     let created = client
         .create_linked_account(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "Test Vendor",
             "vendor@example.com",
@@ -117,7 +117,7 @@ async fn get_linked_account_after_create() {
         .expect("Failed to create linked account");
 
     let fetched = client
-        .get_linked_account(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), &created.id)
+        .get_linked_account(TEST_APP_ID, TEST_TENANT_ID, Some(TEST_USER_ID), &created.id)
         .await
         .expect("Failed to get linked account");
 
@@ -141,7 +141,7 @@ async fn list_linked_accounts_filters_by_status() {
     client
         .create_linked_account(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "Test Vendor",
             "vendor@example.com",
@@ -154,7 +154,7 @@ async fn list_linked_accounts_filters_by_status() {
 
     // List all
     let (accounts, total) = client
-        .list_linked_accounts(TEST_APP_ID, TEST_ORG_ID, Some(TEST_USER_ID), None, 10, 0)
+        .list_linked_accounts(TEST_APP_ID, TEST_TENANT_ID, Some(TEST_USER_ID), None, 10, 0)
         .await
         .expect("Failed to list linked accounts");
 
@@ -165,7 +165,7 @@ async fn list_linked_accounts_filters_by_status() {
     let (accounts, total) = client
         .list_linked_accounts(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             Some(LinkedAccountStatus::Activated),
             10,
@@ -194,7 +194,7 @@ async fn update_commission_config() {
     let created = client
         .create_linked_account(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             "Test Vendor",
             "vendor@example.com",
@@ -208,7 +208,7 @@ async fn update_commission_config() {
     let updated = client
         .update_commission_config(
             TEST_APP_ID,
-            TEST_ORG_ID,
+            TEST_TENANT_ID,
             Some(TEST_USER_ID),
             &created.id,
             CommissionConfig {

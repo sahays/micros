@@ -1,6 +1,6 @@
 //! Transaction handlers with multi-tenant support.
 //!
-//! All operations are scoped to the tenant (app_id, org_id) from the request context.
+//! All operations are scoped to the tenant (app_id, tenant_id) from the request context.
 
 use axum::{
     extract::{Path, State},
@@ -28,7 +28,7 @@ pub async fn create_transaction(
     let transaction = Transaction {
         id: Uuid::new_v4(),
         app_id: tenant.app_id.clone(),
-        org_id: tenant.org_id.clone(),
+        tenant_id: tenant.tenant_id.clone(),
         user_id: tenant.user_id.clone(),
         amount_paise: payload.amount_paise,
         currency: payload.currency,
@@ -41,7 +41,7 @@ pub async fn create_transaction(
     tracing::info!(
         transaction_id = %transaction.id,
         app_id = %tenant.app_id,
-        org_id = %tenant.org_id,
+        tenant_id = %tenant.tenant_id,
         amount_paise = payload.amount_paise,
         "Creating transaction"
     );
@@ -66,13 +66,13 @@ pub async fn get_transaction(
     tracing::info!(
         transaction_id = %transaction_id,
         app_id = %tenant.app_id,
-        org_id = %tenant.org_id,
+        tenant_id = %tenant.tenant_id,
         "Fetching transaction"
     );
 
     let transaction = state
         .repository
-        .get_transaction_in_tenant(&tenant.app_id, &tenant.org_id, transaction_id)
+        .get_transaction_in_tenant(&tenant.app_id, &tenant.tenant_id, transaction_id)
         .await?
         .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Transaction not found")))?;
 
@@ -89,7 +89,7 @@ pub async fn update_transaction_status(
     tracing::info!(
         transaction_id = %transaction_id,
         app_id = %tenant.app_id,
-        org_id = %tenant.org_id,
+        tenant_id = %tenant.tenant_id,
         new_status = ?payload.status,
         "Updating transaction status"
     );
@@ -97,7 +97,7 @@ pub async fn update_transaction_status(
     // Verify transaction exists within tenant scope
     let _transaction = state
         .repository
-        .get_transaction_in_tenant(&tenant.app_id, &tenant.org_id, transaction_id)
+        .get_transaction_in_tenant(&tenant.app_id, &tenant.tenant_id, transaction_id)
         .await?
         .ok_or_else(|| AppError::NotFound(anyhow::anyhow!("Transaction not found")))?;
 
@@ -105,7 +105,7 @@ pub async fn update_transaction_status(
         .repository
         .update_transaction_status_in_tenant(
             &tenant.app_id,
-            &tenant.org_id,
+            &tenant.tenant_id,
             transaction_id,
             payload.status,
         )
