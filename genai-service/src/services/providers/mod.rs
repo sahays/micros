@@ -32,6 +32,9 @@ pub enum ProviderError {
 
     #[error("Network error: {0}")]
     NetworkError(String),
+
+    #[error("Request timed out after {0}s")]
+    Timeout(u64),
 }
 
 /// Result of a provider response.

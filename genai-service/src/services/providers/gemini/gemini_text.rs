@@ -19,6 +19,9 @@ use std::time::Instant;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 
+const REQUEST_TIMEOUT_SECS: u64 = 300;
+const CONNECT_TIMEOUT_SECS: u64 = 10;
+
 /// Gemini text provider.
 pub struct GeminiTextProvider {
     config: GeminiConfig,
@@ -28,7 +31,8 @@ pub struct GeminiTextProvider {
 impl GeminiTextProvider {
     pub fn new(config: GeminiConfig) -> Self {
         let client = Client::builder()
-            .timeout(std::time::Duration::from_secs(120))
+            .connect_timeout(std::time::Duration::from_secs(CONNECT_TIMEOUT_SECS))
+            .timeout(std::time::Duration::from_secs(REQUEST_TIMEOUT_SECS))
             .build()
             .expect("Failed to create HTTP client");
 
@@ -82,6 +86,18 @@ impl GeminiTextProvider {
 
     /// Build generation config from parameters.
     fn build_generation_config(&self, params: &GenerationParams) -> GenerationConfig {
+        let response_schema: Option<serde_json::Value> = params
+            .output_schema
+            .as_ref()
+            .and_then(|s| serde_json::from_str(s).ok());
+
+        if let Some(ref schema) = response_schema {
+            tracing::info!(
+                schema = %serde_json::to_string(schema).unwrap_or_default(),
+                "Response schema for Vertex AI request"
+            );
+        }
+
         GenerationConfig {
             temperature: params.temperature,
             top_p: params.top_p,
@@ -95,10 +111,34 @@ impl GeminiTextProvider {
                 .output_schema
                 .as_ref()
                 .map(|_| "application/json".to_string()),
-            response_schema: params
-                .output_schema
-                .as_ref()
-                .and_then(|s| serde_json::from_str(s).ok()),
+            response_schema,
+        }
+    }
+
+    /// Map a reqwest error to the appropriate ProviderError,
+    /// distinguishing timeouts from other network errors.
+    fn map_request_error(e: &reqwest::Error, elapsed: &std::time::Duration) -> ProviderError {
+        if e.is_timeout() {
+            tracing::error!(
+                error = ?e,
+                duration_ms = %elapsed.as_millis(),
+                "Vertex AI request timed out"
+            );
+            ProviderError::Timeout(REQUEST_TIMEOUT_SECS)
+        } else if e.is_connect() {
+            tracing::error!(
+                error = ?e,
+                duration_ms = %elapsed.as_millis(),
+                "Failed to connect to Vertex AI"
+            );
+            ProviderError::NetworkError(format!("Connection failed: {:#}", e))
+        } else {
+            tracing::error!(
+                error = ?e,
+                duration_ms = %elapsed.as_millis(),
+                "Network error calling Vertex AI"
+            );
+            ProviderError::NetworkError(format!("{:#}", e))
         }
     }
 }
@@ -151,7 +191,12 @@ impl TextProvider for GeminiTextProvider {
 
         let url = self.config.vertex_url(&model, "generateContent");
 
-        tracing::debug!("Sending request to Vertex AI");
+        tracing::info!(
+            url = %url,
+            has_response_schema = request.generation_config.as_ref()
+                .and_then(|c| c.response_schema.as_ref()).is_some(),
+            "Sending request to Vertex AI"
+        );
 
         let response = self
             .client
@@ -160,11 +205,7 @@ impl TextProvider for GeminiTextProvider {
             .json(&request)
             .send()
             .await
-            .map_err(|e| {
-                let err = ProviderError::NetworkError(e.to_string());
-                tracing::error!(error = %e, "Network error calling Vertex AI");
-                err
-            })?;
+            .map_err(|e| Self::map_request_error(&e, &start.elapsed()))?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -300,11 +341,7 @@ impl TextProvider for GeminiTextProvider {
             .json(&request)
             .send()
             .await
-            .map_err(|e| {
-                let err = ProviderError::NetworkError(e.to_string());
-                tracing::error!(error = %e, "Network error starting Vertex AI stream");
-                err
-            })?;
+            .map_err(|e| Self::map_request_error(&e, &start.elapsed()))?;
 
         if !response.status().is_success() {
             let status = response.status();

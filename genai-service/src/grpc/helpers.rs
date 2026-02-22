@@ -85,6 +85,11 @@ pub fn provider_error_to_status(error: ProviderError) -> Status {
             format!("Network error: {}", msg),
             "network_error",
         ),
+        ProviderError::Timeout(secs) => (
+            tonic::Code::DeadlineExceeded,
+            format!("AI provider request timed out after {}s", secs),
+            "timeout",
+        ),
     };
 
     tracing::error!(

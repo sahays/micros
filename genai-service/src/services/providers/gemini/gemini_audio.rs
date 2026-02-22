@@ -19,7 +19,8 @@ pub struct GeminiAudioProvider {
 impl GeminiAudioProvider {
     pub fn new(config: GeminiConfig) -> Self {
         let client = Client::builder()
-            .timeout(std::time::Duration::from_secs(120))
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(300))
             .build()
             .expect("Failed to create HTTP client");
 
