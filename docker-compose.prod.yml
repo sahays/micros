@@ -143,6 +143,8 @@ services:
       - RUST_LOG=${RUST_LOG:-document_service=${LOG_LEVEL:-info},service_core=${LOG_LEVEL:-info}}
       - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
       - STORAGE_LOCAL_PATH=${STORAGE_LOCAL_PATH:-./storage}
+    volumes:
+      - document_storage:/app/storage
     logging:
       driver: "json-file"
       options:
@@ -464,3 +466,5 @@ volumes:
     name: ${COMPOSE_PROJECT_NAME:-micros-prod}_mongo_data
   redis_data:
     name: ${COMPOSE_PROJECT_NAME:-micros-prod}_redis_data
+  document_storage:
+    name: ${COMPOSE_PROJECT_NAME:-micros-prod}_document_storage
