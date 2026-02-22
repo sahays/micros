@@ -61,11 +61,21 @@ impl GeminiTextProvider {
             .to_string()
     }
 
+    /// Check if a MIME type is text-based (content can be read as UTF-8).
+    fn is_text_mime_type(mime_type: &str) -> bool {
+        mime_type.starts_with("text/")
+            || mime_type == "application/json"
+            || mime_type == "application/xml"
+            || mime_type == "application/x-yaml"
+    }
+
     /// Convert documents to Gemini content parts.
     ///
-    /// For images and PDFs with supported MIME types, downloads content from
-    /// document-service via gRPC and sends as base64 inlineData.
-    /// Returns an error if an inline-capable document cannot be downloaded.
+    /// Strategy by MIME type:
+    /// 1. Pre-extracted text available → use it directly
+    /// 2. Inline-capable (images, PDFs) → download as base64 inlineData
+    /// 3. Text-based (CSV, plain text, JSON, etc.) → download and read as UTF-8 text
+    /// 4. Otherwise → fail with a descriptive error
     async fn documents_to_parts(
         &self,
         documents: &[DocumentContext],
@@ -74,7 +84,7 @@ impl GeminiTextProvider {
         let mut parts = Vec::with_capacity(documents.len());
 
         for doc in documents {
-            // If we have pre-extracted text, use it
+            // 1. If we have pre-extracted text, use it
             if let Some(text) = &doc.text_content {
                 parts.push(ContentPart::Text {
                     text: format!("[Document {}]: {}", doc.document_id, text),
@@ -82,15 +92,15 @@ impl GeminiTextProvider {
                 continue;
             }
 
-            // If MIME type supports inline data (images, PDFs), download via document-service
-            if DocumentFetcher::supports_inline(&doc.mime_type) {
-                let tc = tenant.ok_or_else(|| {
-                    ProviderError::InvalidRequest(format!(
-                        "Document {} requires tenant context for download",
-                        doc.document_id
-                    ))
-                })?;
+            let tc = tenant.ok_or_else(|| {
+                ProviderError::InvalidRequest(format!(
+                    "Document {} requires tenant context for download",
+                    doc.document_id
+                ))
+            })?;
 
+            // 2. Inline-capable (images, PDFs) → download as base64
+            if DocumentFetcher::supports_inline(&doc.mime_type) {
                 let content = self
                     .document_fetcher
                     .download_content(&doc.document_id, tc)
@@ -124,7 +134,40 @@ impl GeminiTextProvider {
                 continue;
             }
 
-            // No text content and not inline-capable — request can't proceed meaningfully
+            // 3. Text-based MIME types → download and read raw content as text
+            if Self::is_text_mime_type(&doc.mime_type) {
+                let content = self
+                    .document_fetcher
+                    .download_content(&doc.document_id, tc)
+                    .await
+                    .map_err(|e| {
+                        tracing::error!(
+                            document_id = %doc.document_id,
+                            mime_type = %doc.mime_type,
+                            error = %e,
+                            "Failed to download text document"
+                        );
+                        ProviderError::InvalidRequest(format!(
+                            "Failed to download document {}: {}",
+                            doc.document_id, e
+                        ))
+                    })?;
+
+                let text = String::from_utf8_lossy(&content.data).to_string();
+                tracing::info!(
+                    document_id = %doc.document_id,
+                    mime_type = %doc.mime_type,
+                    size_bytes = content.data.len(),
+                    text_len = text.len(),
+                    "Downloaded text document as raw content"
+                );
+                parts.push(ContentPart::Text {
+                    text: format!("[Document {}]: {}", doc.document_id, text),
+                });
+                continue;
+            }
+
+            // 4. Unsupported — no way to send this to Gemini
             return Err(ProviderError::InvalidRequest(format!(
                 "Document {} ({}) has no extracted text and is not inline-capable. \
                  Ensure the document exists and has been processed.",
