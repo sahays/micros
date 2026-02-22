@@ -62,7 +62,10 @@ async fn health_check(State(state): State<HealthState>) -> impl IntoResponse {
 async fn readiness_check(State(state): State<HealthState>) -> impl IntoResponse {
     match state.db.health_check().await {
         Ok(_) => StatusCode::OK,
-        Err(_) => StatusCode::SERVICE_UNAVAILABLE,
+        Err(e) => {
+            tracing::warn!(error = %e, "Readiness check failed");
+            StatusCode::SERVICE_UNAVAILABLE
+        }
     }
 }
 
@@ -109,7 +112,12 @@ impl Application {
             AppError::ConfigError(anyhow::anyhow!("Gemini config error: {}", e))
         })?;
         let text_provider: Arc<dyn TextProvider> =
-            Arc::new(GeminiTextProvider::new(gemini_config, document_fetcher.clone()));
+            Arc::new(GeminiTextProvider::new(gemini_config, document_fetcher.clone()).map_err(
+                |e| {
+                    tracing::error!(error = %e, "Failed to create Gemini text provider");
+                    AppError::ConfigError(anyhow::anyhow!("Gemini provider error: {}", e))
+                },
+            )?);
 
         tracing::info!(
             model = %config.models.text_model,

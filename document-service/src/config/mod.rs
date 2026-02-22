@@ -58,22 +58,10 @@ impl DocumentConfig {
                 local_path: get_env("STORAGE_LOCAL_PATH", Some("storage"), is_prod)?,
             },
             worker: WorkerConfig {
-                enabled: env::var("WORKER_ENABLED")
-                    .unwrap_or_else(|_| "true".to_string())
-                    .parse()
-                    .unwrap_or(true),
-                worker_count: env::var("WORKER_COUNT")
-                    .unwrap_or_else(|_| "4".to_string())
-                    .parse()
-                    .unwrap_or(4),
-                queue_size: env::var("QUEUE_SIZE")
-                    .unwrap_or_else(|_| "100".to_string())
-                    .parse()
-                    .unwrap_or(100),
-                command_timeout_seconds: env::var("COMMAND_TIMEOUT_SECONDS")
-                    .unwrap_or_else(|_| "300".to_string())
-                    .parse()
-                    .unwrap_or(300),
+                enabled: parse_env_with_default("WORKER_ENABLED", true),
+                worker_count: parse_env_with_default("WORKER_COUNT", 4),
+                queue_size: parse_env_with_default("QUEUE_SIZE", 100),
+                command_timeout_seconds: parse_env_with_default("COMMAND_TIMEOUT_SECONDS", 300),
                 temp_dir: PathBuf::from(get_env(
                     "TEMP_DIR",
                     Some("/tmp/document-processing"),
@@ -81,6 +69,25 @@ impl DocumentConfig {
                 )?),
             },
         })
+    }
+}
+
+/// Parse an environment variable with a default, logging a warning if the value is present but unparseable.
+fn parse_env_with_default<T: std::str::FromStr + std::fmt::Display>(key: &str, default: T) -> T {
+    match env::var(key) {
+        Ok(raw) => match raw.parse() {
+            Ok(v) => v,
+            Err(_) => {
+                tracing::warn!(
+                    key = key,
+                    value = %raw,
+                    default = %default,
+                    "Failed to parse config value, using default"
+                );
+                default
+            }
+        },
+        Err(_) => default,
     }
 }
 

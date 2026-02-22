@@ -45,7 +45,10 @@ async fn health_check(State(state): State<HealthState>) -> impl IntoResponse {
 async fn readiness_check(State(state): State<HealthState>) -> impl IntoResponse {
     match state.db.health_check().await {
         Ok(_) => StatusCode::OK,
-        Err(_) => StatusCode::SERVICE_UNAVAILABLE,
+        Err(e) => {
+            tracing::warn!(error = %e, "Readiness check failed");
+            StatusCode::SERVICE_UNAVAILABLE
+        }
     }
 }
 

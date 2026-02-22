@@ -28,16 +28,31 @@ impl Processor for PdfProcessor {
     ) -> Result<ProcessingMetadata, AppError> {
         tracing::info!(file_path = ?file_path, "Processing PDF document");
 
+        let file_path_str = file_path.to_str().ok_or_else(|| {
+            AppError::InternalError(anyhow::anyhow!(
+                "Non-UTF-8 file path: {:?}",
+                file_path
+            ))
+        })?;
+
         // Extract text using pdftotext
         let output = executor
-            .execute("pdftotext", &[file_path.to_str().unwrap(), "-"], None)
-            .await?;
+            .execute("pdftotext", &[file_path_str, "-"], None)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, command = "pdftotext", "PDF text extraction failed");
+                e
+            })?;
         let extracted_text = Some(String::from_utf8_lossy(&output.stdout).to_string());
 
         // Get page count using pdfinfo
         let info_output = executor
-            .execute("pdfinfo", &[file_path.to_str().unwrap()], None)
-            .await?;
+            .execute("pdfinfo", &[file_path_str], None)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, command = "pdfinfo", "PDF info extraction failed");
+                e
+            })?;
 
         let page_count = parse_page_count(&info_output.stdout)?;
 

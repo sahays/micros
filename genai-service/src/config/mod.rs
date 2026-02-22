@@ -64,13 +64,26 @@ impl GenaiConfig {
             },
             models: ModelConfig {
                 text_model: get_env("GENAI_TEXT_MODEL", Some("gemini-3-flash-preview"), is_prod)?,
-                default_content_threshold_bytes: get_env(
-                    "GENAI_DEFAULT_CONTENT_THRESHOLD_BYTES",
-                    Some(&DEFAULT_CONTENT_THRESHOLD_BYTES.to_string()),
-                    is_prod,
-                )?
-                .parse()
-                .unwrap_or(DEFAULT_CONTENT_THRESHOLD_BYTES),
+                default_content_threshold_bytes: {
+                    let raw = get_env(
+                        "GENAI_DEFAULT_CONTENT_THRESHOLD_BYTES",
+                        Some(&DEFAULT_CONTENT_THRESHOLD_BYTES.to_string()),
+                        is_prod,
+                    )?;
+                    match raw.parse() {
+                        Ok(v) => v,
+                        Err(e) => {
+                            tracing::warn!(
+                                key = "GENAI_DEFAULT_CONTENT_THRESHOLD_BYTES",
+                                value = %raw,
+                                error = %e,
+                                default = DEFAULT_CONTENT_THRESHOLD_BYTES,
+                                "Failed to parse config value, using default"
+                            );
+                            DEFAULT_CONTENT_THRESHOLD_BYTES
+                        }
+                    }
+                },
             },
             google: GoogleConfig {
                 service_account_key_path: get_env(

@@ -48,7 +48,16 @@ pub async fn process(
         .await?;
 
     // Extract org_id from request metadata before consuming the request
-    let org_id = extract_org_node_id(&request).unwrap_or_default();
+    let org_id = match extract_org_node_id(&request) {
+        Some(id) => id,
+        None => {
+            tracing::warn!(
+                tenant_id = %auth.tenant_id,
+                "Missing org_id in request metadata (x-org-id header), defaulting to empty string"
+            );
+            String::new()
+        }
+    };
 
     let req = request.into_inner();
     let request_id = uuid::Uuid::new_v4().to_string();
@@ -250,7 +259,16 @@ pub async fn process_stream(
         .await?;
 
     // Extract org_id from request metadata before consuming the request
-    let org_id = extract_org_node_id(&request).unwrap_or_default();
+    let org_id = match extract_org_node_id(&request) {
+        Some(id) => id,
+        None => {
+            tracing::warn!(
+                tenant_id = %auth.tenant_id,
+                "Missing org_id in request metadata (x-org-id header), defaulting to empty string"
+            );
+            String::new()
+        }
+    };
 
     let req = request.into_inner();
     let request_id = uuid::Uuid::new_v4().to_string();

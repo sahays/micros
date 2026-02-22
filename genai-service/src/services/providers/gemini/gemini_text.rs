@@ -32,18 +32,23 @@ pub struct GeminiTextProvider {
 }
 
 impl GeminiTextProvider {
-    pub fn new(config: GeminiConfig, document_fetcher: DocumentFetcher) -> Self {
+    pub fn new(
+        config: GeminiConfig,
+        document_fetcher: DocumentFetcher,
+    ) -> Result<Self, ProviderError> {
         let client = Client::builder()
             .connect_timeout(std::time::Duration::from_secs(CONNECT_TIMEOUT_SECS))
             .timeout(std::time::Duration::from_secs(REQUEST_TIMEOUT_SECS))
             .build()
-            .expect("Failed to create HTTP client");
+            .map_err(|e| {
+                ProviderError::NotConfigured(format!("Failed to create HTTP client: {}", e))
+            })?;
 
-        Self {
+        Ok(Self {
             config,
             client,
             document_fetcher,
-        }
+        })
     }
 
     /// Resolve the effective model: use the override from params if present,
@@ -119,12 +124,12 @@ impl GeminiTextProvider {
                 continue;
             }
 
-            // Unsupported MIME type with no text content
-            tracing::warn!(
-                document_id = %doc.document_id,
-                mime_type = %doc.mime_type,
-                "Document has no text content and unsupported MIME type, skipping"
-            );
+            // No text content and not inline-capable — request can't proceed meaningfully
+            return Err(ProviderError::InvalidRequest(format!(
+                "Document {} ({}) has no extracted text and is not inline-capable. \
+                 Ensure the document exists and has been processed.",
+                doc.document_id, doc.mime_type
+            )));
         }
 
         Ok(parts)
@@ -132,10 +137,20 @@ impl GeminiTextProvider {
 
     /// Build generation config from parameters.
     fn build_generation_config(&self, params: &GenerationParams) -> GenerationConfig {
-        let response_schema: Option<serde_json::Value> = params
-            .output_schema
-            .as_ref()
-            .and_then(|s| serde_json::from_str(s).ok());
+        let response_schema: Option<serde_json::Value> =
+            params.output_schema.as_ref().and_then(|s| {
+                match serde_json::from_str(s) {
+                    Ok(v) => Some(v),
+                    Err(e) => {
+                        tracing::warn!(
+                            error = %e,
+                            schema = %s,
+                            "Failed to parse output_schema as JSON, ignoring schema"
+                        );
+                        None
+                    }
+                }
+            });
 
         if let Some(ref schema) = response_schema {
             tracing::info!(
@@ -442,38 +457,54 @@ impl TextProvider for GeminiTextProvider {
 
                             // Parse SSE event
                             if let Some(data) = event.strip_prefix("data: ") {
-                                if let Ok(response) =
-                                    serde_json::from_str::<GenerateContentResponse>(data)
-                                {
-                                    // Update token counts
-                                    if let Some(usage) = &response.usage_metadata {
-                                        total_input_tokens = usage.prompt_token_count.unwrap_or(0);
-                                        total_output_tokens =
-                                            usage.candidates_token_count.unwrap_or(0);
-                                    }
+                                match serde_json::from_str::<GenerateContentResponse>(data) {
+                                    Ok(response) => {
+                                        // Update token counts
+                                        if let Some(usage) = &response.usage_metadata {
+                                            total_input_tokens =
+                                                usage.prompt_token_count.unwrap_or(0);
+                                            total_output_tokens =
+                                                usage.candidates_token_count.unwrap_or(0);
+                                        }
 
-                                    // Extract text and send
-                                    if let Some(candidate) = response.candidates.first() {
-                                        if let Some(ContentPart::Text { text }) =
-                                            candidate.content.parts.first()
-                                        {
-                                            if !text.is_empty() {
-                                                chunk_count += 1;
-                                                let _ = tx
-                                                    .send(Ok(StreamChunk::Text(text.clone())))
-                                                    .await;
+                                        // Extract text and send
+                                        if let Some(candidate) = response.candidates.first() {
+                                            if let Some(ContentPart::Text { text }) =
+                                                candidate.content.parts.first()
+                                            {
+                                                if !text.is_empty() {
+                                                    chunk_count += 1;
+                                                    if tx
+                                                        .send(Ok(StreamChunk::Text(text.clone())))
+                                                        .await
+                                                        .is_err()
+                                                    {
+                                                        tracing::debug!(
+                                                            "Client disconnected during streaming, stopping"
+                                                        );
+                                                        return;
+                                                    }
+                                                }
+                                            }
+
+                                            // Check finish reason
+                                            if let Some(reason) = &candidate.finish_reason {
+                                                last_finish_reason = match reason.as_str() {
+                                                    "STOP" => FinishReason::Complete,
+                                                    "MAX_TOKENS" => FinishReason::Length,
+                                                    "SAFETY" => FinishReason::ContentFilter,
+                                                    _ => FinishReason::Complete,
+                                                };
                                             }
                                         }
-
-                                        // Check finish reason
-                                        if let Some(reason) = &candidate.finish_reason {
-                                            last_finish_reason = match reason.as_str() {
-                                                "STOP" => FinishReason::Complete,
-                                                "MAX_TOKENS" => FinishReason::Length,
-                                                "SAFETY" => FinishReason::ContentFilter,
-                                                _ => FinishReason::Complete,
-                                            };
-                                        }
+                                    }
+                                    Err(e) => {
+                                        tracing::warn!(
+                                            error = %e,
+                                            data_len = data.len(),
+                                            data_preview = %&data[..data.len().min(200)],
+                                            "Failed to parse SSE event from Vertex AI"
+                                        );
                                     }
                                 }
                             }
@@ -481,9 +512,13 @@ impl TextProvider for GeminiTextProvider {
                     }
                     Err(e) => {
                         tracing::error!(error = %e, "Error in Vertex AI stream");
-                        let _ = tx
+                        if tx
                             .send(Err(ProviderError::NetworkError(e.to_string())))
-                            .await;
+                            .await
+                            .is_err()
+                        {
+                            tracing::debug!("Client disconnected before error could be sent");
+                        }
                         return;
                     }
                 }
@@ -501,13 +536,17 @@ impl TextProvider for GeminiTextProvider {
             );
 
             // Send completion
-            let _ = tx
+            if tx
                 .send(Ok(StreamChunk::Complete {
                     input_tokens: total_input_tokens,
                     output_tokens: total_output_tokens,
                     finish_reason: last_finish_reason,
                 }))
-                .await;
+                .await
+                .is_err()
+            {
+                tracing::debug!("Client disconnected before completion could be sent");
+            }
         });
 
         let stream = ReceiverStream::new(rx);

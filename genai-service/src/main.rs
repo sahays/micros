@@ -151,7 +151,10 @@ async fn main() -> std::io::Result<()> {
         std::io::Error::other(format!("Gemini config error: {}", e))
     })?;
     let text_provider: Arc<dyn TextProvider> =
-        Arc::new(GeminiTextProvider::new(gemini_config, document_fetcher.clone()));
+        Arc::new(GeminiTextProvider::new(gemini_config, document_fetcher.clone()).map_err(|e| {
+            tracing::error!(error = %e, "Failed to create Gemini text provider");
+            std::io::Error::other(format!("Gemini provider error: {}", e))
+        })?);
 
     tracing::info!(
         model = %config.models.text_model,

@@ -25,17 +25,34 @@ pub struct TenantContext {
 
 impl TenantContext {
     /// Inject tenant headers into a gRPC request's metadata.
-    fn inject_metadata<T>(&self, request: &mut tonic::Request<T>) {
+    ///
+    /// Returns an error if any header value contains non-ASCII characters.
+    #[allow(clippy::result_large_err)]
+    fn inject_metadata<T>(
+        &self,
+        request: &mut tonic::Request<T>,
+    ) -> Result<(), DocumentFetcherError> {
         let metadata = request.metadata_mut();
-        if let Ok(v) = self.app_id.parse() {
-            metadata.insert("x-app-id", v);
-        }
-        if let Ok(v) = self.org_id.parse() {
-            metadata.insert("x-org-id", v);
-        }
-        if let Ok(v) = self.user_id.parse() {
-            metadata.insert("x-user-id", v);
-        }
+
+        let app_val = self.app_id.parse().map_err(|e| {
+            tracing::warn!(header = "x-app-id", value = %self.app_id, error = %e, "Invalid metadata header value");
+            DocumentFetcherError::ConnectionError(format!("Invalid x-app-id header value '{}': {}", self.app_id, e))
+        })?;
+        metadata.insert("x-app-id", app_val);
+
+        let org_val = self.org_id.parse().map_err(|e| {
+            tracing::warn!(header = "x-org-id", value = %self.org_id, error = %e, "Invalid metadata header value");
+            DocumentFetcherError::ConnectionError(format!("Invalid x-org-id header value '{}': {}", self.org_id, e))
+        })?;
+        metadata.insert("x-org-id", org_val);
+
+        let user_val = self.user_id.parse().map_err(|e| {
+            tracing::warn!(header = "x-user-id", value = %self.user_id, error = %e, "Invalid metadata header value");
+            DocumentFetcherError::ConnectionError(format!("Invalid x-user-id header value '{}': {}", self.user_id, e))
+        })?;
+        metadata.insert("x-user-id", user_val);
+
+        Ok(())
     }
 }
 
@@ -252,13 +269,13 @@ impl DocumentFetcher {
         let mut get_request = tonic::Request::new(GetDocumentRequest {
             document_id: document_id.to_string(),
         });
-        tenant.inject_metadata(&mut get_request);
+        tenant.inject_metadata(&mut get_request)?;
 
         let doc_response = client
             .get_document(get_request)
             .await
             .map_err(|e| {
-                tracing::warn!(error = %e, "Failed to get document");
+                tracing::warn!(document_id = %document_id, error = %e, "Failed to get document from document-service");
                 e
             })?;
 
@@ -294,13 +311,13 @@ impl DocumentFetcher {
         let mut status_request = tonic::Request::new(GetProcessingStatusRequest {
             document_id: document_id.to_string(),
         });
-        tenant.inject_metadata(&mut status_request);
+        tenant.inject_metadata(&mut status_request)?;
 
         let status_response = client
             .get_processing_status(status_request)
             .await
             .map_err(|e| {
-                tracing::warn!(error = %e, "Failed to get processing status");
+                tracing::warn!(document_id = %document_id, error = %e, "Failed to get processing status from document-service");
                 e
             })?;
 
@@ -344,13 +361,13 @@ impl DocumentFetcher {
         let mut request = tonic::Request::new(DownloadDocumentRequest {
             document_id: document_id.to_string(),
         });
-        tenant.inject_metadata(&mut request);
+        tenant.inject_metadata(&mut request)?;
 
         let response = client
             .download_document(request)
             .await
             .map_err(|e| {
-                tracing::warn!(error = %e, "Failed to download document");
+                tracing::warn!(document_id = %document_id, error = %e, "Failed to download document from document-service");
                 e
             })?;
 

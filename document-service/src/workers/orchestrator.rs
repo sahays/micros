@@ -208,7 +208,19 @@ impl Worker {
             .temp_dir
             .join(format!("{}_{}", job.document_id, Uuid::new_v4()));
 
-        let data = self.storage.download(&job.storage_key).await?;
+        let data = self
+            .storage
+            .download(&job.storage_key)
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    document_id = %job.document_id,
+                    storage_key = %job.storage_key,
+                    error = %e,
+                    "Failed to download file from storage"
+                );
+                e
+            })?;
 
         tokio::fs::write(&temp_file, data).await.map_err(|e| {
             AppError::InternalError(anyhow::anyhow!("Failed to write temp file: {}", e))
@@ -242,19 +254,52 @@ impl Worker {
 
         let metadata = processor
             .process(&document, &temp_file, &self.executor)
-            .await?;
+            .await
+            .map_err(|e| {
+                tracing::error!(
+                    document_id = %job.document_id,
+                    mime_type = %job.mime_type,
+                    error = %e,
+                    "Document processing failed"
+                );
+                e
+            })?;
 
         // 4. Cleanup temp file
-        let _ = tokio::fs::remove_file(&temp_file).await;
+        if let Err(e) = tokio::fs::remove_file(&temp_file).await {
+            tracing::warn!(
+                document_id = %job.document_id,
+                temp_file = ?temp_file,
+                error = %e,
+                "Failed to remove temp file after processing"
+            );
+        }
 
         Ok(metadata)
     }
 
     async fn update_document_success(&self, doc_id: &str, metadata: ProcessingMetadata) {
+        let bson_metadata = match mongodb::bson::to_bson(&metadata) {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::error!(
+                    document_id = doc_id,
+                    error = %e,
+                    "Failed to serialize processing metadata to BSON, marking document as failed"
+                );
+                self.update_document_failure(
+                    doc_id,
+                    format!("BSON serialization error: {}", e),
+                )
+                .await;
+                return;
+            }
+        };
+
         let update = doc! {
             "$set": {
                 "status": "ready",
-                "processing_metadata": mongodb::bson::to_bson(&metadata).unwrap(),
+                "processing_metadata": bson_metadata,
                 "updated_at": mongodb::bson::DateTime::from_chrono(Utc::now()),
             }
         };
